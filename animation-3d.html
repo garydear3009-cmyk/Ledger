@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0B0B0D">
+<title>Rotatable exercise animation</title>
+<style>
+:root{--bg:#0B0B0D;--card:#141517;--c2:#1E2024;--line:#2A2D33;--txt:#F5F6F7;--dim:#8E949E;--faint:#5C626B;--acc:#2F7BFF;--grn:#35C26B;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 -apple-system,system-ui,sans-serif;
+ padding:calc(18px + env(safe-area-inset-top)) 12px calc(36px + env(safe-area-inset-bottom));}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.02em;}
+.sub{color:var(--dim);font-size:13px;margin:0 0 18px;}
+.card{background:var(--card);border-radius:15px;padding:14px;margin-bottom:12px;border:1px solid var(--line);}
+.stage{background:#0E0F11;border-radius:12px;height:340px;touch-action:none;cursor:grab;position:relative;overflow:hidden;}
+.stage canvas{display:block;}
+.hint{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:var(--faint);font-size:11.5px;pointer-events:none;}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;}
+.chip{padding:9px 13px;border-radius:9px;background:var(--c2);color:var(--dim);border:0;font:inherit;font-size:13px;cursor:pointer;}
+.chip.on{background:var(--acc);color:#fff;font-weight:600;}
+.lbl{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:0 0 8px;}
+.note{color:var(--dim);font-size:12.5px;margin:10px 0 0;}
+input[type=range]{width:100%;accent-color:var(--acc);}
+.foot{color:var(--faint);font-size:12.5px;margin-top:20px;line-height:1.6;}
+b.k{color:var(--txt);font-weight:600;}
+</style>
+</head>
+<body>
+<h1>Rotatable, in 3D</h1>
+<p class="sub">Drag to turn it. Pinch to zoom. The lift keeps running while you move around it.</p>
+
+<div class="card">
+  <div class="stage" id="stage"><div class="hint">drag to rotate · pinch to zoom</div></div>
+  <div class="row" id="views"></div>
+  <div class="row" id="exs" style="margin-top:8px"></div>
+  <p class="lbl" style="margin-top:14px">Tempo</p>
+  <input type="range" id="sp" min="0.25" max="2" step="0.05" value="1">
+  <div class="row">
+    <button class="chip" id="pause">Pause</button>
+    <button class="chip" id="spin">Auto-turn</button>
+    <button class="chip on" id="mus">Show working muscles</button>
+  </div>
+  <p class="note" id="cap"></p>
+</div>
+
+<p class="foot">
+  Same joint data as the flat version, drawn as a solid body in three dimensions. Because you can turn it,
+  a movement like a <b class="k">fly</b> or a <b class="k">lateral raise</b> reads properly instead of
+  collapsing into a line. Tell me if this is the direction and I'll rebuild all 177 like this.
+</p>
+
+<script>
+(function () {
+  const urls = [
+    "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+    "https://unpkg.com/three@0.128.0/build/three.min.js",
+  ];
+  let i = 0;
+  const stage = document.getElementById("stage");
+  const fail = (why) => {
+    stage.innerHTML = '<div style="padding:26px;text-align:center;color:#8E949E;font-size:13.5px;line-height:1.6">'
+      + '<b style="color:#F5F6F7;font-size:15px">Can\'t load the 3D library</b><br><br>'
+      + 'This page needs three.js from the web, and wherever you have opened it is blocking that '
+      + '\u2014 which includes inside the Claude app.<br><br>'
+      + 'Put it on GitHub next to the app and open it at<br>'
+      + '<b style="color:#F5F6F7">garydear3009-cmyk.github.io/Ledger/animation-3d.html</b>'
+      + (why ? '<br><br><span style="font-size:11.5px;color:#5C626B">' + why + '</span>' : '')
+      + '</div>';
+  };
+  const next = () => {
+    if (i >= urls.length) return fail("every source refused");
+    const sc = document.createElement("script");
+    sc.src = urls[i++];
+    sc.onload = () => (window.THREE ? start() : next());
+    sc.onerror = next;
+    document.head.appendChild(sc);
+  };
+  window.__boot3d = next;
+  window.__fail3d = fail;
+})();
+</script>
+<script>
+function start() {
+/* ---------------- the movements ----------------
+   Each joint is [x, y, z]. x across, y up, z towards the viewer.
+   Two keyframes per lift: the top and the bottom.                */
+const EXS = {
+  bench: {
+    name:"Dumbbell bench press", lying:true,
+    hot:["pec","delt_f","tri"],
+    a:{ hd:[0,.34,-.62], nk:[0,.34,-.48], sp:[0,.32,-.10], hip:[0,.30,.22],
+        shL:[-.20,.34,-.34], shR:[.20,.34,-.34], elL:[-.24,.66,-.34], elR:[.24,.66,-.34],
+        hnL:[-.20,.92,-.32], hnR:[.20,.92,-.32],
+        hpL:[-.13,.30,.22], hpR:[.13,.30,.22], knL:[-.15,.52,.62], knR:[.15,.52,.62],
+        anL:[-.15,.06,.72], anR:[.15,.06,.72] },
+    b:{ hd:[0,.34,-.62], nk:[0,.34,-.48], sp:[0,.32,-.10], hip:[0,.30,.22],
+        shL:[-.20,.34,-.34], shR:[.20,.34,-.34], elL:[-.44,.38,-.36], elR:[.44,.38,-.36],
+        hnL:[-.34,.48,-.30], hnR:[.34,.48,-.30],
+        hpL:[-.13,.30,.22], hpR:[.13,.30,.22], knL:[-.15,.52,.62], knR:[.15,.52,.62],
+        anL:[-.15,.06,.72], anR:[.15,.06,.72] },
+    cap:"Turn it to the front and you can see the arms travel outwards as well as down — that arc is the bit a side view hides."
+  },
+  fly: {
+    name:"Dumbbell fly", lying:true,
+    hot:["pec","delt_f"],
+    a:{ hd:[0,.34,-.62], nk:[0,.34,-.48], sp:[0,.32,-.10], hip:[0,.30,.22],
+        shL:[-.20,.34,-.34], shR:[.20,.34,-.34], elL:[-.16,.68,-.34], elR:[.16,.68,-.34],
+        hnL:[-.09,.94,-.32], hnR:[.09,.94,-.32],
+        hpL:[-.13,.30,.22], hpR:[.13,.30,.22], knL:[-.15,.52,.62], knR:[.15,.52,.62],
+        anL:[-.15,.06,.72], anR:[.15,.06,.72] },
+    b:{ hd:[0,.34,-.62], nk:[0,.34,-.48], sp:[0,.32,-.10], hip:[0,.30,.22],
+        shL:[-.20,.34,-.34], shR:[.20,.34,-.34], elL:[-.56,.44,-.34], elR:[.56,.44,-.34],
+        hnL:[-.78,.34,-.32], hnR:[.78,.34,-.32],
+        hpL:[-.13,.30,.22], hpR:[.13,.30,.22], knL:[-.15,.52,.62], knR:[.15,.52,.62],
+        anL:[-.15,.06,.72], anR:[.15,.06,.72] },
+    cap:"This is the one a flat drawing ruins. From the side a fly and a press look identical; from above they are obviously different."
+  },
+  lateral: {
+    name:"Lateral raise", lying:false,
+    hot:["delt_s"],
+    a:{ hd:[0,1.72,0], nk:[0,1.60,0], sp:[0,1.30,0], hip:[0,.92,0],
+        shL:[-.22,1.48,0], shR:[.22,1.48,0], elL:[-.26,1.18,.02], elR:[.26,1.18,.02],
+        hnL:[-.28,.92,.04], hnR:[.28,.92,.04],
+        hpL:[-.12,.90,0], hpR:[.12,.90,0], knL:[-.13,.50,.02], knR:[.13,.50,.02],
+        anL:[-.13,.08,0], anR:[.13,.08,0] },
+    b:{ hd:[0,1.72,0], nk:[0,1.60,0], sp:[0,1.30,0], hip:[0,.92,0],
+        shL:[-.22,1.48,0], shR:[.22,1.48,0], elL:[-.54,1.50,.04], elR:[.54,1.50,.04],
+        hnL:[-.80,1.48,.06], hnR:[.80,1.48,.06],
+        hpL:[-.12,.90,0], hpR:[.12,.90,0], knL:[-.13,.50,.02], knR:[.13,.50,.02],
+        anL:[-.13,.08,0], anR:[.13,.08,0] },
+    cap:"Turn to the side and you can check the arms stay slightly forward of the body rather than straight out — the detail that makes it a side delt exercise."
+  },
+  row: {
+    name:"Bent-over row", lying:false,
+    hot:["lat","delt_r","bi"],
+    a:{ hd:[0,1.30,.46], nk:[0,1.26,.36], sp:[0,1.16,.16], hip:[0,1.00,-.10],
+        shL:[-.22,1.24,.30], shR:[.22,1.24,.30], elL:[-.26,.94,.34], elR:[.26,.94,.34],
+        hnL:[-.26,.66,.34], hnR:[.26,.66,.34],
+        hpL:[-.12,.98,-.10], hpR:[.12,.98,-.10], knL:[-.13,.54,.04], knR:[.13,.54,.04],
+        anL:[-.13,.08,-.02], anR:[.13,.08,-.02] },
+    b:{ hd:[0,1.30,.46], nk:[0,1.26,.36], sp:[0,1.16,.16], hip:[0,1.00,-.10],
+        shL:[-.22,1.24,.30], shR:[.22,1.24,.30], elL:[-.34,1.16,-.04], elR:[.34,1.16,-.04],
+        hnL:[-.26,1.02,.16], hnR:[.26,1.02,.16],
+        hpL:[-.12,.98,-.10], hpR:[.12,.98,-.10], knL:[-.13,.54,.04], knR:[.13,.54,.04],
+        anL:[-.13,.08,-.02], anR:[.13,.08,-.02] },
+    cap:"From behind you can see the elbows drive back past the ribs rather than flaring out, which is the whole difference between a row and a rear delt raise."
+  },
+  squat: {
+    name:"Goblet squat", lying:false,
+    hot:["quad","glute"],
+    a:{ hd:[0,1.72,0], nk:[0,1.60,0], sp:[0,1.30,0], hip:[0,.92,0],
+        shL:[-.22,1.48,0], shR:[.22,1.48,0], elL:[-.20,1.24,.14], elR:[.20,1.24,.14],
+        hnL:[-.07,1.34,.20], hnR:[.07,1.34,.20],
+        hpL:[-.12,.90,0], hpR:[.12,.90,0], knL:[-.14,.50,.03], knR:[.14,.50,.03],
+        anL:[-.14,.08,0], anR:[.14,.08,0] },
+    b:{ hd:[0,1.30,.10], nk:[0,1.18,.09], sp:[0,.94,.06], hip:[0,.56,-.06],
+        shL:[-.22,1.08,.08], shR:[.22,1.08,.08], elL:[-.20,.86,.20], elR:[.20,.86,.20],
+        hnL:[-.07,.96,.24], hnR:[.07,.96,.24],
+        hpL:[-.14,.54,-.06], hpR:[.14,.54,-.06], knL:[-.20,.42,.26], knR:[.20,.42,.26],
+        anL:[-.14,.08,0], anR:[.14,.08,0] },
+    cap:"Turn to the front and you can watch whether the knees track over the toes or fall inwards. Impossible to see from the side."
+  },
+};
+
+const BONES = [["nk","hd"],["sp","nk"],["hip","sp"],
+  ["sp","shL"],["sp","shR"],["shL","elL"],["shR","elR"],["elL","hnL"],["elR","hnR"],
+  ["hip","hpL"],["hip","hpR"],["hpL","knL"],["hpR","knR"],["knL","anL"],["knR","anR"]];
+/* how thick each bone is, and which muscle group lights up on it */
+const RIG = {
+  "nk-hd":[.055,.055,null], "sp-nk":[.075,.062,null], "hip-sp":[.115,.095,null],
+  "sp-shL":[.085,.070,"pec"], "sp-shR":[.085,.070,"pec"],
+  "shL-elL":[.062,.050,"delt_s"], "shR-elR":[.062,.050,"delt_s"],
+  "elL-hnL":[.048,.038,"tri"], "elR-hnR":[.048,.038,"tri"],
+  "hip-hpL":[.075,.070,null], "hip-hpR":[.075,.070,null],
+  "hpL-knL":[.088,.062,"quad"], "hpR-knR":[.088,.062,"quad"],
+  "knL-anL":[.058,.036,null], "knR-anR":[.058,.036,null],
+};
+const HOTMAP = { pec:["sp-shL","sp-shR"], delt_f:["shL-elL","shR-elR"], delt_s:["shL-elL","shR-elR"],
+  delt_r:["shL-elL","shR-elR"], tri:["elL-hnL","elR-hnR"], bi:["elL-hnL","elR-hnR"],
+  lat:["sp-shL","sp-shR"], quad:["hpL-knL","hpR-knR"], glute:["hip-hpL","hip-hpR"] };
+
+  let key="bench", playing=true, autoSpin=false, showMus=true, speed=1;
+const stage=document.getElementById("stage");
+const W=stage.clientWidth, H=340;
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(32,W/H,.1,100);
+const rnd=new THREE.WebGLRenderer({antialias:true,alpha:true});
+rnd.setSize(W,H); rnd.setPixelRatio(Math.min(2,devicePixelRatio||1));
+stage.insertBefore(rnd.domElement, stage.firstChild);
+
+scene.add(new THREE.AmbientLight(0xffffff,.66));
+const l1=new THREE.DirectionalLight(0xffffff,.8); l1.position.set(2,4,3); scene.add(l1);
+const l2=new THREE.DirectionalLight(0x9ec0ff,.36); l2.position.set(-3,2,-3); scene.add(l2);
+
+const root=new THREE.Group(); scene.add(root);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(1.5,48),
+  new THREE.MeshBasicMaterial({color:0x15171a,transparent:true,opacity:.75}));
+floor.rotation.x=-Math.PI/2; floor.position.y=-.01; root.add(floor);
+
+const bench3=new THREE.Group();
+bench3.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(.34,.07,1.25),
+  new THREE.MeshStandardMaterial({color:0x24272c,roughness:.9})),{position:new THREE.Vector3(0,.27,0)}));
+[-.5,.5].forEach(z=>bench3.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(.24,.24,.06),
+  new THREE.MeshStandardMaterial({color:0x1c1f23,roughness:.9})),{position:new THREE.Vector3(0,.12,z)})));
+root.add(bench3);
+
+const NORM=new THREE.MeshStandardMaterial({color:0x878f9b,roughness:.55});
+const HOT=new THREE.MeshStandardMaterial({color:0x35c26b,roughness:.5,emissive:0x0d3d20});
+const DARK=new THREE.MeshStandardMaterial({color:0x4a5058,roughness:.7});
+const METAL=new THREE.MeshStandardMaterial({color:0xc7cbd1,roughness:.35,metalness:.4});
+
+const limbs={}, joints={}, bells=[];
+BONES.forEach(([a,b])=>{
+  const k=a+"-"+b, [r1,r2]=RIG[k]||[.05,.04];
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r2,r1,1,16), NORM);
+  m.userData.k=k; root.add(m); limbs[k]=m;
+});
+["hd","shL","shR","elL","elR","hpL","hpR","knL","knR","anL","anR","hip"].forEach(j=>{
+  const r=j==="hd"?.135:j.startsWith("sh")?.075:j.startsWith("kn")?.058:.05;
+  const m=new THREE.Mesh(new THREE.SphereGeometry(r,20,14), j==="hd"?NORM:DARK);
+  root.add(m); joints[j]=m;
+});
+[0,1].forEach(()=>{
+  const g=new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(.022,.022,.20,12), METAL));
+  [-.085,.085].forEach(y=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.05,16), METAL); p.position.y=y; g.add(p); });
+  g.rotation.z=Math.PI/2; root.add(g); bells.push(g);
+});
+
+const V=new THREE.Vector3();
+function place(mesh,a,b,shrink=1){
+  const A=new THREE.Vector3(...a), B=new THREE.Vector3(...b);
+  const mid=A.clone().add(B).multiplyScalar(.5);
+  const len=A.distanceTo(B)*shrink;
+  mesh.position.copy(mid);
+  mesh.scale.set(1,Math.max(.001,len),1);
+  const dir=B.clone().sub(A).normalize();
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+}
+const lerp3=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+
+function poseNow(t){
+  const E=EXS[key];
+  const p = t<.38 ? t/.38 : 1-((t-.38)/.62);
+  const e = p<.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+  const o={}; Object.keys(E.a).forEach(k=>o[k]=lerp3(E.a[k],E.b[k],e)); return o;
+}
+
+let rotY=.5, rotX=.12, rotYT=.5, rotXT=.12, zoom=1, zoomT=1, camD=3.4;
+const ptrs=new Map(); let pinch0=0, zoom0=1;
+const cv=rnd.domElement; cv.style.touchAction="none";
+cv.addEventListener("pointerdown",e=>{ ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch0=Math.hypot(a.x-b.x,a.y-b.y);zoom0=zoomT;}
+  cv.setPointerCapture&&cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove",e=>{
+  const p=ptrs.get(e.pointerId); if(!p) return;
+  const dx=e.clientX-p.x, dy=e.clientY-p.y;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){ const[a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y);
+    if(pinch0) zoomT=Math.max(.6,Math.min(3.2,zoom0*(d/pinch0))); return; }
+  rotYT+=dx*.009; rotXT=Math.max(-.9,Math.min(.9,rotXT+dy*.006)); autoSpin=false;
+  document.getElementById("spin").classList.remove("on");
+});
+const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=0; };
+cv.addEventListener("pointerup",up); cv.addEventListener("pointercancel",up);
+cv.addEventListener("wheel",e=>{e.preventDefault();zoomT=Math.max(.6,Math.min(3.2,zoomT*(1-e.deltaY*.0015)));},{passive:false});
+
+const VIEWS=[["Front",0],["Side",-Math.PI/2],["Back",Math.PI],["Other side",Math.PI/2],["Above",null]];
+const vr=document.getElementById("views");
+VIEWS.forEach(([n,r])=>{ const b=document.createElement("button"); b.className="chip"; b.textContent=n;
+  b.onclick=()=>{ autoSpin=false; document.getElementById("spin").classList.remove("on");
+    if(r===null){ rotXT=.85; rotYT=0; } else { rotYT=r; rotXT=.12; }
+    [...vr.children].forEach(c=>c.classList.remove("on")); b.classList.add("on"); };
+  vr.appendChild(b); });
+
+const er=document.getElementById("exs");
+Object.entries(EXS).forEach(([k,E],i)=>{ const b=document.createElement("button");
+  b.className="chip"+(i===0?" on":""); b.textContent=E.name;
+  b.onclick=()=>{ key=k; [...er.children].forEach(c=>c.classList.remove("on")); b.classList.add("on");
+    document.getElementById("cap").textContent=E.cap; };
+  er.appendChild(b); });
+document.getElementById("cap").textContent=EXS.bench.cap;
+
+document.getElementById("sp").oninput=e=>speed=+e.target.value;
+document.getElementById("pause").onclick=e=>{ playing=!playing; e.target.classList.toggle("on",!playing);
+  e.target.textContent=playing?"Pause":"Play"; };
+document.getElementById("spin").onclick=e=>{ autoSpin=!autoSpin; e.target.classList.toggle("on",autoSpin); };
+document.getElementById("mus").onclick=e=>{ showMus=!showMus; e.target.classList.toggle("on",showMus); };
+
+let t=0, last=performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt=Math.min(.06,(now-last)/1000); last=now;
+  if(playing) t=(t+dt*speed/2.6)%1;
+  const E=EXS[key], p=poseNow(t);
+  bench3.visible=!!E.lying;
+
+  const hotSet=new Set(); if(showMus) (E.hot||[]).forEach(h=>(HOTMAP[h]||[]).forEach(b=>hotSet.add(b)));
+  BONES.forEach(([a,b])=>{
+    const k=a+"-"+b, m=limbs[k];
+    if(!p[a]||!p[b]){ m.visible=false; return; }
+    m.visible=true; place(m,p[a],p[b]);
+    m.material = hotSet.has(k) ? HOT : NORM;
+  });
+  Object.entries(joints).forEach(([j,m])=>{ if(p[j]){ m.visible=true; m.position.set(...p[j]); } else m.visible=false; });
+  [["hnL",0],["hnR",1]].forEach(([j,i])=>{
+    if(!p[j]){ bells[i].visible=false; return; }
+    bells[i].visible=true; bells[i].position.set(...p[j]);
+  });
+
+  if(autoSpin) rotYT+=.006;
+  rotY+=(rotYT-rotY)*.16; rotX+=(rotXT-rotX)*.16; zoom+=(zoomT-zoom)*.14;
+  root.rotation.y=rotY; root.rotation.x=rotX;
+  const focus = E.lying ? .45 : .95;
+  cam.position.set(0,focus+.25,camD/zoom); cam.lookAt(0,focus,0);
+  rnd.render(scene,cam);
+}
+requestAnimationFrame(loop);
+}
+try { window.__boot3d(); } catch (e) { window.__fail3d(e.message || String(e)); }
+</script>
+</body>
+</html>
