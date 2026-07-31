@@ -3789,7 +3789,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v70 · 31 Jul";
+const APP_VERSION = "v71 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -4771,17 +4771,74 @@ const bareLabel = (t) => String(t || "")
     .replace(/^\s*\d+(?:[.,]\d+)?\s*(?:g|kg|ml|l|oz|fl\s?oz)?\s*/i, "")
     .replace(/^\s*(?:a|an|one)\s+/i, "")
     .trim() || "portion";
+/* Models sometimes run past the token limit and the JSON arrives cut off
+   mid-sentence. Rather than bin the whole thing, close whatever is still
+   open and keep every section that did come through.                 */
+function repairJson(src) {
+    const stack = [];
+    let inStr = false, esc = false, strStart = -1;
+    for (let i = 0; i < src.length; i++) {
+        const c = src[i];
+        if (inStr) {
+            if (esc)
+                esc = false;
+            else if (c === "\\")
+                esc = true;
+            else if (c === '"')
+                inStr = false;
+            continue;
+        }
+        if (c === '"') {
+            inStr = true;
+            strStart = i;
+        }
+        else if (c === "{" || c === "[")
+            stack.push(c);
+        else if (c === "}" || c === "]")
+            stack.pop();
+    }
+    let out = src;
+    if (inStr) {
+        // was it cut inside a key or inside a value? look back for the colon
+        let k = strStart - 1;
+        while (k >= 0 && /\s/.test(out[k]))
+            k--;
+        if (out[k] === ":")
+            out += '"'; // mid-value: close it and keep it
+        else
+            out = out.slice(0, strStart); // mid-key: it has no value, drop it
+    }
+    let prev;
+    do {
+        prev = out;
+        out = out.replace(/\s+$/, "").replace(/"[^"]*"\s*:\s*$/, "").replace(/,$/, "");
+    } while (out !== prev);
+    while (stack.length)
+        out += stack.pop() === "{" ? "}" : "]";
+    return out;
+}
 function looseJson(txt) {
     const clean = String(txt).replace(/```json/g, "").replace(/```/g, "").trim();
-    const a = clean.indexOf("{"), b = clean.lastIndexOf("}");
-    if (a < 0 || b <= a)
+    const a = clean.indexOf("{");
+    if (a < 0)
         return null;
+    const b = clean.lastIndexOf("}");
+    if (b > a) {
+        try {
+            return JSON.parse(clean.slice(a, b + 1));
+        }
+        catch { }
+    }
+    // cut off, or malformed — repair and try again
     try {
-        return JSON.parse(clean.slice(a, b + 1));
+        const fixed = JSON.parse(repairJson(clean.slice(a)));
+        if (fixed && typeof fixed === "object") {
+            fixed._truncated = true;
+            return fixed;
+        }
     }
-    catch {
-        return null;
-    }
+    catch { }
+    return null;
 }
 /* ============ ASK COACH ============ */
 const COACH_SYSTEM = `You are a strength and nutrition coach built into someone's training app.
@@ -7659,10 +7716,22 @@ ${q}`, 6000, "deep");
         setElapsed(0);
         setStage("thinking");
         try {
-            const txt = await callClaude(`${PROF_PROMPT}\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 8000, "deep");
-            const j = looseJson(txt);
-            if (!j || !Array.isArray(j.sections))
-                throw new Error("The reply didn't come back in a usable shape. Try again.");
+            const txt = await callClaude(`${PROF_PROMPT}\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 16000, "deep");
+            let j = looseJson(txt);
+            if (j && Array.isArray(j.sections)) {
+                j.sections = j.sections.filter((x) => x && x.title && x.body);
+                if (j._truncated)
+                    j.cut = true;
+            }
+            else if (txt && txt.trim().length > 200) {
+                // not JSON at all — keep the words rather than throwing away the analysis
+                j = { headline: "It answered, but not in the shape the app expected.",
+                    sections: [{ title: "What it said", body: txt.trim(), confidence: "suggestive" }],
+                    questions: [], raw: true };
+            }
+            else {
+                throw new Error("Nothing usable came back. Tap again — it usually works second time.");
+            }
             setRes(j);
             setStage("analysis");
         }
@@ -7680,10 +7749,13 @@ ${q}`, 6000, "deep");
             const txt = await callClaude(`${PLAN_PROMPT}\n\n=== YOUR ANALYSIS ===\n${res.headline}\n${res.sections.map((s2) => `${s2.title}: ${s2.body}`).join("\n")}`
                 + `\n\n=== THEIR ANSWERS ===\n${qa}`
                 + `\n\n=== EXERCISES THEY CAN DO (exact names) ===\n${exList()}`
-                + `\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 8000, "deep");
+                + `\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 16000, "deep");
             const j = looseJson(txt);
-            if (!j || !Array.isArray(j.plan))
-                throw new Error("The plan didn't come back in a usable shape. Try again.");
+            if (!j || !Array.isArray(j.plan) || !j.plan.length)
+                throw new Error("The plan didn't come back whole. Tap again — it usually works second time.");
+            j.plan = j.plan.filter((d) => d && Array.isArray(d.exercises) && d.exercises.length);
+            if (!j.plan.length)
+                throw new Error("The plan came back empty. Tap again.");
             setPlan(j);
             setStage("plan");
         }
@@ -7760,6 +7832,10 @@ ${q}`, 6000, "deep");
                 : "Writing your week…"),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 14, color: "var(--faint)" } }, "Leave this open. Closing it loses the analysis."))),
         stage === "analysis" && res && React.createElement(React.Fragment, null,
+            (res.cut || res.raw) && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-note" }, res.raw
+                    ? "It replied in prose rather than the structure the app wanted, so this is its answer as written. The plan step needs the structured version — run it again if you want next week written."
+                    : "This ran long and got cut off at the end. Everything below is intact; there may have been another section or two coming. Running it again usually gets the lot."))),
             React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "The headline"),
                 React.createElement("div", { style: { fontSize: 16, lineHeight: 1.45 } }, res.headline)),
