@@ -52,36 +52,28 @@ b.k{color:var(--txt);font-weight:600;}
 
 <script>
 (function () {
+  const stage = document.getElementById("stage");
+  const fail = (why) => {
+    stage.innerHTML = '<div style="padding:26px;text-align:center;color:#8E949E;font-size:13.5px;line-height:1.6">'
+      + '<b style="color:#F5F6F7;font-size:15px">Couldn\'t start</b><br><br>'
+      + (why || "something went wrong") + '</div>';
+  };
   const urls = [
     "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
     "https://unpkg.com/three@0.128.0/build/three.min.js",
   ];
   let i = 0;
-  const stage = document.getElementById("stage");
-  const fail = (why) => {
-    stage.innerHTML = '<div style="padding:26px;text-align:center;color:#8E949E;font-size:13.5px;line-height:1.6">'
-      + '<b style="color:#F5F6F7;font-size:15px">Can\'t load the 3D library</b><br><br>'
-      + 'This page needs three.js from the web, and wherever you have opened it is blocking that '
-      + '\u2014 which includes inside the Claude app.<br><br>'
-      + 'Put it on GitHub next to the app and open it at<br>'
-      + '<b style="color:#F5F6F7">garydear3009-cmyk.github.io/Ledger/animation-3d.html</b>'
-      + (why ? '<br><br><span style="font-size:11.5px;color:#5C626B">' + why + '</span>' : '')
-      + '</div>';
-  };
   const next = () => {
-    if (i >= urls.length) return fail("every source refused");
+    if (i >= urls.length) return fail("The 3D library wouldn't load. If you're inside the Claude app, that's expected \u2014 open it at garydear3009-cmyk.github.io/Ledger/animation-3d.html instead.");
     const sc = document.createElement("script");
     sc.src = urls[i++];
-    sc.onload = () => (window.THREE ? start() : next());
+    sc.onload = () => { if (!window.THREE) return next(); try { run(); } catch (e) { fail(e.message || String(e)); } };
     sc.onerror = next;
     document.head.appendChild(sc);
   };
-  window.__boot3d = next;
-  window.__fail3d = fail;
-})();
-</script>
-<script>
-function start() {
+
+  function run() {
+
 /* ---------------- the movements ----------------
    Each joint is [x, y, z]. x across, y up, z towards the viewer.
    Two keyframes per lift: the top and the bottom.                */
@@ -317,8 +309,12 @@ function loop(now){
   rnd.render(scene,cam);
 }
 requestAnimationFrame(loop);
-}
-try { window.__boot3d(); } catch (e) { window.__fail3d(e.message || String(e)); }
+
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", next);
+  else next();
+})();
 </script>
 </body>
 </html>
