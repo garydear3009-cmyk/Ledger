@@ -3789,7 +3789,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v72 · 31 Jul";
+const APP_VERSION = "v73 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -4043,17 +4043,6 @@ function LiveSession({ st, save, s, setSheet }) {
     const stale = started != null && Date.now() - started > STALE;
     // only a session you actually pressed Start on, in the last six hours, is live
     const fin = !!s.finished || started == null || stale;
-    useEffect(() => { if (fin || paused)
-        return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [fin, paused]);
-    // tidy up anything left running overnight rather than showing a silly number
-    useEffect(() => {
-        if (s.finished || !stale)
-            return;
-        const done = s.exercises.flatMap((e) => e.sets.filter((x) => !x.warm)).filter((x) => x.done);
-        const last = Math.max(0, ...s.exercises.flatMap((e) => e.sets.map((x) => x.at || 0)));
-        const dur = last > started ? Math.round((last - started) / 1000) : done.length * 180;
-        save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, finished: true, durationSec: dur } : x) });
-    }, [stale, s.id]);
     const paused = !!s.pausedAt;
     const pausedMs = (s.pausedTotal || 0) + (paused ? Date.now() - s.pausedAt : 0);
     const elapsed = fin ? (s.durationSec || 0)
@@ -4067,6 +4056,17 @@ function LiveSession({ st, save, s, setSheet }) {
             sess.pausedAt = Date.now();
         return sess;
     });
+    useEffect(() => { if (fin || paused)
+        return; const t = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(t); }, [fin, paused]);
+    // tidy up anything left running overnight rather than showing a silly number
+    useEffect(() => {
+        if (s.finished || !stale)
+            return;
+        const done = s.exercises.flatMap((e) => e.sets.filter((x) => !x.warm)).filter((x) => x.done);
+        const last = Math.max(0, ...s.exercises.flatMap((e) => e.sets.map((x) => x.at || 0)));
+        const dur = last > started ? Math.round((last - started) / 1000) : done.length * 180;
+        save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, finished: true, durationSec: dur } : x) });
+    }, [stale, s.id]);
     const allSets = s.exercises.flatMap((e) => e.sets.filter((x) => !x.warm));
     const doneSets = allSets.filter((x) => x.done).length;
     const exDone = s.exercises.filter((e) => e.sets.filter((x) => !x.warm).every((x) => x.done)).length;
