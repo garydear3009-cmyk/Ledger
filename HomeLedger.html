@@ -198,6 +198,7 @@ const GROUPS = {
     legs: { label: "Legs", m: ["quad", "ham", "glute", "calf"] },
     core: { label: "Core", m: ["abs", "obl", "lback"] },
     cardio: { label: "Conditioning", m: [] },
+    aerobic: { label: "Cardio", m: [] },
 };
 function status(s) {
     if (s >= 10 && s <= 20)
@@ -360,13 +361,42 @@ const CARDIO_RAW = [
     ["Renegade row", ["db"], "row", ["uback", "abs"], ["lats", "bi"], 7.0, 1, ["Press-up position on the dumbbells", "Row one arm without your hips twisting", "Wide feet makes it easier"]],
     ["Farmer's march", ["db"], "farmer", ["fore", "traps"], ["abs", "quad"], 5.0, 1, ["A heavy dumbbell in each hand, march on the spot", "Shoulders back, ribs down", "Silent, and your grip will complain"]],
 ];
+/* Cardio. Logged in minutes and kilometres, not sets and reps.
+   MET values from the Compendium of Physical Activities.            */
+const AEROBIC_RAW = [
+    ["Walking, easy", ["none"], 3.0, 1, ["A stroll. Counts towards your exercise ring and not much else", "Still worth it — it's the cheapest recovery there is", "About 5 km/h"]],
+    ["Walking, brisk", ["none"], 4.8, 1, ["Fast enough that talking gets slightly harder", "The pace most step targets assume", "About 6.5 km/h"]],
+    ["Walking, uphill", ["none"], 6.3, 1, ["Hills or a treadmill incline", "Far more work than the flat for the same time", "Knees prefer it to running"]],
+    ["Running, easy", ["none"], 8.3, 1, ["Conversational pace, roughly 6:30 a kilometre", "Most of your running should feel this easy", "Nose breathing should just about work"]],
+    ["Running, steady", ["none"], 9.8, 1, ["Comfortably hard, around 5:30 a kilometre", "You can speak in short sentences, not paragraphs"]],
+    ["Running, hard", ["none"], 11.5, 1, ["Around 4:30 a kilometre or faster", "A few words at a time at most", "Short efforts only"]],
+    ["Cycling, easy", ["none"], 5.8, 1, ["Flat, unhurried, under 20 km/h", "Great for recovery days"]],
+    ["Cycling, moderate", ["none"], 8.0, 1, ["20 to 25 km/h, working but sustainable"]],
+    ["Cycling, hard", ["none"], 10.0, 1, ["Over 25 km/h or serious hills", "Legs will feel it in tomorrow's squats"]],
+    ["Stationary bike", ["none"], 6.8, 0, ["Moderate resistance, steady effort", "Easy to do while reading something"]],
+    ["Rowing machine", ["none"], 7.0, 1, ["Legs, then back, then arms — in that order", "Most people pull with the arms first and wonder why their back aches", "Drive with the legs"]],
+    ["Rowing, hard", ["none"], 8.5, 1, ["Race pace, 500m intervals or similar", "One of the highest calorie burns available"]],
+    ["Elliptical", ["none"], 5.0, 0, ["Low impact, easy on the joints", "Machines wildly overestimate the calories — trust the app's number"]],
+    ["Stair climbing", ["none"], 8.8, 0, ["Real stairs or a machine", "Brutal for the time it takes"]],
+    ["Swimming, easy", ["none"], 5.8, 1, ["Steady laps, breathing every three strokes"]],
+    ["Swimming, hard", ["none"], 9.8, 1, ["Intervals or continuous hard effort", "Whole body, no impact"]],
+    ["Skipping", ["none"], 11.8, 0, ["One of the highest burns per minute there is", "Start with 30 second bursts", "Needs ceiling height"]],
+    ["Hiking", ["none"], 6.0, 1, ["Off-road walking, usually with some climb", "A pack makes it considerably harder"]],
+    ["Football", ["none"], 7.0, 0, ["Casual five-a-side or a full game", "Stop-start, so it hits differently to steady cardio"]],
+    ["Tennis", ["none"], 7.3, 0, ["Singles is far harder than doubles"]],
+    ["Badminton", ["none"], 5.5, 0, ["Casual play", "Surprisingly hard on the calves"]],
+    ["Squash", ["none"], 12.0, 0, ["About as hard as cardio gets indoors"]],
+    ["Boxing, bag work", ["none"], 7.8, 0, ["Rounds on a heavy bag", "Shoulders give out before the legs do"]],
+    ["Circuit training", ["none"], 7.5, 0, ["Continuous movement, minimal rest", "Counts as conditioning rather than strength"]],
+    ["Dog walk", ["none"], 3.5, 1, ["Stop-start, but it all counts", "The easiest daily habit to keep"]],
+];
 const MET_BY_MOVE = {
     bench: 5, incline: 5, fly: 3.5, skull: 3.5, pullover: 3.5, ohp: 5, ohtri: 3.5, lateral: 3.5,
     front: 3.5, curl: 3.5, kickback: 3.5, shrug: 4, sidebend: 3.5, row: 5, reardelt: 3.5,
     squat: 6, hinge: 6, lunge: 6, thrust: 5, calf: 3.5, pushup: 5.5, pullup: 6, dip: 6,
     crunch: 3.5, legraise: 3.5, rollout: 4, plank: 3.5, cardio: 6,
 };
-const groupOf = (ex) => ex.cardio ? "cardio" : (Object.keys(GROUPS).find((g) => GROUPS[g].m.length && ex.primary.some((m) => GROUPS[g].m.includes(m))) || "core");
+const groupOf = (ex) => ex.aerobic ? "aerobic" : ex.cardio ? "cardio" : (Object.keys(GROUPS).find((g) => GROUPS[g].m.length && ex.primary.some((m) => GROUPS[g].m.includes(m))) || "core");
 const EX = [
     ...RAW.map(([name, kit, move, primary, secondary, lo, hi, perSide, cues], i) => ({
         id: "x" + i, name, kit, move, primary, secondary, lo, hi, cues, perSide: !!perSide,
@@ -379,11 +409,26 @@ const EX = [
         loaded: false, timed: true, isCompound: true, cardio: true, quiet: !!quiet, met,
     })),
 ];
-EX.forEach((e) => { e.group = groupOf(e); });
+const AEROBIC = AEROBIC_RAW.map(([name, kit, met, dist, cues], i) => ({
+    id: "a" + i, name, kit, met, dist: !!dist, cues,
+    move: "cardio", group: "aerobic", aerobic: true, cardio: true, timed: true,
+    primary: [], secondary: [], lo: 20, hi: 45, perSide: false, loaded: false, isCompound: true, quiet: true,
+}));
+EX.push(...AEROBIC);
+EX.forEach((e) => { e.group = e.group || groupOf(e); });
 const exOf = (id) => EX.find((e) => e.id === id);
 const byName = (n) => EX.find((e) => e.name === n).id;
 /* active calories per minute — MET minus resting, x bodyweight */
 const kcalMin = (met, kg) => Math.max(0.5, (met - 1) * kg * 0.0175);
+/* a cardio "set" is one bout: minutes, and kilometres if it travels */
+const boutKcal = (ex, s, kg) => Math.round(kcalMin(ex.met, kg) * (Number(s.mins) || 0));
+const pace = (s) => {
+    const m = Number(s.mins) || 0, k = Number(s.km) || 0;
+    if (!m || !k)
+        return null;
+    const p = m / k;
+    return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /km`;
+};
 /* ---------------- food ---------------- */
 const FCAT = ["Meat & fish", "Eggs & dairy", "Carbs & grains", "Bread & bakery", "Fruit", "Veg", "Beans & pulses", "Nuts & fats", "Snacks & sweets", "Drinks", "Supplements", "Meals & takeaway", "Sauces & extras"];
 const FRAW = [
@@ -1268,7 +1313,17 @@ const GOALS = [
     { id: "size", label: "Overall size", muscles: ["chest", "lats", "quad", "glute", "fdelt", "bi", "tri", "ham"], target: 14, note: "Spread the work evenly and eat slightly above maintenance." },
 ];
 /* ---------------- helpers ---------------- */
-const e1rm = (w, r) => (r > 0 && w > 0 ? w * (1 + r / 30) : 0);
+/* Epley, corrected for how far short of failure the set stopped. Without
+   the correction every strength number assumes you trained to failure,
+   which is exactly the assumption Robinson (2024) shows people break. */
+const e1rm = (w, r, rir) => (r > 0 && w > 0 ? w * (1 + (r + (rir ?? 0)) / 30) : 0);
+const RIR_OPTS = [[0, "0", "nothing left"], [1, "1", "one more"], [2, "2", "two more"], [3, "3", "three more"], [4, "4+", "plenty left"]];
+/* the last working set of an exercise is the one worth rating */
+const lastWorkIdx = (sets) => { for (let i = sets.length - 1; i >= 0; i--)
+    if (!sets[i].warm)
+        return i; return -1; };
+const setRir = (e) => { const i = lastWorkIdx(e.sets); return i < 0 ? null : (e.sets[i].rir ?? null); };
+const rirWord = (r) => r == null ? "" : r === 0 ? "to failure" : r >= 4 ? "well short" : `${r} in reserve`;
 const iso = (d) => d.toISOString().slice(0, 10);
 const dlong = (s) => new Date(s + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const dtiny = (s) => new Date(s + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -1277,7 +1332,7 @@ const dur = (s) => `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60
 const clock = (s) => s >= 3600
     ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
     : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-const setVol = (ex, s) => (s.warm || !ex.loaded ? 0 : s.w * s.reps * (ex.perSide ? 2 : 1));
+const setVol = (ex, s) => (s.warm || !ex.loaded || ex.aerobic ? 0 : s.w * s.reps * (ex.perSide ? 2 : 1));
 const exVol = (ex, sets) => sets.reduce((a, s) => a + setVol(ex, s), 0);
 const sessVol = (s) => s.exercises.reduce((a, e) => { const x = exOf(e.exId); return a + (x ? exVol(x, e.sets) : 0); }, 0);
 const STEP = 2.5;
@@ -1329,7 +1384,29 @@ const sessMet = (s) => {
         return isRings(s) ? 7 : 5;
     return list.reduce((a, e) => a + e.met, 0) / list.length;
 };
-const burned = (s, kg) => Math.round(kcalMin(sessMet(s), kg) * (s.durationSec / 60));
+/* cardio bouts carry their own minutes, so count those exactly and
+   estimate only the lifting part of a session */
+const sessKcal = (s, kg) => {
+    let kcal = 0, liftMin = 0;
+    s.exercises.forEach((e) => {
+        const ex = exOf(e.exId);
+        if (!ex)
+            return;
+        if (ex.aerobic)
+            e.sets.forEach((q) => { kcal += boutKcal(ex, q, kg); });
+    });
+    const aerobicMin = s.exercises.reduce((a, e) => {
+        const ex = exOf(e.exId);
+        return a + (ex?.aerobic ? e.sets.reduce((x, q) => x + (Number(q.mins) || 0), 0) : 0);
+    }, 0);
+    liftMin = Math.max(0, (s.durationSec || 0) / 60 - aerobicMin);
+    return Math.round(kcal + kcalMin(sessMet(s), kg) * liftMin);
+};
+const cardioMins = (s) => s.exercises.reduce((a, e) => {
+    const ex = exOf(e.exId);
+    return a + (ex?.aerobic ? e.sets.reduce((x, q) => x + (Number(q.mins) || 0), 0) : 0);
+}, 0);
+const burned = (s, kg) => sessKcal(s, kg);
 const pumpWeight = (w) => Math.max(STEP, Math.round((w * 0.72) / STEP) * STEP);
 const pumpReps = (ex) => Math.min(30, ex.hi + 5);
 function nextTarget(ex, sets, intent) {
@@ -1344,6 +1421,14 @@ function nextTarget(ex, sets, intent) {
         return { pump: true, msg: "Pump session — doesn't count towards your weight progression. Chase the burn." };
     const w = Number(work[0].w) || 0;
     const allTop = work.every((s) => Number(s.reps) >= ex.hi);
+    const lastRir = work[work.length - 1]?.rir;
+    // three or more left in the tank means the load is the limiter, not you
+    if (lastRir != null && lastRir >= 3 && ex.loaded)
+        return { hold: false, w: w + stepKg(), rir: lastRir,
+            msg: `You finished with ${lastRir} reps still in you. That's the weight holding you back rather than the effort — go to ${W(w + stepKg())}${ex.perSide ? " per dumbbell" : ""} next time.` };
+    if (lastRir === 0 && !allTop)
+        return { hold: true, w, rir: 0,
+            msg: `You went to failure and still came up short of ${ex.hi}. Stay at ${W(w)} — the reps will come. Going to failure every set costs more than it gives.` };
     if (!ex.loaded)
         return { hold: !allTop, msg: allTop ? `All sets hit ${ex.hi}. Make it harder next time.` : `Keep going until you reach ${ex.hi} on every set.` };
     if (allTop)
@@ -2293,14 +2378,14 @@ function analyse(st) {
         const w = e.sets.filter((x) => !x.warm);
         if (!w.length)
             return;
-        (byEx[_a = e.exId] || (byEx[_a] = [])).push({ date: s.date, hour: s.hour, top: Math.max(0, ...w.map((x) => e1rm(x.w, x.reps))), vol: exVol(ex, e.sets), sets: w.length, best: w.reduce((a, b) => (e1rm(b.w, b.reps) > e1rm(a.w, a.reps) ? b : a)) });
+        (byEx[_a = e.exId] || (byEx[_a] = [])).push({ date: s.date, hour: s.hour, top: Math.max(0, ...w.map((x) => e1rm(x.w, x.reps, x.rir))), vol: exVol(ex, e.sets), sets: w.length, best: w.reduce((a, b) => (e1rm(b.w, b.reps, b.rir) > e1rm(a.w, a.reps, a.rir) ? b : a)) });
     }));
     const base = {};
     Object.entries(byEx).forEach(([k, a]) => { const h = a.slice(0, Math.max(2, Math.ceil(a.length / 3))); base[k] = h.reduce((x, y) => x + y.top, 0) / h.length; });
     const perf = strength.map((s) => {
         const rs = s.exercises.map((e) => {
             const w = e.sets.filter((x) => !x.warm);
-            const top = w.length ? Math.max(...w.map((x) => e1rm(x.w, x.reps))) : 0;
+            const top = w.length ? Math.max(...w.map((x) => e1rm(x.w, x.reps, x.rir))) : 0;
             return base[e.exId] && top ? top / base[e.exId] : null;
         }).filter(Boolean);
         return { ...s, idx: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null, carbsPrev: carbBy[prevD(s.date)] ?? null };
@@ -3012,7 +3097,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v48 · 31 Jul";
+const APP_VERSION = "v51 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -3322,29 +3407,45 @@ function LiveSession({ st, save, s, setSheet }) {
             const nx = nextTarget(ex, e.sets, s.intent);
             return (React.createElement("div", { key: i, className: "il-ex", style: { opacity: complete ? 0.72 : 1 } },
                 React.createElement("div", { className: "il-exh", style: { cursor: "default" } },
-                    React.createElement("div", { className: "il-thumb" },
-                        React.createElement(FormDemo, { ex: ex, h: 52, weight: false })),
+                    React.createElement("div", { className: "il-thumb" }, ex.aerobic ? React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 20 } }, "\uD83C\uDFC3") : React.createElement(FormDemo, { ex: ex, h: 52, weight: false })),
                     React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                         React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } },
                             ex.name,
                             complete ? " ✓" : ""),
                         React.createElement("div", { className: "il-sub il-n" },
-                            ex.timed || ex.cardio ? "timed" : `target ${isPump(s) ? `${pumpReps(ex)}ish` : `${ex.lo}–${ex.hi}`} reps`,
+                            ex.aerobic ? `${Math.round(kcalMin(ex.met, st.profile.weightKg))} cal a minute`
+                                : ex.timed || ex.cardio ? "timed" : `target ${isPump(s) ? `${pumpReps(ex)}ish` : `${ex.lo}–${ex.hi}`} reps`,
                             ex.loaded ? ` · rest ${ex.isCompound ? "2–3 min" : "60–90s"}` : "")),
                     React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "info", exId: e.exId }) }, "How")),
                 React.createElement("div", { style: { padding: "0 12px 12px" } },
-                    React.createElement("div", { className: "il-lrow", style: { padding: 0, marginBottom: 4 } },
+                    ex.aerobic && React.createElement(CardioRow, { ex: ex, e: e, write: write, kg: st.profile.weightKg }),
+                    !ex.aerobic && React.createElement("div", { className: "il-lrow", style: { padding: 0, marginBottom: 4 } },
                         React.createElement("span", null),
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.loaded ? (ex.perSide ? LU() + " ea" : LU()) : "—"),
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.timed || ex.cardio ? "secs" : "reps"),
                         React.createElement("span", null)),
-                    e.sets.map((x, j) => (React.createElement("div", { key: j, className: "il-lrow" + (x.done ? " il-done" : "") },
+                    !ex.aerobic && e.sets.map((x, j) => (React.createElement("div", { key: j, className: "il-lrow" + (x.done ? " il-done" : "") },
                         React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
                         React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
                         React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) }),
                         React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713")))),
+                    (() => {
+                        if (ex.aerobic)
+                            return null;
+                        const li = lastWorkIdx(e.sets);
+                        const lastDone = li >= 0 && e.sets[li].done;
+                        if (!lastDone)
+                            return null;
+                        const cur = e.sets[li].rir;
+                        return (React.createElement("div", { style: { marginTop: 12, padding: 11, background: "var(--c2)", borderRadius: 10 } },
+                            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How many could you have done?"),
+                            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, RIR_OPTS.map(([v, l, why]) => (React.createElement("button", { key: v, className: "il-chip" + (cur === v ? " on" : ""), onClick: () => setField(e.exId, li, "rir", cur === v ? null : v), title: why }, l)))),
+                            cur != null && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, cur === 0 ? "To failure. Fine occasionally, expensive every set."
+                                : cur <= 2 ? "That's the sweet spot — the growth without the fatigue."
+                                    : "Plenty left. Worth more weight next time.")));
+                    })(),
                     React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
-                        React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => write((sess) => { const t = sess.exercises.find((q) => q.exId === e.exId); t.sets.push({ ...t.sets[t.sets.length - 1], done: false, at: null }); return sess; }) }, "+ Set"),
+                        React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => write((sess) => { const t = sess.exercises.find((q) => q.exId === e.exId); t.sets.push({ ...t.sets[t.sets.length - 1], done: false, at: null, rir: null }); return sess; }) }, "+ Set"),
                         e.sets.length > 1 && React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => write((sess) => { const t = sess.exercises.find((q) => q.exId === e.exId); t.sets.pop(); return sess; }) }, "\u2212 Set"),
                         React.createElement("button", { className: "il-btn g sm", onClick: () => setRest(ex.isCompound ? 150 : 90) }, "Rest")),
                     complete && nx && React.createElement("div", { style: { marginTop: 12, padding: 11, background: nx.pump ? "#2A1638" : nx.hold ? "#241F12" : "#10281A", borderRadius: 9 } },
@@ -3404,8 +3505,23 @@ function Train({ st, save, a, today, setSheet }) {
                     ". That's accumulated fatigue rather than a programme fault. Start any session as a ",
                     React.createElement("strong", { style: { color: "var(--txt)" } }, "deload"),
                     " this week \u2014 same weights, half the sets. You'll come back stronger in seven days than by pushing through.")),
-            React.createElement("div", { style: { padding: "0 12px 4px" } },
-                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach to build me a session")),
+            React.createElement("div", { style: { padding: "0 12px 4px", display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach to build me a session"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick", title: "Log cardio", onPick: (e) => {
+                            const n = new Date();
+                            const sessions = [...st.sessions];
+                            let i = sessions.findIndex((x) => x.date === today);
+                            if (i < 0) {
+                                sessions.push({ id: "u" + Date.now(), date: today, intent: "strength", routineName: "", hour: n.getHours(),
+                                    minute: n.getMinutes(), startedAt: Date.now(), durationSec: 0, exercises: [] });
+                                i = sessions.length - 1;
+                            }
+                            const ex = sessions[i].exercises.slice();
+                            if (!ex.some((x) => x.exId === e.id))
+                                ex.push({ exId: e.id, sets: [{ mins: "", km: "", done: false, warm: false }] });
+                            sessions[i] = { ...sessions[i], exercises: ex, finished: false };
+                            save({ ...st, sessions });
+                        } }) }, "Log a walk, run or ride")),
             React.createElement("div", { className: "il-row", style: { margin: "14px 14px 9px" } },
                 React.createElement("span", { className: "il-lbl" }, "Or choose a session"),
                 React.createElement("span", { className: "il-sub", style: { margin: 0, fontSize: 11 } }, "slide a card left to delete")),
@@ -4483,7 +4599,7 @@ function Diary({ st, save, a, close, setSheet }) {
                     if (!ex)
                         return null;
                     const w = e.sets.filter((x) => !x.warm);
-                    const best = w.length ? w.reduce((x, y) => (e1rm(y.w, y.reps) > e1rm(x.w, x.reps) ? y : x)) : null;
+                    const best = w.length ? w.reduce((x, y) => (e1rm(y.w, y.reps, y.rir) > e1rm(x.w, x.reps, x.rir) ? y : x)) : null;
                     return React.createElement("div", { key: i, className: "il-row", style: { padding: "7px 0", borderTop: "1px solid var(--line)" } },
                         React.createElement("span", { style: { fontSize: 13.5 } }, ex.name),
                         React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)" } },
@@ -4634,6 +4750,8 @@ function Diagnostics({ st, save, a, close, health }) {
     const [shot, setShot] = useState(null);
     const shotIn = useRef(null);
     const bugs = st.bugs || [];
+    // never let the API key leave the phone in an export
+    const safe = () => { const { apiKey, ...rest } = st; return rest; };
     const snapshot = () => ({
         version: APP_VERSION,
         when: new Date().toISOString(),
@@ -4816,7 +4934,7 @@ ${JSON.stringify(snapshot(), null, 1)}
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Carry your data between sessions"),
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Your data belongs to the exact web address this is running at. Move it to a different address and you start empty \u2014 unless you bring a file with you."),
             React.createElement("button", { className: "il-btn", style: { marginBottom: 8 }, onClick: () => {
-                    const body = JSON.stringify(st);
+                    const body = JSON.stringify(safe());
                     const name = `homeledger-${iso(new Date())}.json`;
                     try {
                         const b = new Blob([body], { type: "application/json" });
@@ -4833,7 +4951,7 @@ ${JSON.stringify(snapshot(), null, 1)}
                         copy("state", body);
                     }
                 } }, copied === "file" ? "Saved to your files ✓" : "1. Save my data to a file"),
-            React.createElement("button", { className: "il-btn g", style: { marginBottom: 8, width: "100%" }, onClick: () => copy("state", JSON.stringify(st)) }, copied === "state" ? "Copied ✓" : "…or copy it to the clipboard"),
+            React.createElement("button", { className: "il-btn g", style: { marginBottom: 8, width: "100%" }, onClick: () => copy("state", JSON.stringify(safe())) }, copied === "state" ? "Copied ✓" : "…or copy it to the clipboard"),
             React.createElement("input", { type: "file", accept: "application/json,.json,.txt", ref: fileIn, style: { display: "none" }, onChange: (e) => {
                     const f = e.target.files?.[0];
                     if (!f)
@@ -4844,7 +4962,7 @@ ${JSON.stringify(snapshot(), null, 1)}
                             const o = JSON.parse(String(fr.result));
                             if (!o || !Array.isArray(o.sessions) || !o.profile)
                                 throw new Error("that file isn't a Home Ledger export");
-                            save(o);
+                            save({ ...o, apiKey: o.apiKey || st.apiKey || "" });
                             setImported(true);
                             setTimeout(() => setImported(false), 3000);
                         }
@@ -4863,7 +4981,7 @@ ${JSON.stringify(snapshot(), null, 1)}
                         const o = JSON.parse(paste);
                         if (!o || !Array.isArray(o.sessions) || !o.profile)
                             throw new Error("that doesn't look like a Home Ledger export");
-                        save(o);
+                        save({ ...o, apiKey: o.apiKey || st.apiKey || "" });
                         setPaste("");
                         setImported(true);
                         setTimeout(() => setImported(false), 3000);
@@ -4874,7 +4992,7 @@ ${JSON.stringify(snapshot(), null, 1)}
                     }
                 } }, imported ? "Restored ✓" : "Restore from what I pasted"),
             importErr && React.createElement("div", { className: "il-note", style: { color: "var(--red)", marginTop: 8 } }, importErr),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "The file goes to your Files app. Keep it \u2014 it's the only way to move your data to a different web address, and the only way back if Safari's storage is ever cleared.")),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "The file goes to your Files app. Keep it \u2014 it's the only way to move your data to a different web address, and the only way back if Safari's storage is ever cleared. Your API key is deliberately left out, so an export is always safe to send me.")),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                 React.createElement("div", { className: "il-lbl" }, "Storage test"),
@@ -5260,6 +5378,649 @@ function ImportWorkouts({ st, save, close }) {
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "These go in as completed sessions so your numbers have a starting point. They're marked as imported, and you can delete any of them by sliding left on the Train tab.")));
 }
+/* ============ WARM-UP SETS ============
+   Ramping sets before the first heavy one. Most people skip them because
+   working out the numbers is a faff, so their first set is their worst. */
+function warmupFor(ex, workW) {
+    if (!ex.loaded || !workW)
+        return [];
+    if (!ex.isCompound)
+        return [{ w: Math.max(stepKg(), Math.round(workW * 0.5 / stepKg()) * stepKg()), reps: 10 }];
+    return [
+        { w: Math.max(stepKg(), Math.round(workW * 0.5 / stepKg()) * stepKg()), reps: 8 },
+        { w: Math.max(stepKg(), Math.round(workW * 0.7 / stepKg()) * stepKg()), reps: 5 },
+        { w: Math.max(stepKg(), Math.round(workW * 0.85 / stepKg()) * stepKg()), reps: 3 },
+    ];
+}
+/* ============ VOLUME LANDMARKS ============
+   The evidence range is 10-20 sets a muscle a week, but the useful band
+   differs by muscle and by person. Once there's enough history, work out
+   where each muscle actually responded best.                          */
+function volumeLandmarks(st, a) {
+    const out = {};
+    const weeks = [];
+    for (let w = 0; w < 16; w++) {
+        const from = iso(new Date(Date.now() - (w + 1) * 7 * 864e5));
+        const to = iso(new Date(Date.now() - w * 7 * 864e5));
+        const ss = st.sessions.filter((x) => x.date >= from && x.date < to && !isPump(x));
+        if (!ss.length)
+            continue;
+        const sets = {};
+        const best = {};
+        ss.forEach((sn) => sn.exercises.forEach((e) => {
+            const ex = exOf(e.exId);
+            if (!ex || ex.cardio)
+                return;
+            const work = e.sets.filter((x) => !x.warm);
+            ex.primary.forEach((m) => { sets[m] = (sets[m] || 0) + work.length; });
+            ex.secondary.forEach((m) => { sets[m] = (sets[m] || 0) + work.length * 0.5; });
+            const top = Math.max(0, ...work.map((x) => e1rm(x.w, x.reps, x.rir)));
+            ex.primary.forEach((m) => { best[m] = Math.max(best[m] || 0, top); });
+        }));
+        weeks.push({ w, sets, best });
+    }
+    MK.forEach((m) => {
+        const pts = weeks.filter((wk) => (wk.sets[m] || 0) > 0 && (wk.best[m] || 0) > 0)
+            .map((wk) => ({ sets: wk.sets[m], best: wk.best[m], w: wk.w })).reverse();
+        if (pts.length < 6) {
+            out[m] = { n: pts.length, enough: false };
+            return;
+        }
+        // pair each week with how the lift moved the following week
+        const gains = [];
+        for (let i = 0; i < pts.length - 1; i++) {
+            const d = (pts[i + 1].best - pts[i].best) / Math.max(1, pts[i].best);
+            gains.push({ sets: pts[i].sets, gain: d });
+        }
+        const lo = gains.filter((g) => g.sets <= 8), mid = gains.filter((g) => g.sets > 8 && g.sets <= 16), hi = gains.filter((g) => g.sets > 16);
+        const avg = (arr) => arr.length ? arr.reduce((x, y) => x + y.gain, 0) / arr.length : null;
+        const bands = [["under 9", avg(lo), lo.length], ["9 to 16", avg(mid), mid.length], ["over 16", avg(hi), hi.length]]
+            .filter((b) => b[2] >= 2);
+        const bestBand = bands.length ? bands.reduce((x, y) => (y[1] > x[1] ? y : x)) : null;
+        out[m] = { n: pts.length, enough: bands.length > 1, bands, bestBand, current: a.weeklyMap[m] ?? 0 };
+    });
+    return out;
+}
+/* ============ AUTOREGULATION ============
+   How you turned up, plus how hard the last one was, decides whether today
+   pushes or holds. This is the bit a human coach does that an app usually
+   can't, because the app never asks.                                   */
+function autoreg(st, a, chk) {
+    const rs = readinessScore(chk);
+    const recent = [...st.sessions].reverse().filter((s) => !isPump(s)).slice(0, 3);
+    const rirs = recent.flatMap((s) => s.exercises.map(setRir)).filter((x) => x != null);
+    const avgRir = rirs.length ? rirs.reduce((a2, b) => a2 + b, 0) / rirs.length : null;
+    let mood = "normal", why = [], setDelta = 0, loadNote = null;
+    if (rs != null && rs < 40) {
+        mood = "back off";
+        setDelta = -1;
+        why.push("you've turned up rough");
+    }
+    else if (rs != null && rs >= 78) {
+        mood = "push";
+        why.push("you're fresh");
+    }
+    if (chk?.sore === "bad") {
+        if (mood !== "back off") {
+            mood = "back off";
+            setDelta = -1;
+        }
+        why.push("you're still sore");
+    }
+    if (avgRir != null && avgRir >= 3) {
+        loadNote = "Your last few sessions finished with plenty in the tank — the weights are due to go up.";
+        if (mood === "normal")
+            mood = "push";
+    }
+    if (avgRir != null && avgRir <= 0.4) {
+        loadNote = "You've been taking nearly everything to failure. That's a lot of fatigue for very little extra growth — leave one or two in most sets.";
+    }
+    if ((st.profile.stress ?? 3) >= 4 && mood === "push") {
+        mood = "normal";
+        why.push("stress is high, so hold rather than push");
+    }
+    return { mood, why, setDelta, loadNote, rs, avgRir };
+}
+/* ============ ADHERENCE ============ */
+function adherence(st) {
+    const days = 28;
+    const from = iso(new Date(Date.now() - days * 864e5));
+    const sess = st.sessions.filter((s) => s.date >= from);
+    const planned = (Number(st.profile.daysWk) || 3) * (days / 7);
+    const foodDays = st.foods.filter((f) => f.date >= from && f.entries.length).length;
+    const weighDays = st.weights.filter((w) => w.date >= from).length;
+    const started = sess.length, finished = sess.filter((s) => s.finished).length;
+    return {
+        sessions: sess.length, planned: Math.round(planned),
+        sessionPct: Math.min(100, Math.round((sess.length / Math.max(1, planned)) * 100)),
+        foodPct: Math.round((foodDays / days) * 100), weighPct: Math.round((weighDays / days) * 100),
+        abandoned: started - finished,
+    };
+}
+/* ============ EXERCISE ROTATION ============ */
+function staleExercises(st) {
+    const first = {}, last = {}, count = {};
+    st.sessions.forEach((s) => s.exercises.forEach((e) => {
+        if (!first[e.exId] || s.date < first[e.exId])
+            first[e.exId] = s.date;
+        if (!last[e.exId] || s.date > last[e.exId])
+            last[e.exId] = s.date;
+        count[e.exId] = (count[e.exId] || 0) + 1;
+    }));
+    const cutoff = iso(new Date(Date.now() - 21 * 864e5));
+    return Object.keys(first).filter((id) => last[id] >= cutoff && count[id] >= 8)
+        .map((id) => {
+        const weeks = Math.round((new Date(last[id]) - new Date(first[id])) / (7 * 864e5));
+        return { id, ex: exOf(id), weeks, times: count[id] };
+    })
+        .filter((x) => x.ex && x.weeks >= 8)
+        .sort((a, b) => b.weeks - a.weeks);
+}
+const swapsFor = (ex, kit) => EX.filter((e) => e.id !== ex.id && e.kit.every((k) => kit.includes(k))
+    && e.move !== ex.move && e.primary.some((m) => ex.primary.includes(m)) && e.isCompound === ex.isCompound)
+    .slice(0, 3);
+/* ============ DIET BREAKS ============ */
+function dietBreak(st, a) {
+    if (st.profile.goal !== "lean" || !a.maint)
+        return null;
+    const days = 70;
+    let weeks = 0;
+    for (let w = 0; w < 12; w++) {
+        const from = iso(new Date(Date.now() - (w + 1) * 7 * 864e5));
+        const to = iso(new Date(Date.now() - w * 7 * 864e5));
+        const f = st.foods.filter((x) => x.date >= from && x.date < to && x.entries.length);
+        if (f.length < 3)
+            break;
+        const avg = f.reduce((x, y) => x + y.entries.reduce((p, q) => p + q.kcal, 0), 0) / f.length;
+        if (avg < a.maint - 150)
+            weeks++;
+        else
+            break;
+    }
+    if (weeks < 8)
+        return null;
+    return { weeks, target: a.maint };
+}
+/* ============ IMPORT FROM OTHER APPS ============
+   Withings, Apple Health, MacroFactor, Hevy and most others will export a
+   CSV. Rather than guess at each format, read the headers and let you say
+   which column is which — that way it handles anything, including apps
+   that don't exist yet.                                               */
+function parseCSV(text) {
+    const rows = [];
+    let cur = "", row = [], inQ = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQ) {
+            if (c === '"' && text[i + 1] === '"') {
+                cur += '"';
+                i++;
+            }
+            else if (c === '"')
+                inQ = false;
+            else
+                cur += c;
+        }
+        else if (c === '"')
+            inQ = true;
+        else if (c === "," || c === ";" || c === "\t") {
+            row.push(cur.trim());
+            cur = "";
+        }
+        else if (c === "\n") {
+            row.push(cur.trim());
+            if (row.some((x) => x !== ""))
+                rows.push(row);
+            row = [];
+            cur = "";
+        }
+        else if (c !== "\r")
+            cur += c;
+    }
+    row.push(cur.trim());
+    if (row.some((x) => x !== ""))
+        rows.push(row);
+    return rows;
+}
+const guessDate = (v) => {
+    if (!v)
+        return null;
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); // 2026-07-31
+    if (m)
+        return `${m[1]}-${m[2]}-${m[3]}`;
+    m = t.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/); // 31/07/2026
+    if (m)
+        return `${m[3]}-${String(m[2]).padStart(2, "0")}-${String(m[1]).padStart(2, "0")}`;
+    const d = new Date(t);
+    return isNaN(d) ? null : iso(d);
+};
+const guessNum = (v) => {
+    if (v == null)
+        return null;
+    const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? null : n;
+};
+/* header names these apps actually use */
+const COLGUESS = {
+    date: ["date", "day", "start", "startdate", "start time", "timestamp", "when", "datetime", "recorded"],
+    weight: ["weight", "weight (kg)", "weight (lb)", "body weight", "bodyweight", "mass", "weight kg", "weight lb"],
+    fat: ["fat", "fat ratio", "body fat", "body fat (%)", "fat %", "fat percent", "bodyfat"],
+    exercise: ["exercise", "exercise name", "movement", "lift", "workout", "title", "name"],
+    reps: ["reps", "repetitions", "rep", "rep count"],
+    setw: ["weight", "kg", "lb", "load", "weight (kg)", "weight (lb)", "weight kg"],
+    rir: ["rir", "reps in reserve", "rpe"],
+};
+const matchCol = (headers, kind) => {
+    const want = COLGUESS[kind];
+    for (let i = 0; i < headers.length; i++) {
+        const h = String(headers[i]).toLowerCase().trim();
+        if (want.includes(h))
+            return i;
+    }
+    for (let i = 0; i < headers.length; i++) {
+        const h = String(headers[i]).toLowerCase().trim();
+        if (want.some((w) => h.includes(w)))
+            return i;
+    }
+    return -1;
+};
+function ImportData({ st, save, close }) {
+    const [kind, setKind] = useState("body");
+    const [rows, setRows] = useState(null);
+    const [head, setHead] = useState([]);
+    const [map, setMap] = useState({});
+    const [unit, setUnit] = useState("kg");
+    const [err, setErr] = useState("");
+    const [done, setDone] = useState("");
+    const file = useRef(null);
+    const load = (e) => {
+        const f = e.target.files?.[0];
+        if (!f)
+            return;
+        setErr("");
+        setDone("");
+        const fr = new FileReader();
+        fr.onload = () => {
+            try {
+                const txt = String(fr.result);
+                if (txt.trim().startsWith("<?xml"))
+                    throw new Error("That's an Apple Health XML export. It's usually hundreds of megabytes and won't open on a phone — export from Withings or your workout app instead, which give you a CSV.");
+                const all = parseCSV(txt);
+                if (all.length < 2)
+                    throw new Error("Couldn't find any rows in that file.");
+                const h = all[0];
+                setHead(h);
+                setRows(all.slice(1));
+                setMap(kind === "body"
+                    ? { date: matchCol(h, "date"), weight: matchCol(h, "weight"), fat: matchCol(h, "fat") }
+                    : { date: matchCol(h, "date"), exercise: matchCol(h, "exercise"), setw: matchCol(h, "setw"), reps: matchCol(h, "reps"), rir: matchCol(h, "rir") });
+            }
+            catch (x) {
+                setErr(x.message || "Couldn't read that file.");
+            }
+        };
+        fr.onerror = () => setErr("Couldn't read that file.");
+        fr.readAsText(f);
+    };
+    const preview = (() => {
+        if (!rows)
+            return null;
+        if (kind === "body") {
+            const out = rows.map((r) => ({
+                date: guessDate(r[map.date]), kg: guessNum(r[map.weight]), fat: map.fat >= 0 ? guessNum(r[map.fat]) : null,
+            })).filter((x) => x.date && x.kg != null && x.kg > 20 && x.kg < 400);
+            const seen = new Set();
+            return out.filter((x) => { if (seen.has(x.date))
+                return false; seen.add(x.date); return true; })
+                .sort((a2, b2) => a2.date.localeCompare(b2.date));
+        }
+        const byDay = {};
+        rows.forEach((r) => {
+            var _a;
+            const d = guessDate(r[map.date]);
+            const nm = r[map.exercise];
+            const w = guessNum(r[map.setw]);
+            const reps = guessNum(r[map.reps]);
+            if (!d || !nm || reps == null || reps <= 0)
+                return;
+            const hit = EX.find((e) => e.name.toLowerCase() === String(nm).toLowerCase())
+                || EX.find((e) => String(nm).toLowerCase().includes(e.name.toLowerCase()))
+                || EX.find((e) => e.name.toLowerCase().includes(String(nm).toLowerCase()));
+            (byDay[d] || (byDay[d] = {}));
+            const key = hit ? hit.id : "?" + nm;
+            ((_a = byDay[d])[key] || (_a[key] = { exId: hit?.id || null, raw: nm, matched: hit?.name || null, sets: [] }));
+            byDay[d][key].sets.push({ w: unit === "lb" ? (w || 0) / LB : (w || 0), reps, rir: map.rir >= 0 ? guessNum(r[map.rir]) : null });
+        });
+        return Object.entries(byDay).map(([date, exs]) => ({ date, exs: Object.values(exs) }))
+            .sort((a2, b2) => a2.date.localeCompare(b2.date));
+    })();
+    const apply = () => {
+        if (kind === "body") {
+            const byDate = Object.fromEntries(st.weights.map((w) => [w.date, w]));
+            preview.forEach((x) => { byDate[x.date] = { date: x.date, kg: Math.round(x.kg * 10) / 10, fat: x.fat ?? undefined }; });
+            const weights = Object.values(byDate).sort((a2, b2) => a2.date.localeCompare(b2.date));
+            save({ ...st, weights });
+            setDone(`${preview.length} weigh-ins added.`);
+        }
+        else {
+            const have = new Set(st.sessions.map((s) => s.date + "|" + (s.routineName || "")));
+            const add = preview.map((d, i) => {
+                const exs = d.exs.filter((e) => e.exId && e.sets.length);
+                if (!exs.length)
+                    return null;
+                if (have.has(d.date + "|Imported session"))
+                    return null;
+                return {
+                    id: "imp" + Date.now() + i, date: d.date, intent: "strength", routineName: "Imported session",
+                    hour: 18, minute: 0, startedAt: new Date(`${d.date}T18:00:00`).getTime(), finished: true,
+                    durationSec: exs.length * 420, imported: true,
+                    exercises: exs.map((e) => ({ exId: e.exId, sets: e.sets.map((q) => ({ ...q, warm: false, done: true })) })),
+                };
+            }).filter(Boolean);
+            const sessions = [...st.sessions, ...add].sort((a2, b2) => a2.date.localeCompare(b2.date));
+            save({ ...st, sessions });
+            setDone(`${add.length} sessions added.`);
+        }
+        setRows(null);
+        setHead([]);
+    };
+    const Picker = ({ label, k, optional }) => (React.createElement("div", { style: { marginBottom: 10 } },
+        React.createElement("div", { className: "il-lbl", style: { marginBottom: 5, fontSize: 10 } },
+            label,
+            optional ? " (optional)" : ""),
+        React.createElement("select", { className: "il-sel", style: { width: "100%" }, value: map[k] ?? -1, onChange: (e) => setMap({ ...map, [k]: Number(e.target.value) }) },
+            React.createElement("option", { value: -1 }, optional ? "not in this file" : "pick a column"),
+            head.map((h, i) => React.createElement("option", { key: i, value: i }, h || `column ${i + 1}`)))));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Import from another app", sub: "Withings, Hevy, MacroFactor \u2014 anything that exports a CSV", close: close }),
+        React.createElement("div", { style: { padding: "12px 12px 0", display: "flex", gap: 7 } }, [["body", "Weight & body fat"], ["workouts", "Past workouts"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (kind === v ? " on" : ""), onClick: () => { setKind(v); setRows(null); setHead([]); setDone(""); } }, l)))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, kind === "body"
+                ? "In the Withings app: Profile → Download my data, and it emails you a zip. The file you want is weight.csv. Most smart scales and health apps offer something similar."
+                : "Most training apps have an export in settings. Hevy, Strong and Boostcamp all produce a CSV with one row per set."),
+            React.createElement("input", { ref: file, type: "file", accept: ".csv,text/csv,text/plain,.txt", style: { display: "none" }, onChange: load }),
+            React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Choose a CSV file"),
+            err && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginTop: 10 } }, err),
+            done && React.createElement("div", { className: "il-note", style: { color: "var(--grn)", marginTop: 10 } }, done)),
+        rows && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Which column is which?"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 12 } },
+                rows.length,
+                " rows. I've had a guess \u2014 correct anything wrong."),
+            kind === "body" ? React.createElement(React.Fragment, null,
+                React.createElement(Picker, { label: "Date", k: "date" }),
+                React.createElement(Picker, { label: "Weight", k: "weight" }),
+                React.createElement(Picker, { label: "Body fat %", k: "fat", optional: true })) : React.createElement(React.Fragment, null,
+                React.createElement(Picker, { label: "Date", k: "date" }),
+                React.createElement(Picker, { label: "Exercise name", k: "exercise" }),
+                React.createElement(Picker, { label: "Weight", k: "setw" }),
+                React.createElement(Picker, { label: "Reps", k: "reps" }),
+                React.createElement(Picker, { label: "Reps in reserve / RPE", k: "rir", optional: true })),
+            React.createElement("div", { className: "il-lbl", style: { margin: "6px 0 6px", fontSize: 10 } }, "Weights in that file are in"),
+            React.createElement("div", { style: { display: "flex", gap: 7 } }, [["kg", "Kilograms"], ["lb", "Pounds"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (unit === v ? " on" : ""), onClick: () => setUnit(v) }, l)))))),
+        preview && preview.length > 0 && kind === "body" && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } },
+                preview.length,
+                " weigh-ins found"),
+            React.createElement("div", { className: "il-ring", style: { marginBottom: 12 } },
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v", style: { fontSize: 14 } }, dtiny(preview[0].date)),
+                    React.createElement("div", { className: "l" }, "from")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v", style: { fontSize: 14 } }, dtiny(preview[preview.length - 1].date)),
+                    React.createElement("div", { className: "l" }, "to")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, fmtBW(preview[preview.length - 1].kg, 1)),
+                    React.createElement("div", { className: "l" }, "latest"))),
+            preview.slice(-5).reverse().map((x, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "6px 0", borderTop: "1px solid var(--line)" } },
+                React.createElement("span", { style: { fontSize: 13 } }, dtiny(x.date)),
+                React.createElement("span", { className: "il-n", style: { fontSize: 13, color: "var(--dim)" } },
+                    fmtBW(x.kg, 1),
+                    x.fat != null ? ` · ${x.fat.toFixed(1)}% fat` : "")))))),
+        preview && preview.length > 0 && kind === "workouts" && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } },
+                preview.length,
+                " sessions found"),
+            preview.slice(-4).reverse().map((d, i) => (React.createElement("div", { key: i, style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { fontSize: 13.5, fontWeight: 500, marginBottom: 4 } }, dlong(d.date)),
+                d.exs.map((e, j) => (React.createElement("div", { key: j, className: "il-row", style: { padding: "3px 0" } },
+                    React.createElement("span", { style: { fontSize: 12.5, color: e.matched ? "var(--dim)" : "var(--gold)" } }, e.matched || `${e.raw} — not in your list`),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--faint)" } },
+                        e.sets.length,
+                        " sets"))))))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Anything not in your exercise list is skipped. Everything else goes in as completed history."))),
+        preview && preview.length === 0 && rows && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-note" }, "Nothing usable came out of those columns. Check the date and weight pickers above \u2014 the date format might be one I don't recognise."))),
+        preview && preview.length > 0 && (React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", onClick: apply },
+                "Add ",
+                preview.length,
+                " ",
+                kind === "body" ? "weigh-ins" : "sessions"))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "About Apple Health"),
+            React.createElement("div", { className: "il-note" }, "Apple's own export is one enormous XML file \u2014 often several hundred megabytes \u2014 and no phone browser will open it. If your weight is in Apple Health it almost certainly got there from your scales, so export from Withings instead and you'll get a tidy CSV covering the same thing.")));
+}
+/* ============ VOLUME & ADHERENCE SCREENS ============ */
+function VolumeSheet({ st, a, close }) {
+    const vl = volumeLandmarks(st, a);
+    const ready = MK.filter((m) => vl[m]?.enough);
+    const learning = MK.filter((m) => !vl[m]?.enough && (a.weeklyMap[m] ?? 0) > 0);
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Your own volume", sub: "What actually worked, from your logs", close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Ten to twenty hard sets a muscle a week is the range the research settles on, but it's a population average. The band that works for your side delts isn't the one that works for your hamstrings. Once there are a few months of logs, this shows where each muscle actually responded \u2014 your numbers, not a textbook's.")),
+        ready.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "16px 14px 9px" } }, "Enough history to tell"),
+            ready.map((m) => {
+                const v = vl[m];
+                return (React.createElement("div", { key: m, className: "il-card" },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
+                        React.createElement("div", { className: "il-h2" }, M[m]),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 13, color: "var(--dim)" } },
+                            v.current,
+                            " sets now")),
+                    v.bands.map(([label, gain, n]) => (React.createElement("div", { key: label, style: { marginBottom: 9 } },
+                        React.createElement("div", { className: "il-row" },
+                            React.createElement("span", { style: { fontSize: 13, color: v.bestBand && label === v.bestBand[0] ? "var(--grn)" : "var(--dim)" } },
+                                label,
+                                " sets",
+                                v.bestBand && label === v.bestBand[0] ? " — best" : ""),
+                            React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--faint)" } },
+                                (gain * 100 >= 0 ? "+" : "") + (gain * 100).toFixed(1),
+                                "% \u00B7 ",
+                                n,
+                                " weeks")),
+                        React.createElement("div", { className: "il-bar" },
+                            React.createElement("i", { style: { width: Math.min(100, Math.max(3, (gain + 0.03) * 900)) + "%",
+                                    background: v.bestBand && label === v.bestBand[0] ? "var(--grn)" : "var(--c2)" } }))))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, "How much your best set moved in the week after training it that hard.")));
+            })),
+        learning.length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Still watching"),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, "Needs about six weeks of logs per muscle before the pattern means anything."),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, learning.map((m) => React.createElement("span", { key: m, className: "il-chip" },
+                M[m],
+                " \u00B7 ",
+                vl[m].n,
+                "/6"))))));
+}
+function AdherenceSheet({ st, a, close }) {
+    const ad = adherence(st);
+    const Bar = ({ label, pct, sub, good }) => (React.createElement("div", { style: { marginBottom: 14 } },
+        React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
+            React.createElement("span", { style: { fontSize: 14 } }, label),
+            React.createElement("span", { className: "il-n il-d", style: { fontSize: 17, fontWeight: 600, color: pct >= good ? "var(--grn)" : pct >= good * 0.7 ? "var(--gold)" : "var(--red)" } },
+                pct,
+                "%")),
+        React.createElement("div", { className: "il-bar" },
+            React.createElement("i", { style: { width: Math.min(100, pct) + "%", background: pct >= good ? "var(--grn)" : pct >= good * 0.7 ? "var(--gold)" : "var(--red)" } })),
+        React.createElement("div", { className: "il-sub", style: { marginTop: 5 } }, sub)));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Sticking to it", sub: "Last four weeks", close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Turning up predicts results better than programme design does. Everything else in this app is fine-tuning on top of this number.")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement(Bar, { label: "Sessions", pct: ad.sessionPct, good: 85, sub: `${ad.sessions} done against ${ad.planned} planned` }),
+            React.createElement(Bar, { label: "Days you logged food", pct: ad.foodPct, good: 70, sub: "Gaps make the calorie maths guesswork" }),
+            React.createElement(Bar, { label: "Days you weighed in", pct: ad.weighPct, good: 50, sub: "Two or three a week is enough for a trend" })),
+        ad.abandoned > 0 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } },
+                ad.abandoned,
+                " sessions left open"),
+            React.createElement("div", { className: "il-note" }, "Started and never finished. They still count towards your weekly volume, which quietly flatters the numbers. Finish them or swipe them away on the Train tab."))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What to do about a low number"),
+            React.createElement("div", { className: "il-note" }, ad.sessionPct >= 85
+                ? "Nothing — you're turning up. That's the hard part done."
+                : `Shrink the plan rather than trying harder. ${Math.max(2, (Number(st.profile.daysWk) || 3) - 1)} days you actually do beats ${st.profile.daysWk || 3} you keep missing, and the difference in results is smaller than the difference in guilt.`)));
+}
+/* ============ MUSCLE CHIPS ============
+   A little body with the muscle lit up. Faster to scan than a word, and
+   you pick by what you want to train rather than by exercise name.   */
+const BODYPATH = {
+    chest: "M30,26 h16 v13 h-16 z M54,26 h16 v13 h-16 z",
+    fdelt: "M20,24 a7,7 0 0,1 12,2 l-4,7 -9,-3 z M80,24 a7,7 0 0,0 -12,2 l4,7 9,-3 z",
+    sdelt: "M16,26 a8,8 0 0,1 6,-3 l2,12 -9,2 z M84,26 a8,8 0 0,0 -6,-3 l-2,12 9,2 z",
+    rdelt: "M17,27 a8,8 0 0,1 7,-4 l1,11 -9,2 z M83,27 a8,8 0 0,0 -7,-4 l-1,11 9,2 z",
+    tri: "M16,38 l9,-2 3,16 -9,2 z M84,38 l-9,-2 -3,16 9,2 z",
+    bi: "M20,38 l8,-1 2,15 -8,1 z M80,38 l-8,-1 -2,15 8,1 z",
+    fore: "M17,55 l8,-2 3,15 -8,2 z M83,55 l-8,-2 -3,15 8,2 z",
+    abs: "M38,42 h24 v22 h-24 z",
+    obl: "M31,42 h6 v20 h-6 z M63,42 h6 v20 h-6 z",
+    lats: "M26,30 l10,4 -2,22 -10,-6 z M74,30 l-10,4 2,22 10,-6 z",
+    uback: "M32,24 h36 v18 h-36 z",
+    traps: "M36,16 h28 l-4,9 h-20 z",
+    lback: "M34,44 h32 v14 h-32 z",
+    glute: "M30,64 h18 v14 h-18 z M52,64 h18 v14 h-18 z",
+    quad: "M31,80 h16 v24 h-16 z M53,80 h16 v24 h-16 z",
+    ham: "M31,80 h16 v24 h-16 z M53,80 h16 v24 h-16 z",
+    calf: "M33,108 h13 v18 h-13 z M54,108 h13 v18 h-13 z",
+};
+function MuscleChip({ m, on, onClick }) {
+    return (React.createElement("button", { onClick: onClick, style: {
+            background: "none", border: 0, padding: 0, cursor: "pointer", flexShrink: 0,
+            width: 62, textAlign: "center", opacity: on ? 1 : 0.82,
+        } },
+        React.createElement("div", { style: {
+                background: on ? "#132241" : "var(--c2)", borderRadius: 11, padding: "5px 0",
+                border: on ? "1.5px solid var(--acc)" : "1.5px solid transparent",
+            } },
+            React.createElement("svg", { viewBox: "0 0 100 132", style: { width: 44, height: 58, display: "block", margin: "0 auto" } },
+                React.createElement("g", { fill: "#3A3F47" },
+                    React.createElement("circle", { cx: "50", cy: "10", r: "7" }),
+                    React.createElement("path", { d: "M34,17 h32 v46 h-32 z" }),
+                    React.createElement("path", { d: "M18,24 h9 v46 h-9 z M73,24 h9 v46 h-9 z" }),
+                    React.createElement("path", { d: "M30,63 h18 v63 h-18 z M52,63 h18 v63 h-18 z" })),
+                React.createElement("path", { d: BODYPATH[m] || "", fill: on ? "#2F7BFF" : "#6E7681" }))),
+        React.createElement("div", { style: { fontSize: 9.5, marginTop: 4, color: on ? "var(--acc)" : "var(--dim)", fontWeight: on ? 600 : 400, lineHeight: 1.15 } }, M[m])));
+}
+/* ============ CARDIO LOGGING ============ */
+function CardioRow({ ex, e, write, kg }) {
+    const set = (i, k, v) => write((sess) => {
+        const t = sess.exercises.find((q) => q.exId === e.exId);
+        t.sets[i] = { ...t.sets[i], [k]: v };
+        return sess;
+    });
+    return (React.createElement(React.Fragment, null,
+        e.sets.map((s, i) => (React.createElement("div", { key: i, style: { padding: "10px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: ex.dist ? "1fr 1fr" : "1fr", gap: 9 } },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 4, fontSize: 10 } }, "Minutes"),
+                    React.createElement(NumIn, { value: s.mins ?? "", step: 5, onChange: (v) => set(i, "mins", v) })),
+                ex.dist && React.createElement("div", null,
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 4, fontSize: 10 } }, "Distance (km)"),
+                    React.createElement(NumIn, { value: s.km ?? "", step: 0.5, onChange: (v) => set(i, "km", v) }))),
+            React.createElement("div", { className: "il-row", style: { marginTop: 9 } },
+                React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)" } },
+                    s.mins ? `${boutKcal(ex, s, kg)} cal` : "—",
+                    pace(s) ? ` · ${pace(s)}` : ""),
+                React.createElement("button", { className: "il-tick" + (s.done ? " on" : ""), onClick: () => set(i, "done", !s.done) }, s.done ? "✓" : ""))))),
+        React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 10 }, onClick: () => write((sess) => {
+                const t = sess.exercises.find((q) => q.exId === e.exId);
+                t.sets.push({ mins: "", km: "", done: false, warm: false });
+                return sess;
+            }) }, "+ Another bout")));
+}
+/* ============ EXERCISE PICKER ============ */
+function PickExercise({ st, close, onPick, title }) {
+    const [q, setQ] = useState("");
+    const [mus, setMus] = useState(null);
+    const [tab, setTab] = useState("all");
+    const [kitOnly, setKitOnly] = useState(true);
+    const [openGrp, setOpenGrp] = useState({});
+    const counts = useMemo(() => {
+        const c = {};
+        st.sessions.forEach((s) => s.exercises.forEach((e) => { c[e.exId] = (c[e.exId] || 0) + 1; }));
+        return c;
+    }, [st.sessions]);
+    const list = EX.filter((e) => {
+        if (kitOnly && !e.kit.every((k) => st.kit.includes(k)))
+            return false;
+        if (tab === "done" && !counts[e.id])
+            return false;
+        if (mus && !(e.primary.includes(mus) || e.secondary.includes(mus)))
+            return false;
+        if (q) {
+            const t = q.toLowerCase();
+            return e.name.toLowerCase().includes(t)
+                || [...e.primary, ...e.secondary].some((m) => M[m].toLowerCase().includes(t))
+                || (e.aerobic && "cardio".includes(t));
+        }
+        return true;
+    });
+    const GROUPS = [["aerobic", "Cardio"], ["push", "Push"], ["pull", "Pull"], ["legs", "Legs"], ["core", "Core"], ["cardio", "Conditioning"]];
+    const grouped = GROUPS.map(([g, label]) => ({ g, label, items: list.filter((e) => e.group === g) })).filter((x) => x.items.length);
+    const musList = ["chest", "lats", "quad", "glute", "sdelt", "bi", "tri", "ham", "uback", "abs", "calf", "rdelt", "fdelt", "traps", "fore", "obl", "lback"];
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: title || "Add an exercise", sub: `${list.length} of ${EX.length}`, close: close }),
+        React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } },
+            [["all", "All"], ["done", `Done before${Object.keys(counts).length ? ` · ${Object.keys(counts).length}` : ""}`]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l))),
+            React.createElement("button", { className: "il-chip" + (kitOnly ? " on" : ""), onClick: () => setKitOnly(!kitOnly) }, "My kit only")),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 12, gap: 8 } },
+            React.createElement(MuscleChip, { m: "chest", on: false, onClick: () => setMus(null) }),
+            musList.map((m) => React.createElement(MuscleChip, { key: m, m: m, on: mus === m, onClick: () => setMus(mus === m ? null : m) }))),
+        mus && React.createElement("div", { style: { padding: "8px 12px 0" } },
+            React.createElement("button", { className: "il-chip on", onClick: () => setMus(null) },
+                M[mus],
+                " \u00D7 clear")),
+        grouped.length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing matches. Try turning off \"My kit only\"."),
+        grouped.map(({ g, label, items }) => {
+            const open = openGrp[g] ?? (grouped.length <= 2 || !!q || !!mus);
+            const show = open ? items : items.slice(0, 4);
+            return (React.createElement("div", { key: g },
+                React.createElement("div", { className: "il-row", style: { margin: "18px 14px 8px" } },
+                    React.createElement("span", { className: "il-lbl" }, label),
+                    items.length > 4 && React.createElement("button", { className: "il-chip", onClick: () => setOpenGrp({ ...openGrp, [g]: !open }) }, open ? "See less" : `See ${items.length - 4} more`)),
+                show.map((e) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => onPick(e) },
+                    React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center" } },
+                        React.createElement("div", { style: { width: 46, height: 56, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: "var(--c2)" } }, e.aerobic
+                            ? React.createElement("div", { style: { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19 } }, e.name.startsWith("Walk") || e.name.startsWith("Dog") || e.name.startsWith("Hik") ? "🚶"
+                                : e.name.startsWith("Run") ? "🏃" : e.name.startsWith("Cyc") || e.name.startsWith("Stat") ? "🚲"
+                                    : e.name.startsWith("Row") ? "🚣" : e.name.startsWith("Swim") ? "🏊" : e.name.startsWith("Skip") ? "🪢"
+                                        : e.name.startsWith("Stair") ? "🪜" : "🏅")
+                            : React.createElement(FormDemo, { ex: e, h: 56, weight: false })),
+                        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, marginBottom: 3 } }, e.name),
+                            React.createElement("div", { className: "il-sub", style: { margin: 0, lineHeight: 1.35 } }, e.aerobic
+                                ? `${e.met} METs · about ${Math.round(kcalMin(e.met, st.profile.weightKg))} cal a minute${e.dist ? " · tracks distance" : ""}`
+                                : React.createElement(React.Fragment, null,
+                                    e.primary.map((m) => M[m]).join(", "),
+                                    e.secondary.length ? React.createElement("span", { style: { color: "var(--faint)" } },
+                                        " \u00B7 ",
+                                        e.secondary.map((m) => M[m]).join(", ")) : null)),
+                            counts[e.id] > 0 && React.createElement("div", { className: "il-sub il-n", style: { margin: "3px 0 0", color: "var(--acc)" } },
+                                "Done ",
+                                counts[e.id],
+                                " time",
+                                counts[e.id] > 1 ? "s" : "")),
+                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))));
+        }),
+        React.createElement("div", { style: { height: 74 } }),
+        React.createElement("div", { style: { position: "sticky", bottom: 0, background: "var(--bg)", padding: "10px 12px calc(12px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--line)" } },
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search for an exercise", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", value: q, onChange: (e) => setQ(e.target.value) })));
+}
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
     const P = st.profile;
@@ -5533,7 +6294,9 @@ function Body({ st, save, a, setSheet }) {
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Last 4 weeks"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Green means the right amount of work each week. Conditioning counts at half."),
                 React.createElement(Body3D, { weekly: a.weeklyMap, onPick: (m) => setSheet({ t: "muscle", m }) }),
-                React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => setSheet({ t: "ask", ctx: "body" }) }, "Ask coach about my coverage")),
+                React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
+                    React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "volume" }) }, "What volume actually works for me"),
+                    React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "ask", ctx: "body" }) }, "Ask coach about my coverage"))),
             React.createElement("div", { className: "il-lbl", style: { margin: "16px 14px 9px" } }, "Every muscle"),
             React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, [...a.weekly].sort((x, y) => y.sets - x.sets).map((w) => {
                 const s = w.sets > 0 ? status(w.sets) : "red";
@@ -5713,6 +6476,31 @@ function Fuel({ st, save, a, today, setSheet }) {
                         v < tg ? ` · ${Math.round(tg - v)} to go` : "")),
                 React.createElement("div", { className: "il-bar" },
                     React.createElement("i", { style: { width: Math.min(100, (v / tg) * 100) + "%", background: col } })))))),
+        (() => {
+            const per = Math.round(P.weightKg * 0.4);
+            const byMeal = MEALS.map((m) => ({ m, p: f.entries.filter((e) => (e.meal || "Snacks") === m).reduce((x, e) => x + e.p, 0) }));
+            const hits = byMeal.filter((x) => x.p >= per * 0.8).length;
+            if (!f.entries.length)
+                return null;
+            return (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                    React.createElement("div", { className: "il-lbl" }, "Protein across the day"),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 13, color: hits >= 3 ? "var(--grn)" : "var(--gold)", fontWeight: 600 } },
+                        hits,
+                        " of 4 doses")),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 10, fontSize: 12.5 } },
+                    "Three to five doses of about ",
+                    per,
+                    "g does more than the same total in one sitting."),
+                byMeal.map((x) => (React.createElement("div", { key: x.m, style: { marginBottom: 8 } },
+                    React.createElement("div", { className: "il-row" },
+                        React.createElement("span", { style: { fontSize: 13 } }, x.m),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } },
+                            Math.round(x.p),
+                            "g")),
+                    React.createElement("div", { className: "il-bar" },
+                        React.createElement("i", { style: { width: Math.min(100, (x.p / per) * 100) + "%", background: x.p >= per * 0.8 ? "var(--grn)" : "var(--c2)" } })))))));
+        })(),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "meals" }) }, "What should I eat?"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "food" }) }, "Ask coach about today's food"),
@@ -5935,6 +6723,37 @@ function coachRead(st, a) {
         push(5, "med", "Run changes past your GP first", "You've flagged a condition or medication. Everything in this app is general information rather than advice for your situation — particularly the supplement section. Check with your GP or pharmacist before you change anything.", "Check before changing supplements");
     if (P.urgency === "6w" && P.goal === "lean")
         push(5, "rush", "Two months is enough for real change, not a transformation", `Under two months, a sensible deficit gets you around ${(P.weightKg * 0.006 * 8).toFixed(1)}kg — noticeable, but not what the before-and-after photos promise. Chasing more than about 1% of bodyweight a week costs you muscle and rarely sticks. I'd rather tell you that now than let you find out in week six.`, "Aim for steady, not dramatic");
+    // effort, from the RIR you've been logging
+    const recentRir = [...st.sessions].reverse().filter((x) => !isPump(x)).slice(0, 4)
+        .flatMap((x) => x.exercises.map(setRir)).filter((x) => x != null);
+    if (recentRir.length >= 4) {
+        const avg = recentRir.reduce((x, y) => x + y, 0) / recentRir.length;
+        if (avg >= 2.8)
+            push(4, "effort", "You're leaving too much in the tank", `Across your last few sessions you've been finishing sets with about ${avg.toFixed(1)} reps still in you. Growth tracks how close you get to failure — one to two left is the mark. Either add weight or push the last set harder.`, "Add weight next session", { tab: "train" });
+        else if (avg <= 0.4)
+            push(3, "toohard", "You're grinding every set to failure", `You're averaging ${avg.toFixed(1)} reps in reserve. Training to failure gives barely more growth than stopping one or two short, but it costs far more fatigue and takes longer to recover from. Leave one or two in most sets and save failure for the last set of an exercise.`, "Aim for 1-2 in reserve", { tab: "train" });
+    }
+    // adherence, plainly
+    const ad = adherence(st);
+    if (ad.sessionPct < 65 && ad.planned >= 6)
+        push(4, "adherence", "You're doing about two thirds of the sessions", `${ad.sessions} of a planned ${ad.planned} over four weeks. Nothing in a programme matters as much as turning up, and no amount of tweaking the plan fixes a ${ad.sessionPct}% attendance rate. If the plan is too much, tell me and I'll shrink it — a smaller plan you finish beats a better one you don't.`, "Shrink the plan", { sheet: { t: "intake" } });
+    if (ad.abandoned >= 2)
+        push(2, "abandon", `${ad.abandoned} sessions started and never finished`, "Those still count towards your volume in the numbers, which quietly flatters your totals. Either finish them or swipe them away on the Train tab.", "Tidy those up", { tab: "train" });
+    // a muscle stuck outside its own best range
+    const vl = volumeLandmarks(st, a);
+    const offBand = MK.filter((m) => vl[m]?.enough && vl[m].bestBand)
+        .map((m) => ({ m, cur: vl[m].current, band: vl[m].bestBand[0] }))
+        .filter(({ cur, band }) => (band === "9 to 16" && (cur < 9 || cur > 16)) || (band === "over 16" && cur <= 16) || (band === "under 9" && cur > 9))[0];
+    if (offBand)
+        push(3, "volband", `${M[offBand.m]} grew best on ${offBand.band} sets a week`, `That's from your own logs, not a textbook. You're on ${offBand.cur} at the moment. Worth moving back into the band that worked.`, "Adjust the volume", { tab: "body" });
+    // same movement for months
+    const stale = staleExercises(st)[0];
+    if (stale)
+        push(2, "rotate", `${stale.ex.name} for ${stale.weeks} weeks`, `You've run it ${stale.times} times without a break. Swapping to something that trains the same muscle differently every couple of months keeps the joints happier and gives you a fresh number to chase.`, "See what to swap it for", { sheet: { t: "info", exId: stale.id } });
+    // eight weeks in a deficit
+    const db = dietBreak(st, a);
+    if (db)
+        push(3, "dietbreak", `${db.weeks} weeks in a deficit without a break`, `Past a couple of months, a planned week back at maintenance — about ${db.target} calories — makes the next block easier to hold and gives your appetite and training a rest. It isn't lost progress; it's what makes the rest of it stick.`, "Take a week at maintenance", { sheet: { t: "coach" } });
     const dl = deloadCheck(st, a);
     if (dl.need)
         push(4, "deload", "You need an easy week, not a harder one", `${dl.streak} weeks of hard training with no break, and ${dl.down > 0 ? `${dl.down} of your lifts ${dl.down === 1 ? "is" : "are"} going backwards` : "your lifts have gone flat"}. That pattern is fatigue, not a bad programme. Keep the weights exactly where they are and halve the sets for a week — start any routine in deload mode.`, "Run this week as a deload", { tab: "train" });
@@ -6205,6 +7024,11 @@ function You({ st, save, a, setSheet, go }) {
             React.createElement("div", { className: "il-note" }, "Anything broken, annoying, or that you wish it did. Jot it down as you go, then send me the lot in one block. Crashes record themselves.")),
         React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { className: "il-lbl" }, "Sticking to it"),
+                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "adhere" }) }, "Open")),
+            React.createElement("div", { className: "il-note" }, (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions and ${ad.foodPct}% of days logged over the last four weeks.`; })())),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Diary"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "diary" }) }, "Open")),
             React.createElement("div", { className: "il-note" }, "Every day you've logged something, in one place \u2014 the session and how you turned up to it, the food, the weigh-in, and any device numbers you've cross-checked.")),
@@ -6212,7 +7036,8 @@ function You({ st, save, a, setSheet, go }) {
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Import past workouts"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "importwo" }) }, "Open")),
-            React.createElement("div", { className: "il-note" }, "Screenshots from whatever you used before. It reads the weights and reps so your first sessions start from real numbers rather than estimates.")),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, "Screenshots from whatever you used before. It reads the weights and reps so your first sessions start from real numbers rather than estimates."),
+            React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => setSheet({ t: "importcsv" }) }, "Or import a CSV \u2014 Withings, Hevy, MacroFactor")),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "AI features"),
@@ -6407,11 +7232,15 @@ function Sheet({ sheet, setSheet, st, save, a, today, health }) {
             sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, close, setSheet }),
             sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, close }),
             sheet.t === "importwo" && React.createElement(ImportWorkouts, { st, save, close }),
+            sheet.t === "importcsv" && React.createElement(ImportData, { st, save, close }),
+            sheet.t === "pick" && React.createElement(PickExercise, { st, close, title: sheet.title, onPick: (e) => { close(); setTimeout(() => sheet.onPick(e), 40); } }),
+            sheet.t === "volume" && React.createElement(VolumeSheet, { st, a, close }),
+            sheet.t === "adhere" && React.createElement(AdherenceSheet, { st, a, close }),
             sheet.t === "aikey" && React.createElement(ApiKeySheet, { st, save, close }),
             sheet.t === "ask" && React.createElement(AskCoach, { st, save, a, today, ctx: coachCtx(sheet.ctx, st, a, today), close }),
             sheet.t === "past" && React.createElement(Past, { sheet, st, close }),
             sheet.t === "startrt" && React.createElement(StartRoutine, { sheet, st, save, a, today, close, setSheet }),
-            sheet.t === "editrt" && React.createElement(EditRoutine, { sheet, st, save, close }),
+            sheet.t === "editrt" && React.createElement(EditRoutine, { sheet, st, save, close, setSheet }),
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close }),
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
@@ -6620,6 +7449,8 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
     const rt = st.routines.find((r) => r.id === sheet.id);
     const [intent, setIntent] = useState(rt.intent);
     const [chk, setChk] = useState({ sleep: st.profile.sleep ?? 7, feel: 3, sore: "none" });
+    const [warmUp, setWarmUp] = useState(true);
+    const ar = autoreg(st, a, chk);
     const lastW = (exId) => {
         for (let i = st.sessions.length - 1; i >= 0; i--) {
             if (isPump(st.sessions[i]))
@@ -6638,13 +7469,16 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
     const totalSets = rt.exercises.reduce((x, e) => x + (intent === "deload" ? Math.ceil(e.sets / 2) : e.sets), 0);
     const start = () => {
         const n = new Date();
-        const exercises = rt.exercises.map((x) => {
+        const exercises = rt.exercises.map((x, j) => {
             const e = exOf(x.exId);
             const base = e.loaded ? (lastW(x.exId) ?? opener(e, st.profile)) : 0;
             const w = intent === "pump" ? pumpWeight(base) : base;
-            const nSets = intent === "deload" ? Math.max(1, Math.ceil(x.sets / 2)) : x.sets;
+            const auto = intent === "strength" ? ar.setDelta : 0;
+            const nSets = intent === "deload" ? Math.max(1, Math.ceil(x.sets / 2)) : Math.max(2, x.sets + auto);
             const startReps = intent === "pump" ? pumpReps(e) : (x.lo ?? e.lo);
-            return { exId: x.exId, sets: Array.from({ length: nSets }, () => ({ w, reps: startReps, warm: false, done: false })), lo: x.lo, hi: x.hi };
+            const warm = (warmUp && intent === "strength" && j === 0) ? warmupFor(e, w).map((q) => ({ ...q, warm: true, done: false, rir: null })) : [];
+            return { exId: x.exId, lo: x.lo, hi: x.hi,
+                sets: [...warm, ...Array.from({ length: nSets }, () => ({ w, reps: startReps, warm: false, done: false, rir: null }))] };
         });
         const sessions = [...st.sessions];
         const i = sessions.findIndex((s) => s.date === today);
@@ -6705,12 +7539,28 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                 : intent === "pump" ? "About 70% of your usual weight, higher reps, short rests. Kept out of your strength numbers."
                     : "Same weights, half the sets. An easy week after a hard block.")),
         React.createElement(Readiness, { value: chk, onChange: setChk }),
+        intent === "strength" && (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${ar.mood === "push" ? "var(--grn)" : ar.mood === "back off" ? "var(--gold)" : "var(--acc)"}` } },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { className: "il-lbl" }, "Today's call"),
+                React.createElement("span", { className: "il-n", style: { fontSize: 13, fontWeight: 600, color: ar.mood === "push" ? "var(--grn)" : ar.mood === "back off" ? "var(--gold)" : "var(--acc)" } }, ar.mood === "push" ? "Push" : ar.mood === "back off" ? "Ease off" : "As planned")),
+            React.createElement("div", { className: "il-note" },
+                ar.mood === "back off"
+                    ? `Taking a set off each exercise because ${ar.why.join(" and ")}. Same weights — you'll get more from turning up again on Thursday than from grinding through today.`
+                    : ar.mood === "push"
+                        ? `${ar.why.length ? ar.why.join(" and ") + ", so " : ""}this is a day to chase the top of the rep range.`
+                        : "Nothing to change — run it as written.",
+                ar.loadNote ? ` ${ar.loadNote}` : ""),
+            React.createElement("div", { className: "il-row", style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 13.5 } }, "Add warm-up sets"),
+                    React.createElement("div", { className: "il-sub" }, "A ramp before your first heavy set. Marked W, excluded from your numbers.")),
+                React.createElement("button", { className: "il-chip" + (warmUp ? " on" : ""), onClick: () => setWarmUp(!warmUp) }, warmUp ? "On" : "Off")))),
         React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: start }, "Start workout"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask coach to change it"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "editrt", id: rt.id }) }, "Edit manually")));
 }
-function EditRoutine({ sheet, st, save, close }) {
+function EditRoutine({ sheet, st, save, close, setSheet }) {
     const existing = sheet.id ? st.routines.find((r) => r.id === sheet.id) : null;
     const [rt, setRt] = useState(existing || { id: "r" + Date.now(), name: "", intent: "strength", minutes: 30, blurb: "", exercises: [] });
     const [adding, setAdding] = useState(false);
@@ -6752,7 +7602,7 @@ function EditRoutine({ sheet, st, save, close }) {
                         React.createElement("button", { className: "il-chip", onClick: () => setRt({ ...rt, exercises: rt.exercises.map((y, j) => j === i ? { ...y, sets: Math.min(6, y.sets + 1) } : y) }) }, "+"),
                         React.createElement("button", { className: "il-x", onClick: () => setRt({ ...rt, exercises: rt.exercises.filter((_, j) => j !== i) }) }, "\u00D7")));
             }),
-            React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => setAdding(true) }, "+ Add exercise")),
+            React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => setSheet({ t: "pick", title: "Add to this routine", onPick: (e) => setRt((r) => ({ ...r, exercises: [...r.exercises, { exId: e.id, sets: recSets(e, st.profile, null).n }] })) }) }, "+ Add exercise")),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", disabled: !rt.name || !rt.exercises.length, onClick: () => { save({ ...st, routines: existing ? st.routines.map((r) => (r.id === rt.id ? rt : r)) : [...st.routines, rt] }); close(); } }, "Save routine"),
             existing && React.createElement("button", { className: "il-btn dz", onClick: () => { save({ ...st, routines: st.routines.filter((r) => r.id !== rt.id) }); close(); } }, "Delete routine")));
