@@ -163,6 +163,11 @@ const CSS = `
  background-repeat:no-repeat;background-position:right 10px center;}
 .il-sel:focus{outline:2px solid var(--acc);outline-offset:-1px;}
 .il-fld{display:flex;gap:8px;align-items:stretch;}
+.il-menu{background:var(--card);border-radius:13px;margin:0 12px 8px;overflow:hidden;}
+.il-mrow{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:none;border:0;
+ padding:13px 14px;color:var(--txt);font:inherit;cursor:pointer;text-align:left;border-bottom:1px solid var(--line);}
+.il-mrow:last-child{border-bottom:0;}
+.il-mrow:active{background:var(--c2);}
 .il-sw{position:relative;overflow:hidden;border-radius:13px;margin:0 12px 9px;touch-action:pan-y;}
 .il-sw-bin{position:absolute;top:0;right:0;bottom:0;width:84px;display:flex;align-items:center;justify-content:center;
  background:var(--red);border:0;cursor:pointer;color:#fff;}
@@ -411,8 +416,8 @@ const EX = [
 ];
 const AEROBIC = AEROBIC_RAW.map(([name, kit, met, dist, cues], i) => ({
     id: "a" + i, name, kit, met, dist: !!dist, cues,
-    move: "cardio", group: "aerobic", aerobic: true, cardio: true, timed: true,
-    primary: [], secondary: [], lo: 20, hi: 45, perSide: false, loaded: false, isCompound: true, quiet: true,
+    move: "aerobic", group: "aerobic", aerobic: true, cardio: false, timed: false,
+    primary: [], secondary: [], lo: 20, hi: 45, perSide: false, loaded: false, isCompound: false, quiet: true,
 }));
 EX.push(...AEROBIC);
 EX.forEach((e) => { e.group = e.group || groupOf(e); });
@@ -3097,7 +3102,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v51 · 31 Jul";
+const APP_VERSION = "v52 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -4361,6 +4366,8 @@ function Readiness({ value, onChange, compact }) {
    Working back from that, and from your goal, training age and how much
    of the week you can give it, lands on a per-exercise number.        */
 function recSets(ex, P, a) {
+    if (ex.aerobic)
+        return { n: 1, why: "cardio is measured in minutes, not sets" };
     const goal = P.goal || "muscle";
     const yrs = P.years ?? 2;
     const mins = Number(P.minsSess) || 45;
@@ -6021,6 +6028,112 @@ function PickExercise({ st, close, onPick, title }) {
         React.createElement("div", { style: { position: "sticky", bottom: 0, background: "var(--bg)", padding: "10px 12px calc(12px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--line)" } },
             React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search for an exercise", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", value: q, onChange: (e) => setQ(e.target.value) })));
 }
+/* ============ LOG A CARDIO BOUT ============
+   Minutes and kilometres. No sets, no reps, no rest timer, and nobody
+   asking how close to failure a walk was.                            */
+function LogCardio({ sheet, st, save, today, close, setSheet }) {
+    const ex = exOf(sheet.exId);
+    const kg = st.profile.weightKg;
+    const sess = st.sessions.find((x) => x.date === today);
+    const existing = sess?.exercises.find((x) => x.exId === ex.id);
+    const [bouts, setBouts] = useState(existing?.sets?.length ? existing.sets : [{ mins: "", km: "", done: true }]);
+    const hist = useMemo(() => st.sessions.filter((x) => x.date !== today)
+        .flatMap((x) => x.exercises.filter((y) => y.exId === ex.id)
+        .flatMap((y) => y.sets.map((q) => ({ ...q, date: x.date }))))
+        .filter((q) => Number(q.mins) > 0).slice(-8).reverse(), [st.sessions, ex.id]);
+    const tot = bouts.reduce((a2, b) => ({
+        mins: a2.mins + (Number(b.mins) || 0), km: a2.km + (Number(b.km) || 0),
+        kcal: a2.kcal + boutKcal(ex, b, kg),
+    }), { mins: 0, km: 0, kcal: 0 });
+    const commit = () => {
+        const clean = bouts.filter((b) => Number(b.mins) > 0).map((b) => ({ ...b, done: true, warm: false }));
+        if (!clean.length) {
+            close();
+            return;
+        }
+        const sessions = [...st.sessions];
+        let i = sessions.findIndex((x) => x.date === today);
+        const n = new Date();
+        if (i < 0) {
+            sessions.push({ id: "u" + Date.now(), date: today, intent: "strength", routineName: "", hour: n.getHours(),
+                minute: n.getMinutes(), startedAt: Date.now(), durationSec: 0, exercises: [] });
+            i = sessions.length - 1;
+        }
+        const exs = sessions[i].exercises.filter((x) => x.exId !== ex.id);
+        exs.push({ exId: ex.id, sets: clean });
+        sessions[i] = { ...sessions[i], exercises: exs };
+        save({ ...st, sessions });
+        close();
+    };
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: ex.name, sub: "Cardio", close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+            React.createElement("div", { className: "il-lbl", style: { color: "#7FA8F0", marginBottom: 6 } }, "What this costs you"),
+            React.createElement("div", { className: "il-d", style: { fontSize: 21, fontWeight: 600, marginBottom: 6 } },
+                "About ",
+                Math.round(kcalMin(ex.met, kg)),
+                " calories a minute"),
+            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } },
+                ex.met,
+                " METs at ",
+                fmtBW(kg, 0),
+                ". ",
+                ex.cues[0])),
+        bouts.map((b, i) => (React.createElement("div", { key: i, className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
+                React.createElement("div", { className: "il-lbl" }, bouts.length > 1 ? `Bout ${i + 1}` : "How long"),
+                bouts.length > 1 && React.createElement("button", { className: "il-x", onClick: () => setBouts(bouts.filter((_, j) => j !== i)) }, "\u00D7")),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: ex.dist ? "1fr 1fr" : "1fr", gap: 9 } },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 4, fontSize: 10 } }, "Minutes"),
+                    React.createElement(NumIn, { value: b.mins, step: 5, onChange: (v) => setBouts(bouts.map((x, j) => j === i ? { ...x, mins: v } : x)) })),
+                ex.dist && React.createElement("div", null,
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 4, fontSize: 10 } }, "Distance in km"),
+                    React.createElement(NumIn, { value: b.km, step: 0.5, onChange: (v) => setBouts(bouts.map((x, j) => j === i ? { ...x, km: v } : x)) }))),
+            Number(b.mins) > 0 && (React.createElement("div", { className: "il-ring", style: { marginTop: 12 } },
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, boutKcal(ex, b, kg)),
+                    React.createElement("div", { className: "l" }, "calories")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, Math.round(Number(b.mins))),
+                    React.createElement("div", { className: "l" }, "minutes")),
+                ex.dist && React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v", style: { fontSize: 17 } }, pace(b) || "\u2014"),
+                    React.createElement("div", { className: "l" }, "pace"))))))),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => setBouts([...bouts, { mins: "", km: "", done: true }]) }, "+ Another bout today")),
+        tot.mins > 0 && bouts.length > 1 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Today altogether"),
+            React.createElement("div", { className: "il-ring" },
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, Math.round(tot.mins)),
+                    React.createElement("div", { className: "l" }, "minutes")),
+                ex.dist && React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, tot.km.toFixed(1)),
+                    React.createElement("div", { className: "l" }, "km")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, tot.kcal),
+                    React.createElement("div", { className: "l" }, "calories"))))),
+        hist.length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Last few times"),
+            hist.map((h, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "7px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                React.createElement("span", { style: { fontSize: 13 } }, dtiny(h.date)),
+                React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)" } },
+                    Math.round(h.mins),
+                    " min",
+                    h.km ? ` \u00b7 ${Number(h.km).toFixed(1)} km \u00b7 ${pace(h)}` : "",
+                    " \\u00b7 ",
+                    boutKcal(ex, h, kg),
+                    " cal")))))),
+        ex.cues.length > 1 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Worth knowing"),
+            ex.cues.slice(1).map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 13, color: "var(--dim)", padding: "6px 0 6px 18px", position: "relative", lineHeight: 1.5 } },
+                React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--acc)" } }, "\u2022"),
+                c))))),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", disabled: !tot.mins, onClick: commit }, tot.mins ? `Log ${Math.round(tot.mins)} minutes` : "Put some minutes in"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: { exId: ex.id } }) }, "Ask coach")));
+}
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
     const P = st.profile;
@@ -7015,50 +7128,24 @@ function You({ st, save, a, setSheet, go }) {
                 " of ",
                 ALLQ.length,
                 " answered. Change any of them and everything above recalculates.")),
-        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "Notes for the next update"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "diag" }) },
-                    "Open",
-                    (st.bugs || []).length ? ` · ${(st.bugs || []).length}` : "")),
-            React.createElement("div", { className: "il-note" }, "Anything broken, annoying, or that you wish it did. Jot it down as you go, then send me the lot in one block. Crashes record themselves.")),
-        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "Sticking to it"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "adhere" }) }, "Open")),
-            React.createElement("div", { className: "il-note" }, (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions and ${ad.foodPct}% of days logged over the last four weeks.`; })())),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "Diary"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "diary" }) }, "Open")),
-            React.createElement("div", { className: "il-note" }, "Every day you've logged something, in one place \u2014 the session and how you turned up to it, the food, the weigh-in, and any device numbers you've cross-checked.")),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "Import past workouts"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "importwo" }) }, "Open")),
-            React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, "Screenshots from whatever you used before. It reads the weights and reps so your first sessions start from real numbers rather than estimates."),
-            React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => setSheet({ t: "importcsv" }) }, "Or import a CSV \u2014 Withings, Hevy, MacroFactor")),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "AI features"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "aikey" }) }, st.apiKey ? "Key added" : "Set up")),
-            React.createElement("div", { className: "il-note" }, st.apiKey
-                ? "Your key is in. Label scanning, food photos, the coach and workout import all work."
-                : "The coach, label scanning, food photos and workout import need an Anthropic key. Everything else works without one.")),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                React.createElement("div", { className: "il-lbl" }, "Units"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "units" }) }, "Change")),
-            React.createElement("div", { className: "il-note" },
-                "Weight in ",
-                UNIT.bw === "st" ? "stones and pounds" : UNIT.bw === "lb" ? "pounds" : "kilograms",
-                " \u00B7 height in ",
-                UNIT.ht === "ftin" ? "feet and inches" : "centimetres",
-                " \u00B7 tape in ",
-                TU() === "in" ? "inches" : "centimetres",
-                " \u00B7 lifting in ",
-                LU() === "lb" ? "pounds" : "kilograms",
-                ".")),
+        React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "Settings & tools"),
+        React.createElement("div", { className: "il-menu" }, [
+            ["Diary", "Every day you've logged something", { t: "diary" }, null],
+            ["Sticking to it", (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions this month`; })(), { t: "adhere" }, null],
+            ["Import from another app", "Withings, Hevy, MacroFactor \u2014 any CSV", { t: "importcsv" }, null],
+            ["Import past workouts", "From screenshots of your old app", { t: "importwo" }, null],
+            ["Health apps", "Apple Health and Health Connect", { t: "health" }, null],
+            ["Cross-check my devices", "Reconcile steps and calories", { t: "crosscheck" }, null],
+            ["Units", `${UNIT.bw === "st" ? "Stones" : UNIT.bw === "lb" ? "Pounds" : "Kilograms"}, ${UNIT.ht === "ftin" ? "feet" : "centimetres"}, lifting in ${LU()}`, { t: "units" }, null],
+            ["AI features", st.apiKey ? "Key added \u2014 everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
+            ["Notes for the next update", `${(st.bugs || []).length} on the list`, { t: "diag" }, null],
+        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
+            React.createElement("span", { style: { minWidth: 0 } },
+                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
+                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
+            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                tag && React.createElement("span", { className: "il-tag t2" }, tag),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\\u203a")))))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Health apps & cross-check")),
@@ -7725,6 +7812,9 @@ function Pick({ st, close, setSheet }) {
                     React.createElement("div", { className: "il-sub" }, e.cardio ? `Conditioning · ~${Math.round(e.met)} effort` : `${e.primary.map((m) => M[m]).join(", ")} · ${e.lo}–${e.hi} ${e.timed ? "sec" : "reps"}`))))))));
 }
 function Log({ sheet, st, save, a, today, close, setSheet }) {
+    const exA = exOf(sheet.exId);
+    if (exA && exA.aerobic)
+        return React.createElement(LogCardio, { sheet, st, save, today, close, setSheet });
     const ex = exOf(sheet.exId);
     const cur = st.sessions.find((s) => s.date === today);
     const intent = cur?.intent || "strength";
