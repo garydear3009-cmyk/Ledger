@@ -2364,7 +2364,7 @@ const DEFAULT_STATE = () => {
         kit: ["none", "db", "bench", "bar", "band"],
         profile: { age: 34, heightCm: 180, weightKg: 82, years: 2, goal: "muscle", sleep: 7, sex: "male", job: "desk", proteinTarget: 148, carbTarget: 300, fatTarget: 74, done: false, units: { ...DEFAULT_UNITS } },
         rings: { kcalGoal: 600, minGoal: 30 },
-        focus: null, actions: [], hiddenTips: [], apiKey: "", photos: [], videos: {}, exNotes: {}, daily: {}, bugs: [], routines: makeRoutines(PROF), myFoods: [], recent: [], foodCount: {}, dishes: [],
+        focus: null, actions: [], hiddenTips: [], apiKey: "", reviewModel: "mid", pastVolume: {}, pastTdee: [], reviews: [], photos: [], videos: {}, exNotes: {}, daily: {}, bugs: [], routines: makeRoutines(PROF), myFoods: [], recent: [], foodCount: {}, dishes: [],
         sessions: s.sessions, foods: s.foods, meas: s.meas, weights: s.weights,
     };
 };
@@ -3102,7 +3102,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v52 · 31 Jul";
+const APP_VERSION = "v57 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -3239,10 +3239,12 @@ function HomeLedgerInner() {
                 if (settled && provisional && !dirty.current) {
                     setSt(got);
                     setApiKey(got.apiKey || null);
+                    MODEL_PREF = got.reviewModel || "mid";
                     setBootNote(why === "backup" ? "Recovered from your backup copy." : "");
                 }
                 else if (!settled) {
                     setApiKey(got.apiKey || null);
+                    MODEL_PREF = got.reviewModel || "mid";
                     finish(got, why === "backup" ? "Recovered from your backup copy." : "");
                 }
                 else if (dirty.current) {
@@ -3867,7 +3869,7 @@ function ScanLabel({ st, save, today, close, setSheet }) {
             const txt = await callClaude([
                 { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
                 { type: "text", text: LABEL_PROMPT },
-            ], 1000);
+            ], 1000, "cheap");
             const j = looseJson(txt);
             if (!j)
                 throw new Error("The reply didn't make sense.");
@@ -4007,11 +4009,20 @@ function ScanLabel({ st, save, today, close, setSheet }) {
 /* One request shape for every AI call in the app. Kept deliberately close
    to the documented example — no system parameter, everything in the user
    message — because that is the shape known to work here.              */
-async function callClaude(content, maxTokens = 1000) {
+/* Cheap models for extraction, the good one for coaching. A label scan is
+   reading numbers off a photo; a review is reasoning about your training.
+   Paying Opus rates for the former is money on the floor.             */
+const MODELS = {
+    cheap: "claude-haiku-4-5-20251001",
+    mid: "claude-sonnet-5",
+    deep: "claude-opus-5",
+};
+let MODEL_PREF = "mid";
+async function callClaude(content, maxTokens = 1000, tier = "mid") {
     let step = "building the request";
     try {
         const payload = JSON.stringify({
-            model: "claude-sonnet-4-6",
+            model: MODELS[tier === "deep" ? (MODEL_PREF === "deep" ? "deep" : "mid") : tier] || MODELS.mid,
             max_tokens: maxTokens,
             messages: [{ role: "user", content }],
         });
@@ -5087,6 +5098,25 @@ function ApiKeySheet({ st, save, close }) {
             testing && testing !== "…" && (React.createElement("div", { className: "il-note", style: { marginTop: 10, color: testing === "works" ? "var(--grn)" : "var(--red)" } }, testing === "works" ? "Works — save it and you're set." : testing)),
             st.apiKey && React.createElement("button", { className: "il-btn dz sm", style: { width: "100%", marginTop: 10 }, onClick: () => { setApiKey(null); save({ ...st, apiKey: "" }); setK(""); } }, "Remove the key")),
         React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "The full review uses"),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, "Label scanning and photo reading always use the cheapest model \u2014 they're just reading numbers off a picture. Only the full review is worth paying more for."),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, [["mid", "Sonnet", "about 4p a review"], ["deep", "Opus", "about 11p, sharper reasoning"]].map(([v, l, note]) => (React.createElement("button", { key: v, className: "il-chip" + ((st.reviewModel || "mid") === v ? " on" : ""), onClick: () => { MODEL_PREF = v; save({ ...st, reviewModel: v }); } }, l)))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, (st.reviewModel || "mid") === "deep"
+                ? "Opus. Around 11p a review, and noticeably better at spotting the thing you didn't ask about."
+                : "Sonnet. Around 4p a review, and plenty good enough for most weeks.")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What it actually costs"),
+            [["Full review and week plan", "4p", "11p on Opus"],
+                ["One coach question", "1p", ""],
+                ["Scan a label", "0.5p", ""],
+                ["Photograph your food", "0.7p", ""],
+                ["Read a health report PDF", "5p", "depends on pages"]].map(([k, v, note], i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "7px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                React.createElement("span", { style: { fontSize: 13.5 } }, k),
+                React.createElement("span", { className: "il-n", style: { fontSize: 13, color: "var(--dim)" } },
+                    v,
+                    note ? ` · ${note}` : "")))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "Using all of it fairly heavily comes to under a pound a month. Five pounds of credit lasts most of a year.")),
+        React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Getting one"),
             ["Go to console.anthropic.com and make an account.",
                 "Add a little credit — five pounds lasts a very long time at this usage.",
@@ -5130,7 +5160,7 @@ function ScalePhoto({ st, save, today, close }) {
             const txt = await callClaude([
                 { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
                 { type: "text", text: SCALE_PROMPT },
-            ], 1200);
+            ], 1200, "cheap");
             const j = looseJson(txt);
             if (!j || !Array.isArray(j.items) || !j.items.length)
                 throw new Error("Couldn't make out any food.");
@@ -5296,7 +5326,7 @@ function ImportWorkouts({ st, save, close }) {
             const txt = await callClaude([
                 { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
                 { type: "text", text: IMPORT_PROMPT },
-            ], 1600);
+            ], 1600, "cheap");
             const j = looseJson(txt);
             if (!j || !Array.isArray(j.exercises) || !j.exercises.length)
                 throw new Error(j?.notes || "No exercises found in that one.");
@@ -5426,6 +5456,20 @@ function volumeLandmarks(st, a) {
         }));
         weeks.push({ w, sets, best });
     }
+    // anything brought in from another app counts as history too
+    const past = st.pastVolume || {};
+    Object.entries(past).forEach(([date, v]) => {
+        const wk = Math.floor((Date.now() - new Date(date + "T12:00").getTime()) / (7 * 864e5));
+        if (wk < 0 || wk > 15)
+            return;
+        const hit = weeks.find((w) => w.w === wk);
+        if (hit) {
+            Object.entries(v).forEach(([m, n2]) => { if (m[0] !== "_")
+                hit.sets[m] = Math.max(hit.sets[m] || 0, n2); });
+        }
+        else
+            weeks.push({ w: wk, sets: Object.fromEntries(Object.entries(v).filter(([k]) => k[0] !== "_")), best: {} });
+    });
     MK.forEach((m) => {
         const pts = weeks.filter((wk) => (wk.sets[m] || 0) > 0 && (wk.best[m] || 0) > 0)
             .map((wk) => ({ sets: wk.sets[m], best: wk.best[m], w: wk.w })).reverse();
@@ -5548,6 +5592,72 @@ function dietBreak(st, a) {
         return null;
     return { weeks, target: a.maint };
 }
+/* ============ SPREADSHEETS AND PDFs ============
+   MacroFactor exports .xlsx with several sheets; Withings sends a PDF
+   health report. Neither is a CSV, so: load SheetJS on demand for the
+   spreadsheet, and read the PDF with the vision model.               */
+let XLSXLIB = null;
+function loadXLSX() {
+    if (XLSXLIB)
+        return Promise.resolve(XLSXLIB);
+    if (typeof window !== "undefined" && window.XLSX) {
+        XLSXLIB = window.XLSX;
+        return Promise.resolve(XLSXLIB);
+    }
+    return new Promise((ok, no) => {
+        const urls = [
+            "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
+            "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js",
+        ];
+        let i = 0;
+        const next = () => {
+            if (i >= urls.length)
+                return no(new Error("Couldn't load the spreadsheet reader. Check your connection."));
+            const s = document.createElement("script");
+            s.src = urls[i++];
+            s.onload = () => { XLSXLIB = window.XLSX; XLSXLIB ? ok(XLSXLIB) : next(); };
+            s.onerror = next;
+            document.head.appendChild(s);
+        };
+        next();
+    });
+}
+const PDF_PROMPT = `You are reading a health or body-composition report, usually from a smart scale.
+
+Return ONLY a JSON object. No markdown fences, no preamble.
+
+{
+  "readings": [
+    { "date": "YYYY-MM-DD", "weightKg": number or null, "fatPct": number or null,
+      "muscleKg": number or null, "waterPct": number or null, "boneKg": number or null }
+  ],
+  "latest": { "date": "YYYY-MM-DD", "weightKg": number, "fatPct": number or null },
+  "other": [ { "label": "name of any other biomarker", "value": "as printed", "date": "YYYY-MM-DD or null" } ],
+  "unit": "kg" | "lb",
+  "confidence": "high" | "medium" | "low",
+  "notes": "anything you couldn't read, or assumptions you made"
+}
+
+Rules:
+- Read EVERY page. Reports put a summary up front and the tables further in.
+- One entry in "readings" per dated measurement you can find. If the report only shows a
+  chart rather than a table, read what you can from the axis labels and say so in notes.
+- Convert nothing. Report the units as printed and set "unit" accordingly.
+- "other" is for things this app doesn't track — blood pressure, heart rate, sleep scores.
+  List them so they can be shown, but don't force them into the readings.
+- If a figure is a range or unclear, leave it null rather than guessing.`;
+function readPdfBase64(file) {
+    return new Promise((ok, no) => {
+        const fr = new FileReader();
+        fr.onerror = () => no(new Error("Couldn't read that file."));
+        fr.onload = () => {
+            const s = String(fr.result);
+            const i = s.indexOf(",");
+            ok(i >= 0 ? s.slice(i + 1) : s);
+        };
+        fr.readAsDataURL(file);
+    });
+}
 /* ============ IMPORT FROM OTHER APPS ============
    Withings, Apple Health, MacroFactor, Hevy and most others will export a
    CSV. Rather than guess at each format, read the headers and let you say
@@ -5632,6 +5742,141 @@ const matchCol = (headers, kind) => {
     }
     return -1;
 };
+/* ============ READ THE WHOLE FILE ============
+   MacroFactor's export has four tabs, and they hold four different things.
+   Rather than make you pick one at a time, look at every sheet, work out
+   what each one is from its headers, and bring the lot in at once.    */
+const hdrOf = (r) => (r || []).map((x) => String(x || "").toLowerCase().trim());
+const hdrHas = (hdr, ...words) => words.some((w) => hdr.some((h) => h.includes(w)));
+const MUSCLE_HEADS = {
+    chest: "chest", quad: "quad", ham: "hamstring", glute: "glute", calf: "calf", abs: "abs",
+    lats: "lats", uback: "upper back", lback: "lower back", traps: "trap", bi: "bicep", tri: "tricep",
+    fdelt: "front delt", sdelt: "side delt", rdelt: "rear delt", fore: "forearm", obl: "oblique",
+};
+function classifySheet(name, rows) {
+    const hdr = hdrOf(rows[0]);
+    const nm = String(name).toLowerCase();
+    const dateCol = matchCol(rows[0], "date");
+    // columns that are muscle names -> a weekly volume table
+    const muscleCols = Object.entries(MUSCLE_HEADS)
+        .map(([m, word]) => [m, hdr.findIndex((h) => h.includes(word))])
+        .filter(([, i]) => i >= 0);
+    if (muscleCols.length >= 3 && dateCol >= 0) {
+        return { kind: hdr.some((h) => h.includes("volume")) || nm.includes("volume") ? "volume" : "sets",
+            dateCol, muscleCols, label: nm.includes("volume") ? "Volume by muscle" : "Sets by muscle" };
+    }
+    if (hdrHas(hdr, "exercise", "movement", "lift") && hdrHas(hdr, "rep")) {
+        const prescribed = !hdrHas(hdr, "date") && (nm.includes("program") || nm.includes("plan") || nm.includes("routine"));
+        return { kind: prescribed ? "program" : "log", label: prescribed ? "A programme" : "Workout log" };
+    }
+    if (dateCol >= 0 && hdrHas(hdr, "calorie", "kcal", "energy") && hdrHas(hdr, "protein"))
+        return { kind: "food", label: "Food log" };
+    if (dateCol >= 0 && hdrHas(hdr, "weight", "scale weight", "body weight"))
+        return { kind: "body", label: "Weigh-ins" };
+    if (dateCol >= 0 && hdrHas(hdr, "expenditure", "tdee", "maintenance"))
+        return { kind: "tdee", label: "Expenditure" };
+    return { kind: "unknown", label: "Not recognised" };
+}
+function readSheet(sheet) {
+    const { name, rows } = sheet;
+    const c = classifySheet(name, rows);
+    const body = rows.slice(1);
+    const hdr = rows[0];
+    const out = { name, ...c, n: 0, preview: [] };
+    if (c.kind === "sets" || c.kind === "volume") {
+        const recs = body.map((r) => {
+            const d = guessDate(r[c.dateCol]);
+            if (!d)
+                return null;
+            const v = {};
+            c.muscleCols.forEach(([m, i]) => { const n2 = guessNum(r[i]); if (n2 != null && n2 > 0)
+                v[m] = n2; });
+            return Object.keys(v).length ? { date: d, v } : null;
+        }).filter(Boolean);
+        out.n = recs.length;
+        out.data = recs;
+        out.preview = recs.slice(-3).reverse().map((x) => `${dtiny(x.date)} · ${Object.entries(x.v).slice(0, 3).map(([m, n2]) => `${M[m]} ${n2}`).join(", ")}`);
+    }
+    else if (c.kind === "log") {
+        const map = { date: matchCol(hdr, "date"), exercise: matchCol(hdr, "exercise"), setw: matchCol(hdr, "setw"), reps: matchCol(hdr, "reps"), rir: matchCol(hdr, "rir") };
+        const byDay = {};
+        body.forEach((r) => {
+            var _a;
+            const d = guessDate(r[map.date]);
+            const nmx = r[map.exercise];
+            const reps = guessNum(r[map.reps]);
+            const w = guessNum(r[map.setw]);
+            if (!d || !nmx || reps == null || reps <= 0)
+                return;
+            const hit = EX.find((e) => e.name.toLowerCase() === String(nmx).toLowerCase())
+                || EX.find((e) => String(nmx).toLowerCase().includes(e.name.toLowerCase()))
+                || EX.find((e) => e.name.toLowerCase().includes(String(nmx).toLowerCase()));
+            (byDay[d] || (byDay[d] = {}));
+            const key = hit ? hit.id : "?" + nmx;
+            ((_a = byDay[d])[key] || (_a[key] = { exId: hit?.id || null, raw: nmx, sets: [] }));
+            byDay[d][key].sets.push({ w: w || 0, reps, rir: map.rir >= 0 ? guessNum(r[map.rir]) : null });
+        });
+        const days = Object.entries(byDay).map(([date, exs]) => ({ date, exs: Object.values(exs) })).sort((a, b) => a.date.localeCompare(b.date));
+        out.n = days.length;
+        out.data = days;
+        out.matched = days.reduce((a, d) => a + d.exs.filter((e) => e.exId).length, 0);
+        out.unmatched = [...new Set(days.flatMap((d) => d.exs.filter((e) => !e.exId).map((e) => e.raw)))];
+        out.preview = days.slice(-3).reverse().map((d) => `${dtiny(d.date)} · ${d.exs.length} exercises`);
+    }
+    else if (c.kind === "program") {
+        const map = { exercise: matchCol(hdr, "exercise"), reps: matchCol(hdr, "reps") };
+        const rowsP = body.map((r) => {
+            const nmx = r[map.exercise];
+            if (!nmx)
+                return null;
+            const hit = EX.find((e) => e.name.toLowerCase() === String(nmx).toLowerCase())
+                || EX.find((e) => String(nmx).toLowerCase().includes(e.name.toLowerCase()));
+            return hit ? { exId: hit.id, name: hit.name, raw: nmx } : null;
+        }).filter(Boolean);
+        out.n = rowsP.length;
+        out.data = rowsP;
+        out.preview = rowsP.slice(0, 3).map((x) => x.name);
+    }
+    else if (c.kind === "food") {
+        const map = { date: matchCol(hdr, "date"), kcal: hdr.findIndex((h) => /calorie|kcal|energy/i.test(String(h))),
+            p: hdr.findIndex((h) => /protein/i.test(String(h))), cc: hdr.findIndex((h) => /carb/i.test(String(h))), f: hdr.findIndex((h) => /fat/i.test(String(h))) };
+        const recs = body.map((r) => {
+            const d = guessDate(r[map.date]);
+            const k = guessNum(r[map.kcal]);
+            if (!d || k == null || k <= 0)
+                return null;
+            return { date: d, kcal: k, p: guessNum(r[map.p]) || 0, c: guessNum(r[map.cc]) || 0, f: guessNum(r[map.f]) || 0 };
+        }).filter(Boolean);
+        out.n = recs.length;
+        out.data = recs;
+        out.preview = recs.slice(-3).reverse().map((x) => `${dtiny(x.date)} · ${Math.round(x.kcal)} cal, ${Math.round(x.p)}g protein`);
+    }
+    else if (c.kind === "body") {
+        const map = { date: matchCol(hdr, "date"), weight: matchCol(hdr, "weight"), fat: matchCol(hdr, "fat") };
+        const recs = body.map((r) => {
+            const d = guessDate(r[map.date]);
+            const kg = guessNum(r[map.weight]);
+            if (!d || kg == null || kg < 20 || kg > 400)
+                return null;
+            return { date: d, kg, fat: map.fat >= 0 ? guessNum(r[map.fat]) : null };
+        }).filter(Boolean);
+        out.n = recs.length;
+        out.data = recs;
+        out.preview = recs.slice(-3).reverse().map((x) => `${dtiny(x.date)} · ${x.kg}kg${x.fat != null ? ` · ${x.fat}% fat` : ""}`);
+    }
+    else if (c.kind === "tdee") {
+        const map = { date: matchCol(hdr, "date"), v: hdr.findIndex((h) => /expenditure|tdee|maintenance/i.test(String(h))) };
+        const recs = body.map((r) => {
+            const d = guessDate(r[map.date]);
+            const v = guessNum(r[map.v]);
+            return d && v ? { date: d, kcal: v } : null;
+        }).filter(Boolean);
+        out.n = recs.length;
+        out.data = recs;
+        out.preview = recs.slice(-2).reverse().map((x) => `${dtiny(x.date)} · ${Math.round(x.kcal)} cal a day`);
+    }
+    return out;
+}
 function ImportData({ st, save, close }) {
     const [kind, setKind] = useState("body");
     const [rows, setRows] = useState(null);
@@ -5641,34 +5886,74 @@ function ImportData({ st, save, close }) {
     const [err, setErr] = useState("");
     const [done, setDone] = useState("");
     const file = useRef(null);
-    const load = (e) => {
+    const [busy, setBusy] = useState(false);
+    const [sheets, setSheets] = useState(null);
+    const [pdf, setPdf] = useState(null);
+    const [book, setBook] = useState(null);
+    const [pick, setPick] = useState({});
+    const [unit2, setUnit2] = useState("kg");
+    const useHeaders = (h, all) => {
+        setHead(h);
+        setRows(all);
+        setMap(kind === "body"
+            ? { date: matchCol(h, "date"), weight: matchCol(h, "weight"), fat: matchCol(h, "fat") }
+            : { date: matchCol(h, "date"), exercise: matchCol(h, "exercise"), setw: matchCol(h, "setw"), reps: matchCol(h, "reps"), rir: matchCol(h, "rir") });
+    };
+    const load = async (e) => {
         const f = e.target.files?.[0];
         if (!f)
             return;
         setErr("");
         setDone("");
-        const fr = new FileReader();
-        fr.onload = () => {
-            try {
-                const txt = String(fr.result);
+        setPdf(null);
+        setSheets(null);
+        setBusy(true);
+        const name = (f.name || "").toLowerCase();
+        try {
+            if (name.endsWith(".pdf") || f.type === "application/pdf") {
+                setBusy("Reading the report…");
+                const b64 = await readPdfBase64(f);
+                const txt = await callClaude([
+                    { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 } },
+                    { type: "text", text: PDF_PROMPT },
+                ], 4000);
+                const j = looseJson(txt);
+                if (!j || !Array.isArray(j.readings) || !j.readings.length)
+                    throw new Error(j?.notes || "Couldn't find any dated measurements in that report.");
+                setPdf(j);
+            }
+            else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+                setBusy("Reading every sheet…");
+                const X = await loadXLSX();
+                const buf = await f.arrayBuffer();
+                const wb = X.read(buf, { type: "array", cellDates: true });
+                const named = wb.SheetNames.map((nm) => {
+                    const rr = X.utils.sheet_to_json(wb.Sheets[nm], { header: 1, raw: false, defval: "" });
+                    return { name: nm, rows: rr.filter((r) => r.some((c) => String(c).trim() !== "")) };
+                }).filter((sh) => sh.rows.length > 1);
+                if (!named.length)
+                    throw new Error("That spreadsheet has no readable sheets.");
+                const read = named.map(readSheet);
+                const usable = read.filter((r) => r.kind !== "unknown" && r.n > 0);
+                if (!usable.length)
+                    throw new Error(`Read ${named.length} sheets but couldn't recognise any of them. Try the manual column mapping below.`);
+                setBook(read);
+                setPick(Object.fromEntries(usable.map((r) => [r.name, true])));
+            }
+            else {
+                const txt = await f.text();
                 if (txt.trim().startsWith("<?xml"))
-                    throw new Error("That's an Apple Health XML export. It's usually hundreds of megabytes and won't open on a phone — export from Withings or your workout app instead, which give you a CSV.");
+                    throw new Error("That's an Apple Health XML export — usually hundreds of megabytes, and no phone browser will open it. Export from Withings instead.");
                 const all = parseCSV(txt);
                 if (all.length < 2)
                     throw new Error("Couldn't find any rows in that file.");
-                const h = all[0];
-                setHead(h);
-                setRows(all.slice(1));
-                setMap(kind === "body"
-                    ? { date: matchCol(h, "date"), weight: matchCol(h, "weight"), fat: matchCol(h, "fat") }
-                    : { date: matchCol(h, "date"), exercise: matchCol(h, "exercise"), setw: matchCol(h, "setw"), reps: matchCol(h, "reps"), rir: matchCol(h, "rir") });
+                useHeaders(all[0], all.slice(1));
             }
-            catch (x) {
-                setErr(x.message || "Couldn't read that file.");
-            }
-        };
-        fr.onerror = () => setErr("Couldn't read that file.");
-        fr.readAsText(f);
+        }
+        catch (x) {
+            setErr(x.message || "Couldn't read that file.");
+        }
+        setBusy(false);
     };
     const preview = (() => {
         if (!rows)
@@ -5744,12 +6029,164 @@ function ImportData({ st, save, close }) {
         React.createElement("div", { style: { padding: "12px 12px 0", display: "flex", gap: 7 } }, [["body", "Weight & body fat"], ["workouts", "Past workouts"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (kind === v ? " on" : ""), onClick: () => { setKind(v); setRows(null); setHead([]); setDone(""); } }, l)))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, kind === "body"
-                ? "In the Withings app: Profile → Download my data, and it emails you a zip. The file you want is weight.csv. Most smart scales and health apps offer something similar."
-                : "Most training apps have an export in settings. Hevy, Strong and Boostcamp all produce a CSV with one row per set."),
-            React.createElement("input", { ref: file, type: "file", accept: ".csv,text/csv,text/plain,.txt", style: { display: "none" }, onChange: load }),
-            React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Choose a CSV file"),
+                ? "Withings health report PDFs work as they are — no need to find the CSV. Or in the Withings app: Profile → Download my data for a zip containing weight.csv."
+                : "Most training apps have an export in settings. Hevy, Strong and Boostcamp give a CSV with one row per set. MacroFactor gives an .xlsx with several sheets — pick the right one after loading."),
+            !st.apiKey && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginBottom: 12, fontSize: 12.5 } }, "PDFs need an Anthropic key (You \u2192 AI features). CSV and Excel files work without one."),
+            React.createElement("input", { ref: file, type: "file", accept: ".csv,.txt,.xlsx,.xls,.pdf,text/csv,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", style: { display: "none" }, onChange: load }),
+            React.createElement("button", { className: "il-btn", disabled: !!busy, onClick: () => file.current?.click() }, busy ? (typeof busy === "string" ? busy : "Working…") : "Choose a file"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Takes CSV, Excel (.xlsx) and PDF. A Withings health report or a MacroFactor export both work as they come."),
             err && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginTop: 10 } }, err),
             done && React.createElement("div", { className: "il-note", style: { color: "var(--grn)", marginTop: 10 } }, done)),
+        book && (() => {
+            const usable = book.filter((r) => r.kind !== "unknown" && r.n > 0);
+            const skipped = book.filter((r) => r.kind === "unknown" || !r.n);
+            const chosen = usable.filter((r) => pick[r.name]);
+            return React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-card", style: { background: "#10281A" } },
+                    React.createElement("div", { className: "il-lbl", style: { color: "#6FDC9B", marginBottom: 6 } },
+                        "Read ",
+                        book.length,
+                        " sheets"),
+                    React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } },
+                        usable.length,
+                        " of them have something I can use. Untick anything you'd rather leave out.")),
+                usable.map((r) => (React.createElement("div", { key: r.name, className: "il-card", style: { opacity: pick[r.name] ? 1 : 0.5 } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                        React.createElement("div", { style: { minWidth: 0 } },
+                            React.createElement("div", { className: "il-h2" }, r.name),
+                            React.createElement("div", { className: "il-sub", style: { marginTop: 2 } },
+                                r.label,
+                                " \u00B7 ",
+                                r.n,
+                                " ",
+                                r.kind === "log" ? "sessions" : r.kind === "program" ? "exercises" : "rows",
+                                r.kind === "log" && r.unmatched?.length ? ` · ${r.unmatched.length} names I don't know` : "")),
+                        React.createElement("button", { className: "il-chip" + (pick[r.name] ? " on" : ""), onClick: () => setPick({ ...pick, [r.name]: !pick[r.name] }) }, pick[r.name] ? "In" : "Out")),
+                    r.preview.map((line, i) => (React.createElement("div", { key: i, className: "il-sub il-n", style: { margin: "3px 0" } }, line))),
+                    r.kind === "log" && r.unmatched?.length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } },
+                        "Skipping: ",
+                        r.unmatched.slice(0, 4).join(", "),
+                        r.unmatched.length > 4 ? ` and ${r.unmatched.length - 4} more` : ""))))),
+                skipped.length > 0 && (React.createElement("div", { className: "il-card" },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "Left alone"),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } },
+                        skipped.map((r) => r.name).join(", "),
+                        " \u2014 nothing in there I recognise. If one of those has data you want, tell me what's in it and I'll teach the app to read it."))),
+                chosen.some((r) => r.kind === "log" || r.kind === "volume") && (React.createElement("div", { className: "il-card" },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Weights in that file are in"),
+                    React.createElement("div", { style: { display: "flex", gap: 7 } }, [["kg", "Kilograms"], ["lb", "Pounds"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (unit2 === v ? " on" : ""), onClick: () => setUnit2(v) }, l)))))),
+                React.createElement("div", { style: { padding: "0 12px" } },
+                    React.createElement("button", { className: "il-btn", disabled: !chosen.length, onClick: () => {
+                            let nx = { ...st };
+                            const summary = [];
+                            chosen.forEach((r) => {
+                                if (r.kind === "body") {
+                                    const byDate = Object.fromEntries(nx.weights.map((w) => [w.date, w]));
+                                    r.data.forEach((x) => { byDate[x.date] = { date: x.date, kg: unit2 === "lb" ? x.kg / LB : x.kg, fat: x.fat ?? undefined }; });
+                                    nx.weights = Object.values(byDate).sort((a2, b2) => a2.date.localeCompare(b2.date));
+                                    summary.push(`${r.data.length} weigh-ins`);
+                                }
+                                else if (r.kind === "log") {
+                                    const add = r.data.map((d, i) => {
+                                        const exs = d.exs.filter((e) => e.exId && e.sets.length);
+                                        if (!exs.length)
+                                            return null;
+                                        return { id: "imp" + Date.now() + i, date: d.date, intent: "strength", routineName: "Imported",
+                                            hour: 18, minute: 0, startedAt: new Date(`${d.date}T18:00:00`).getTime(), finished: true,
+                                            durationSec: exs.length * 420, imported: true,
+                                            exercises: exs.map((e) => ({ exId: e.exId, sets: e.sets.map((q) => ({ ...q, w: unit2 === "lb" ? q.w / LB : q.w, warm: false, done: true })) })) };
+                                    }).filter(Boolean);
+                                    nx.sessions = [...nx.sessions, ...add].sort((a2, b2) => a2.date.localeCompare(b2.date));
+                                    summary.push(`${add.length} sessions`);
+                                }
+                                else if (r.kind === "sets" || r.kind === "volume") {
+                                    const prev = nx.pastVolume || {};
+                                    r.data.forEach((x) => { prev[x.date] = { ...(prev[x.date] || {}), ...x.v, _kind: r.kind }; });
+                                    nx.pastVolume = prev;
+                                    summary.push(`${r.data.length} weeks of ${r.kind === "sets" ? "set" : "volume"} history`);
+                                }
+                                else if (r.kind === "food") {
+                                    const byDate = Object.fromEntries(nx.foods.map((f2) => [f2.date, f2]));
+                                    r.data.forEach((x) => {
+                                        if (byDate[x.date]?.entries?.length)
+                                            return;
+                                        byDate[x.date] = { date: x.date, entries: [{ id: "imp" + x.date, name: "Imported day total", meal: "Dinner",
+                                                    kcal: x.kcal, p: x.p, c: x.c, f: x.f }] };
+                                    });
+                                    nx.foods = Object.values(byDate).sort((a2, b2) => a2.date.localeCompare(b2.date));
+                                    summary.push(`${r.data.length} days of food`);
+                                }
+                                else if (r.kind === "program") {
+                                    nx.routines = [{ id: "imp" + Date.now(), name: "Imported programme", intent: "strength", generated: false,
+                                            minutes: routineMinutes(r.data.map((x) => ({ exId: x.exId, sets: 3 }))),
+                                            blurb: "Brought in from your old app.",
+                                            exercises: r.data.map((x) => ({ exId: x.exId, sets: 3 })) }, ...(nx.routines || [])];
+                                    summary.push("1 routine");
+                                }
+                                else if (r.kind === "tdee") {
+                                    nx.pastTdee = r.data;
+                                    summary.push(`${r.data.length} days of expenditure`);
+                                }
+                            });
+                            save(nx);
+                            setDone(`Added ${summary.join(", ")}.`);
+                            setBook(null);
+                            setPick({});
+                        } },
+                        "Import ",
+                        chosen.length,
+                        " sheet",
+                        chosen.length === 1 ? "" : "s")));
+        })(),
+        sheets && sheets.length > 1 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Which sheet?"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 10 } },
+                "That file has ",
+                sheets.length,
+                " sheets. Pick the one with the data you're after."),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, sheets.map((sh) => (React.createElement("button", { key: sh.name, className: "il-chip" + (head === sh.rows[0] ? " on" : ""), onClick: () => useHeaders(sh.rows[0], sh.rows.slice(1)) },
+                sh.name,
+                " \u00B7 ",
+                sh.rows.length - 1)))))),
+        pdf && (React.createElement("div", { className: "il-card", style: { background: pdf.confidence === "high" ? "#10281A" : "#241F12" } },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("span", { className: "il-lbl", style: { color: pdf.confidence === "high" ? "#6FDC9B" : "#E5C87E" } },
+                    pdf.readings.length,
+                    " readings found"),
+                React.createElement("span", { className: "il-sub", style: { margin: 0 } },
+                    "weights in ",
+                    pdf.unit || "kg")),
+            pdf.notes && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, color: "#B9CBEC" } }, pdf.notes))),
+        pdf && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "From your report"),
+            pdf.readings.slice(-6).reverse().map((r, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "7px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                React.createElement("span", { style: { fontSize: 13 } }, r.date ? dtiny(r.date) : "no date"),
+                React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)" } },
+                    r.weightKg != null ? `${r.weightKg}${pdf.unit || "kg"}` : "—",
+                    r.fatPct != null ? ` · ${r.fatPct}% fat` : "",
+                    r.muscleKg != null ? ` · ${r.muscleKg}kg muscle` : "")))),
+            pdf.other?.length > 0 && React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px", color: "var(--dim)" } }, "Also in the report, not tracked here"),
+                pdf.other.slice(0, 6).map((o, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "5px 0" } },
+                    React.createElement("span", { style: { fontSize: 12.5, color: "var(--dim)" } }, o.label),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--faint)" } }, o.value))))),
+            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 14 }, onClick: () => {
+                    const byDate = Object.fromEntries(st.weights.map((w) => [w.date, w]));
+                    let n = 0;
+                    pdf.readings.forEach((r) => {
+                        const d = guessDate(r.date);
+                        if (!d || r.weightKg == null)
+                            return;
+                        const kg = (pdf.unit === "lb") ? r.weightKg / LB : r.weightKg;
+                        if (kg < 20 || kg > 400)
+                            return;
+                        byDate[d] = { date: d, kg: Math.round(kg * 10) / 10, fat: r.fatPct ?? undefined };
+                        n++;
+                    });
+                    save({ ...st, weights: Object.values(byDate).sort((x, y) => x.date.localeCompare(y.date)) });
+                    setDone(`${n} weigh-ins added from the report.`);
+                    setPdf(null);
+                } }, "Add these to my weigh-ins"))),
         rows && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Which column is which?"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 12 } },
@@ -6133,6 +6570,363 @@ function LogCardio({ sheet, st, save, today, close, setSheet }) {
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", disabled: !tot.mins, onClick: commit }, tot.mins ? `Log ${Math.round(tot.mins)} minutes` : "Put some minutes in"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: { exId: ex.id } }) }, "Ask coach")));
+}
+/* ============ THE DEEP REVIEW ============
+   Everything the app knows, handed to the coach in one go, with a brief
+   to reason like somebody who reads the literature rather than somebody
+   who sells programmes.                                              */
+function reviewDossier(st, a) {
+    const P = st.profile;
+    const L = [];
+    const push = (h, ...lines) => { L.push(`## ${h}`); lines.filter(Boolean).forEach((x) => L.push(x)); L.push(""); };
+    push("WHO", `${P.sex || "unspecified"}, ${P.age}, ${P.heightCm}cm, currently ${P.weightKg}kg`, `Goal: ${{ muscle: "build muscle", lean: "get leaner", strength: "get stronger", health: "general health" }[P.goal] || P.goal}`, `${P.years ?? 2} years training, trains at home only, ${P.daysWk ?? 3} days a week, ${P.minsSess ?? 45} min a session, usually ${P.trainTime || "unspecified"}`, `Kit: ${st.kit.filter((k) => k !== "none").map((k) => (KIT.find((x) => x.id === k) || {}).label).join(", ") || "bodyweight only"}`, `Sleeps ${P.sleep ?? "?"}h${P.sleepQual ? `, quality ${P.sleepQual}` : ""}. Stress ${P.stress ?? "?"}/5. Job: ${P.job || "?"}`, manyOf(P.pain).length ? `Reports pain: ${manyOf(P.pain).join(", ")}` : null, manyOf(P.diet).length ? `Diet: ${manyOf(P.diet).join(", ")}` : null, manyOf(P.focusPart).length ? `Says the priority is: ${manyOf(P.focusPart).map((f) => (GOALS.find((g) => g.id === f) || {}).label || f).join(", ")}` : null, manyOf(P.derail).length ? `What derails them: ${manyOf(P.derail).join(", ")}` : null);
+    // week by week, 12 weeks back
+    const weeks = [];
+    for (let w = 0; w < 12; w++) {
+        const from = iso(new Date(Date.now() - (w + 1) * 7 * 864e5));
+        const to = iso(new Date(Date.now() - w * 7 * 864e5));
+        const ss = st.sessions.filter((x) => x.date >= from && x.date < to);
+        if (!ss.length && w > 8)
+            continue;
+        const hard = ss.filter((x) => !isPump(x));
+        const sets = {};
+        hard.forEach((sn) => sn.exercises.forEach((e) => {
+            const ex = exOf(e.exId);
+            if (!ex || ex.aerobic)
+                return;
+            const n = e.sets.filter((q) => !q.warm).length;
+            ex.primary.forEach((m) => { sets[m] = (sets[m] || 0) + n; });
+        }));
+        const rirs = hard.flatMap((sn) => sn.exercises.map(setRir)).filter((x) => x != null);
+        const cardio = ss.reduce((x, sn) => x + cardioMins(sn), 0);
+        const vol = hard.reduce((x, sn) => x + sessVol(sn), 0);
+        weeks.push({ w, n: ss.length, hard: hard.length,
+            sets: Object.entries(sets).map(([m, v]) => `${M[m]} ${v}`).join(", "),
+            rir: rirs.length ? (rirs.reduce((x, y) => x + y, 0) / rirs.length).toFixed(1) : null,
+            cardio, vol: Math.round(vol) });
+    }
+    push("TRAINING, WEEK BY WEEK (0 = this week)", ...weeks.map((x) => `Week -${x.w}: ${x.n} sessions (${x.hard} hard), ${Math.round(x.vol).toLocaleString()}kg lifted${x.cardio ? `, ${x.cardio} min cardio` : ""}${x.rir ? `, avg ${x.rir} RIR` : ", no effort ratings"}. Sets: ${x.sets || "none"}`));
+    // imported volume history from another app
+    const pv = Object.entries(st.pastVolume || {}).slice(-8);
+    if (pv.length)
+        push("VOLUME BROUGHT IN FROM THEIR PREVIOUS APP", ...pv.map(([d, v]) => `${d}: ${Object.entries(v).filter(([k]) => k[0] !== "_").map(([m, n]) => `${M[m] || m} ${n}`).join(", ")}`));
+    // lift by lift
+    const lifts = Object.entries(a.byEx || {}).filter(([, h]) => h.length >= 3)
+        .map(([id, h]) => {
+        const ex = exOf(id);
+        if (!ex)
+            return null;
+        const first = h[0], last = h[h.length - 1];
+        const pct = first.top ? ((last.top - first.top) / first.top) * 100 : 0;
+        return `${ex.name}: ${h.length} sessions, best set now ${Math.round(last.top)}kg est 1RM, ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% over that span`;
+    }).filter(Boolean);
+    push("LIFT BY LIFT", ...(lifts.length ? lifts : ["Not enough repeat sessions on any lift yet."]));
+    // volume landmarks worked out from their own data
+    const vl = volumeLandmarks(st, a);
+    const bands = MK.filter((m) => vl[m]?.enough && vl[m].bestBand)
+        .map((m) => `${M[m]}: grew best on ${vl[m].bestBand[0]} sets a week, currently on ${vl[m].current}`);
+    push("WHERE EACH MUSCLE ACTUALLY RESPONDED (from their logs, not a textbook)", ...(bands.length ? bands : ["Not enough weeks logged per muscle to tell yet."]));
+    // readiness
+    const chks = st.sessions.filter((s) => s.checkin).slice(-12);
+    if (chks.length)
+        push("HOW THEY'VE BEEN TURNING UP", `Last ${chks.length} sessions: average readiness ${Math.round(chks.reduce((x, s) => x + (readinessScore(s.checkin) || 0), 0) / chks.length)}/100`, `Sleep before sessions: ${(chks.reduce((x, s) => x + (s.checkin.sleep || 0), 0) / chks.length).toFixed(1)}h average`, `Turned up sore: ${chks.filter((s) => s.checkin.sore !== "none").length} of ${chks.length}`);
+    // food and weight
+    const ad = adherence(st);
+    push("FOOD AND BODYWEIGHT", a.maint ? `Maintenance from their own intake and weight trend: ${a.maint} cal` : `No measured maintenance yet — estimate is ${estMaint(P)} cal`, a.avgKcal ? `Actually averaging ${a.avgKcal} cal and ${a.avgP}g protein a day` : "Not enough food logging to average", `Targets set at ${targets(P, a.maint || estMaint(P)).kcal} cal, ${P.proteinTarget}g protein`, a.trendKgWk != null ? `Weight trend ${a.trendKgWk > 0 ? "+" : ""}${a.trendKgWk}kg a week over the last fortnight` : "Not enough weigh-ins for a trend", `Logged food on ${ad.foodPct}% of the last 28 days, weighed in on ${ad.weighPct}%`);
+    push("ADHERENCE", `${ad.sessions} sessions in 28 days against a plan of ${ad.planned} (${ad.sessionPct}%)`, ad.abandoned ? `${ad.abandoned} sessions started and abandoned` : null);
+    // tape
+    if (st.meas.length >= 2) {
+        const f = st.meas[0], l = st.meas[st.meas.length - 1];
+        const ch = SITES.filter((si) => f.v[si.id] != null && l.v[si.id] != null)
+            .map((si) => `${si.label} ${(l.v[si.id] - f.v[si.id]) >= 0 ? "+" : ""}${(l.v[si.id] - f.v[si.id]).toFixed(1)}cm`);
+        push("TAPE", `Between ${f.date} and ${l.date}: ${ch.join(", ") || "no comparable sites"}`);
+    }
+    // what the rule-based coach currently thinks
+    const rules = coachRead(st, a).slice(0, 6).map((r) => `[severity ${r.sev}] ${r.title} — ${r.body.slice(0, 180)}`);
+    push("WHAT MY OWN RULES ARE FLAGGING", ...rules);
+    // last time
+    const prev = (st.reviews || [])[0];
+    if (prev)
+        push("WHAT YOU ADVISED LAST TIME", `On ${dlong(iso(new Date(prev.at)))}: ${prev.headline || "(no headline)"}`, prev.plan ? `You planned ${prev.plan.week?.sessions} sessions of ${prev.plan.week?.minutesEach} minutes. They ${prev.accepted ? "accepted it" : "did not accept it"}.` : null, "Say plainly whether that advice worked, and change course if it didn't.");
+    push("CURRENT ROUTINES", ...(st.routines || []).map((r) => `${r.name}: ${r.exercises.map((x) => `${exOf(x.exId)?.name} ${x.sets}x${x.lo ?? "?"}-${x.hi ?? "?"}`).join("; ")}`));
+    return L.join("\n");
+}
+const PROF_PROMPT = `You are a strength and conditioning academic reviewing one person's training log.
+Think like somebody who reads the primary literature, not somebody who sells programmes.
+
+How to reason:
+- Work from mechanisms and evidence, and name the evidence when it matters. Proximity to
+  failure (Robinson 2024 meta-regression; Refalo 2024 within-subject), weekly volume
+  dose-response, protein distribution, minimum effective dose, fatigue management.
+- Distinguish what the data shows, what it suggests, and what you are guessing. Say which
+  is which. If n is too small, say so rather than dressing a hunch as a finding.
+- Effect sizes matter more than statistical stories. If something would change their results
+  by a rounding error, say it's not worth acting on.
+- Be specific to this person's kit, time and constraints. Generic advice is useless here.
+- Be willing to say the plan is fine and needs no change. That is often the right answer.
+- Never diagnose. Anything medical goes to a professional.
+
+Write in British English, plainly, no jargon without explaining it. Long is fine — they have
+asked for depth — but every paragraph must earn its place.
+
+Return ONLY a JSON object, no markdown fences:
+{
+  "headline": "one sentence, the single most important thing",
+  "sections": [
+    { "title": "short heading",
+      "body": "two to five sentences of actual analysis, with numbers from their data",
+      "confidence": "solid" | "suggestive" | "speculative" }
+  ],
+  "questions": [
+    { "q": "a question whose answer would change your advice",
+      "options": ["3 or 4 short tappable answers"],
+      "why": "one line on why you're asking" }
+  ]
+}
+
+Six to nine sections. Three to five questions, and only ones where the answer genuinely
+changes what you would prescribe — not questions whose answers are already in the data.`;
+const PLAN_PROMPT = `Now write the coming week, using their answers.
+
+Return ONLY a JSON object, no markdown fences:
+{
+  "summary": "two or three sentences on what this week is for and what changed from last week",
+  "week": { "sessions": number, "minutesEach": number, "note": "why this many, this long" },
+  "plan": [
+    { "name": "Push", "day": "Mon | Tue | ...", "minutes": number,
+      "why": "one line on what this session is for",
+      "exercises": [
+        { "name": "exact name from their exercise list", "sets": number,
+          "lo": number, "hi": number, "rir": number, "note": "one short line, or empty" }
+      ] }
+  ],
+  "changes": ["each thing that differs from what they were doing, and the reason"],
+  "watch": ["what to look out for this week that would tell you the plan is wrong"]
+}
+
+Rules:
+- Use ONLY exercise names from the list you were given, spelled exactly.
+- Number of sessions must match what they told you they can do this week.
+- Each session must fit the minutes they gave you. Roughly 3.5 minutes a working set on
+  compounds, 2.5 on isolation, plus a warm-up.
+- Give an RIR target for every exercise. 1-2 for most work, 2-3 on the first heavy compound
+  of a session, 0-1 only on the final set of an isolation movement.
+- Respect anything that aggravates a reported injury.
+- If their answers mean the sensible thing is to do less, prescribe less and say why.`;
+function DeepReview({ st, save, a, today, close, setSheet }) {
+    const [stage, setStage] = useState("intro"); // intro | thinking | analysis | planning | plan
+    const [res, setRes] = useState(null);
+    const [ans, setAns] = useState({});
+    const [free, setFree] = useState({});
+    const [plan, setPlan] = useState(null);
+    const [err, setErr] = useState("");
+    const [elapsed, setElapsed] = useState(0);
+    const last = (st.reviews || [])[0];
+    useEffect(() => {
+        if (stage !== "thinking" && stage !== "planning")
+            return;
+        const t = setInterval(() => setElapsed((x) => x + 1), 1000);
+        return () => clearInterval(t);
+    }, [stage]);
+    const exList = () => {
+        const pains = manyOf(st.profile.pain);
+        const banned = new Set(pains.flatMap((x) => PAIN_AVOID[x] || []));
+        return EX.filter((e) => e.kit.every((k) => st.kit.includes(k)) && !banned.has(e.name))
+            .map((e) => `${e.name}${e.aerobic ? " [cardio]" : ` [${e.primary.map((m) => M[m]).join("/")}]`}`).join("\n");
+    };
+    const analyse2 = async () => {
+        setErr("");
+        setElapsed(0);
+        setStage("thinking");
+        try {
+            const txt = await callClaude(`${PROF_PROMPT}\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 8000, "deep");
+            const j = looseJson(txt);
+            if (!j || !Array.isArray(j.sections))
+                throw new Error("The reply didn't come back in a usable shape. Try again.");
+            setRes(j);
+            setStage("analysis");
+        }
+        catch (e) {
+            setErr(e.message || String(e));
+            setStage("intro");
+        }
+    };
+    const makePlan = async () => {
+        setErr("");
+        setElapsed(0);
+        setStage("planning");
+        try {
+            const qa = (res.questions || []).map((q, i) => `Q: ${q.q}\nA: ${ans[i] || "(no answer)"}${free[i] ? ` — ${free[i]}` : ""}`).join("\n\n");
+            const txt = await callClaude(`${PLAN_PROMPT}\n\n=== YOUR ANALYSIS ===\n${res.headline}\n${res.sections.map((s2) => `${s2.title}: ${s2.body}`).join("\n")}`
+                + `\n\n=== THEIR ANSWERS ===\n${qa}`
+                + `\n\n=== EXERCISES THEY CAN DO (exact names) ===\n${exList()}`
+                + `\n\n=== THEIR DATA ===\n${reviewDossier(st, a)}`, 8000, "deep");
+            const j = looseJson(txt);
+            if (!j || !Array.isArray(j.plan))
+                throw new Error("The plan didn't come back in a usable shape. Try again.");
+            setPlan(j);
+            setStage("plan");
+        }
+        catch (e) {
+            setErr(e.message || String(e));
+            setStage("analysis");
+        }
+    };
+    const toRoutines = () => (plan.plan || []).map((d, i) => {
+        const exs = (d.exercises || []).map((x) => {
+            const hit = EX.find((e) => e.name.toLowerCase() === String(x.name).toLowerCase())
+                || EX.find((e) => e.name.toLowerCase().includes(String(x.name).toLowerCase()));
+            return hit ? { exId: hit.id, sets: Math.max(1, Math.min(6, x.sets || 3)), lo: x.lo, hi: x.hi, rirTarget: x.rir } : null;
+        }).filter(Boolean);
+        if (!exs.length)
+            return null;
+        return { id: "rv" + Date.now() + i, name: d.name || `Session ${i + 1}`, intent: "strength", generated: true,
+            minutes: d.minutes || routineMinutes(exs), blurb: `${d.day ? d.day + ". " : ""}${d.why || "From your review."}`,
+            exercises: exs };
+    }).filter(Boolean);
+    const accept = (mode) => {
+        const rts = toRoutines();
+        if (!rts.length) {
+            setErr("None of those exercises matched your library.");
+            return;
+        }
+        const keep = mode === "replace" ? (st.routines || []).filter((r) => !r.generated) : (st.routines || []);
+        save({
+            ...st, routines: [...rts, ...keep],
+            reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, accepted: true },
+                ...(st.reviews || [])].slice(0, 8),
+        });
+        close();
+    };
+    const conf = (c) => c === "solid" ? ["#10281A", "#6FDC9B", "Solid"] : c === "suggestive" ? ["#132241", "#7FA8F0", "Suggestive"] : ["#241F12", "#E5C87E", "Speculative"];
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Full review", sub: stage === "plan" ? "Next week" : stage === "analysis" ? "What your data says" : "Everything you've logged", close: close }),
+        stage === "intro" && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+                React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "This hands over everything \u2014 twelve weeks of sessions, your set counts muscle by muscle, how hard you've been training, your weight trend, what you've been eating, how you've been sleeping, your tape, and anything you brought in from another app. Then it comes back with a proper read, asks what it needs to know, and writes the coming week.")),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What it'll do"),
+                [["Read the lot", "Not a summary — every week, lift by lift, muscle by muscle"],
+                    ["Say how confident it is", "Marked solid, suggestive or speculative, so you know what's a finding and what's a hunch"],
+                    ["Ask you three to five things", "Only where the answer would change the advice"],
+                    ["Write next week", "Sessions, exercises, sets, reps and an effort target for each"],
+                    ["Leave it up to you", "Replace what you've got, add alongside, or ignore it"]].map(([k, v], i) => (React.createElement("div", { key: i, style: { display: "flex", gap: 11, padding: "8px 0" } },
+                    React.createElement("span", { className: "il-stn", style: { flexShrink: 0 } }, i + 1),
+                    React.createElement("span", { style: { paddingTop: 2 } },
+                        React.createElement("span", { style: { display: "block", fontSize: 13.5 } }, k),
+                        React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, v)))))),
+            last && (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } },
+                    "Last review \u00B7 ",
+                    dtiny(iso(new Date(last.at)))),
+                React.createElement("div", { className: "il-note" }, last.headline),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--faint)" } }, "It'll check whether that advice actually worked before giving you more."))),
+            !st.apiKey && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-note" }, "This one needs your Anthropic key. You \u2192 AI features."))),
+            err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+                React.createElement("div", { className: "il-note" }, err)),
+            React.createElement("div", { style: { padding: "0 12px" } },
+                React.createElement("button", { className: "il-btn", onClick: analyse2 }, "Analyse everything"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } }, (st.reviewModel || "mid") === "deep"
+                    ? "Running on Opus \u00b7 about 11p \u00b7 takes a minute or two"
+                    : "Running on Sonnet \u00b7 about 4p \u00b7 takes about a minute"))),
+        (stage === "thinking" || stage === "planning") && (React.createElement("div", { className: "il-card", style: { textAlign: "center", padding: "40px 20px" } },
+            React.createElement("div", { className: "il-d", style: { fontSize: 30, fontWeight: 600, marginBottom: 10 } }, clock(elapsed)),
+            React.createElement("div", { className: "il-note" }, stage === "thinking"
+                ? elapsed < 12 ? "Reading twelve weeks of sessions…"
+                    : elapsed < 25 ? "Working out where each muscle actually responded…"
+                        : elapsed < 40 ? "Cross-referencing effort against progress…"
+                            : "Putting it together…"
+                : "Writing your week…"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 14, color: "var(--faint)" } }, "Leave this open. Closing it loses the analysis."))),
+        stage === "analysis" && res && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "The headline"),
+                React.createElement("div", { style: { fontSize: 16, lineHeight: 1.45 } }, res.headline)),
+            res.sections.map((sec, i) => {
+                const [bg, fg, word] = conf(sec.confidence);
+                return (React.createElement("div", { key: i, className: "il-card" },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                        React.createElement("div", { className: "il-h2", style: { minWidth: 0 } }, sec.title),
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
+                                background: bg, color: fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0 } }, word)),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 13.5, whiteSpace: "pre-wrap" } }, sec.body)));
+            }),
+            (res.questions || []).length > 0 && React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "Before it writes your week"),
+                res.questions.map((q, i) => (React.createElement("div", { key: i, className: "il-card" },
+                    React.createElement("div", { style: { fontSize: 14.5, marginBottom: 4 } }, q.q),
+                    q.why && React.createElement("div", { className: "il-sub", style: { marginBottom: 10 } }, q.why),
+                    React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 9 } }, (q.options || []).map((o) => (React.createElement("button", { key: o, className: "il-chip" + (ans[i] === o ? " on" : ""), onClick: () => setAns({ ...ans, [i]: ans[i] === o ? "" : o }) }, o)))),
+                    React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "\u2026or say it in your own words", value: free[i] || "", onChange: (e) => setFree({ ...free, [i]: e.target.value }) }))))),
+            err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+                React.createElement("div", { className: "il-note" }, err)),
+            React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: makePlan }, "Write next week"),
+                React.createElement("button", { className: "il-btn g", onClick: () => {
+                        save({ ...st, reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, accepted: false }, ...(st.reviews || [])].slice(0, 8) });
+                        close();
+                    } }, "Keep the analysis, skip the plan"))),
+        stage === "plan" && plan && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
+                React.createElement("div", { className: "il-note", style: { fontSize: 14, color: "var(--txt)" } }, plan.summary)),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-ring" },
+                    React.createElement("div", { className: "il-mini" },
+                        React.createElement("div", { className: "v" }, plan.week?.sessions ?? plan.plan.length),
+                        React.createElement("div", { className: "l" }, "sessions")),
+                    React.createElement("div", { className: "il-mini" },
+                        React.createElement("div", { className: "v" }, plan.week?.minutesEach ?? "—"),
+                        React.createElement("div", { className: "l" }, "min each")),
+                    React.createElement("div", { className: "il-mini" },
+                        React.createElement("div", { className: "v" }, plan.plan.reduce((x, d) => x + (d.exercises?.length || 0), 0)),
+                        React.createElement("div", { className: "l" }, "exercises"))),
+                plan.week?.note && React.createElement("div", { className: "il-note", style: { marginTop: 12 } }, plan.week.note)),
+            plan.plan.map((d, i) => (React.createElement("div", { key: i, className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                    React.createElement("div", { className: "il-h2" },
+                        d.day ? `${d.day} · ` : "",
+                        d.name),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                        d.minutes,
+                        " min")),
+                d.why && React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, d.why),
+                (d.exercises || []).map((x, j) => {
+                    const hit = EX.find((e) => e.name.toLowerCase() === String(x.name).toLowerCase())
+                        || EX.find((e) => e.name.toLowerCase().includes(String(x.name).toLowerCase()));
+                    return (React.createElement("div", { key: j, style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
+                        React.createElement("div", { className: "il-row" },
+                            React.createElement("span", { style: { fontSize: 13.5, color: hit ? "var(--txt)" : "var(--gold)" } }, hit?.name || `${x.name} — not in your list`),
+                            React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)", flexShrink: 0 } },
+                                x.sets,
+                                " \u00D7 ",
+                                x.lo,
+                                "\u2013",
+                                x.hi,
+                                x.rir != null ? ` @ ${x.rir} RIR` : "")),
+                        x.note && React.createElement("div", { className: "il-sub", style: { marginTop: 3 } }, x.note)));
+                })))),
+            (plan.changes || []).length > 0 && (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What's different, and why"),
+                plan.changes.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 13, color: "var(--dim)", padding: "6px 0 6px 18px", position: "relative", lineHeight: 1.5 } },
+                    React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--acc)" } }, "\u2022"),
+                    c))))),
+            (plan.watch || []).length > 0 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What would tell you this plan is wrong"),
+                plan.watch.map((c, i) => (React.createElement("div", { key: i, style: { fontSize: 13, color: "var(--dim)", padding: "6px 0 6px 18px", position: "relative", lineHeight: 1.5 } },
+                    React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--gold)" } }, "\u2022"),
+                    c))))),
+            err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+                React.createElement("div", { className: "il-note" }, err)),
+            React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: () => accept("replace") }, "Use this instead of my current sessions"),
+                React.createElement("button", { className: "il-btn g", onClick: () => accept("add") }, "Add it alongside what I've got"),
+                React.createElement("button", { className: "il-btn g", onClick: () => {
+                        save({ ...st, reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, accepted: false }, ...(st.reviews || [])].slice(0, 8) });
+                        close();
+                    } }, "Just save the review, don't change anything")),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Either way the review is kept, so the next one can tell you whether this worked."))));
 }
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
@@ -6948,8 +7742,21 @@ function You({ st, save, a, setSheet, go }) {
                 React.createElement("i", { style: { width: pct + "%", background: "var(--acc)" } })),
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "intake" }) }, done === 0 ? "Start" : "Carry on"),
             React.createElement("button", { className: "il-btn g", style: { marginTop: 8 }, onClick: () => setSheet({ t: "importwo" }) }, "Import past workouts from screenshots"))),
-        React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything")),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything")),
+        (() => {
+            const lastR = (st.reviews || [])[0];
+            const days = lastR ? Math.round((Date.now() - lastR.at) / 864e5) : null;
+            if (!lastR)
+                return null;
+            return (React.createElement("div", { className: "il-card", style: { marginTop: 8 } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "Last review"),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, days === 0 ? "today" : `${days} day${days > 1 ? "s" : ""} ago`)),
+                React.createElement("div", { className: "il-note" }, lastR.headline),
+                days >= 7 && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "A week's worth of new data since then \u2014 worth running it again.")));
+        })(),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "This week, one thing"),
         React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${top.sev >= 5 ? "var(--red)" : top.sev >= 4 ? "var(--gold)" : "var(--grn)"}` } },
             top.sev >= 5 && React.createElement("div", { className: "il-tag t3", style: { display: "inline-block", marginBottom: 10 } }, "WORTH ACTING ON"),
@@ -7299,6 +8106,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health }) {
             sheet.t === "crosscheck" && React.createElement(CrossCheck, { st, save, a, today, close }),
             sheet.t === "diary" && React.createElement(Diary, { st, save, a, close, setSheet }),
             sheet.t === "diag" && React.createElement(Diagnostics, { st, save, a, close, health }),
+            sheet.t === "review" && React.createElement(DeepReview, { st, save, a, today, close, setSheet }),
             sheet.t === "takeaway" && React.createElement(Takeaway, { st, save, today, close }),
             sheet.t === "meals" && React.createElement(MealFinder, { st, save, a, today, close }),
             sheet.t === "pick" && React.createElement(Pick, { st, close, setSheet }),
