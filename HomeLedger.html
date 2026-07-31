@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#0B0B0D">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Home Ledger">
@@ -67,7 +70,7 @@ const CSS = `
  --acc:#2F7BFF;--gold:#E5B94E;--grn:#35C26B;--red:#FF5A4E;--pmp:#B565FF;--move:#FA3E5A;--exer:#A6F400;--stand:#00D9E1;
  font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;-webkit-font-smoothing:antialiased;}
 .il *{box-sizing:border-box;margin:0;padding:0;}
-.il-shell{max-width:460px;margin:0 auto;min-height:100vh;padding-bottom:calc(86px + env(safe-area-inset-bottom));background:var(--bg);}
+.il-shell{max-width:460px;margin:0 auto;min-height:100vh;padding-bottom:calc(86px + env(safe-area-inset-bottom));background:var(--bg);scroll-padding-bottom:120px;}
 .il-d{font-family:'Outfit',sans-serif;letter-spacing:-.015em;}
 .il-n{font-variant-numeric:tabular-nums;}
 .il-top{position:sticky;top:0;z-index:20;background:rgba(11,11,13,.94);backdrop-filter:blur(12px);
@@ -79,7 +82,9 @@ const CSS = `
 .il-lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600;}
 .il-h2{font-family:'Outfit';font-size:17px;font-weight:600;}
 .il-note{font-size:13px;color:var(--dim);line-height:1.55;}
-.il-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.il-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;}
+.il-row > *{min-width:0;}
+.il-row > *:last-child{flex-shrink:0;}
 .il-btn{font-family:'Outfit';font-size:15.5px;font-weight:600;background:var(--acc);color:#fff;border:0;
  border-radius:11px;padding:14px 16px;width:100%;cursor:pointer;}
 .il-btn:active{opacity:.85;}
@@ -128,10 +133,10 @@ const CSS = `
 .il-si{scroll-padding-top:64px;}
 .il-x{background:var(--c2);border:0;color:var(--dim);width:34px;height:34px;border-radius:17px;font-size:19px;cursor:pointer;flex-shrink:0;}
 .il-list{background:var(--card);border-radius:13px;margin:0 12px;overflow:hidden;}
-.il-li{padding:13px 14px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.il-li{padding:13px 14px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;min-width:0;}
 .il-li:last-child{border-bottom:0;}
 .il-li:active{background:var(--c2);}
-.il-sub{font-size:12px;color:var(--dim);margin-top:3px;}
+.il-sub{font-size:12px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere;}
 .il-bar{height:6px;background:var(--c2);border-radius:3px;overflow:hidden;margin-top:6px;}
 .il-bar i{display:block;height:100%;border-radius:3px;}
 .il-ins{background:var(--card);border-radius:13px;padding:15px;margin:0 12px 10px;border-left:3px solid var(--acc);}
@@ -164,7 +169,7 @@ const CSS = `
 .il-sel:focus{outline:2px solid var(--acc);outline-offset:-1px;}
 .il-fld{display:flex;gap:8px;align-items:stretch;}
 .il-menu{background:var(--card);border-radius:13px;margin:0 12px 8px;overflow:hidden;}
-.il-mrow{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:none;border:0;
+.il-mrow{min-width:0;display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:none;border:0;
  padding:13px 14px;color:var(--txt);font:inherit;cursor:pointer;text-align:left;border-bottom:1px solid var(--line);}
 .il-mrow:last-child{border-bottom:0;}
 .il-mrow:active{background:var(--c2);}
@@ -213,7 +218,199 @@ function status(s) {
     return "red";
 }
 const SCOL = { green: "#35C26B", amber: "#E5B94E", red: "#FF5A4E", none: "#3A3D43" };
-const SWORD = { green: "Right amount", amber: "Close", red: "Needs work" };
+const SWORD = { green: "Right amount", amber: "Short", red: "Needs work" };
+/* ============ WHAT YOU CAN ACTUALLY LOAD ============
+   A 2.5kg step is only right if your kit moves in 2.5kg jumps. Adjustable
+   dumbbells have a floor set by the handle, fixed ones exist only at the
+   weights you own, and one kettlebell is a different exercise list to a
+   pair of them.                                                       */
+const WEIGHTED = ["db", "db_adj", "kb", "plates", "bar_olympic", "bar_ez", "bar_trap",
+    "medball", "slamball", "sandbag", "vest", "ankle_w"];
+const DEFAULT_CFG = {
+    db_adj: { mode: "range", min: 2.5, max: 40, step: 2.5, qty: 2, incBar: true },
+    db: { mode: "fixed", weights: [10, 15, 20], qty: 2 },
+    kb: { mode: "fixed", weights: [16], qty: 1 },
+    plates: { mode: "range", min: 1.25, max: 20, step: 1.25, qty: 4 },
+    bar_olympic: { mode: "range", min: 20, max: 180, step: 2.5, qty: 1, incBar: true },
+    bar_ez: { mode: "range", min: 10, max: 60, step: 2.5, qty: 1, incBar: true },
+    bar_trap: { mode: "range", min: 25, max: 200, step: 5, qty: 1, incBar: true },
+    medball: { mode: "fixed", weights: [6], qty: 1 },
+    slamball: { mode: "fixed", weights: [10], qty: 1 },
+    sandbag: { mode: "range", min: 10, max: 40, step: 5, qty: 1 },
+    vest: { mode: "range", min: 2, max: 20, step: 2, qty: 1 },
+    ankle_w: { mode: "fixed", weights: [2], qty: 2 },
+};
+const cfgFor = (st, id) => ({ ...(DEFAULT_CFG[id] || { mode: "fixed", weights: [], qty: 1 }), ...((st.equipCfg || {})[id] || {}) });
+/* every per-hand load you could actually make right now, sorted */
+function loadOptions(st) {
+    const owned = (st.equip || {})[st.where || "home"] || [];
+    const set = new Set([0]);
+    owned.filter((id) => WEIGHTED.includes(id)).forEach((id) => {
+        const c = cfgFor(st, id);
+        if (c.mode === "range") {
+            for (let w = c.min; w <= c.max + 1e-9; w += c.step)
+                set.add(Math.round(w * 100) / 100);
+        }
+        else
+            (c.weights || []).forEach((w) => set.add(w));
+    });
+    return [...set].sort((a, b) => a - b);
+}
+/* the smallest jump you can actually make near a given weight */
+function stepAt(st, kg) {
+    const o = loadOptions(st).filter((w) => w > 0);
+    if (o.length < 2)
+        return 2.5;
+    const i = o.findIndex((w) => w > kg);
+    if (i <= 0)
+        return Math.round((o[1] - o[0]) * 100) / 100 || 2.5;
+    return Math.round((o[i] - o[i - 1]) * 100) / 100 || 2.5;
+}
+const snapLoad = (st, kg) => {
+    const o = loadOptions(st);
+    if (!o.length)
+        return kg;
+    return o.reduce((a, b) => (Math.abs(b - kg) < Math.abs(a - kg) ? b : a));
+};
+/* the heaviest you can hold in one hand, and whether you have a pair */
+function ceilingFor(st, perSide) {
+    const owned = (st.equip || {})[st.where || "home"] || [];
+    let best = 0, pair = false;
+    owned.filter((id) => WEIGHTED.includes(id)).forEach((id) => {
+        const c = cfgFor(st, id);
+        const top = c.mode === "range" ? c.max : Math.max(0, ...(c.weights || [0]));
+        if (top > best) {
+            best = top;
+            pair = (c.qty || 1) >= 2;
+        }
+        else if (top === best && (c.qty || 1) >= 2)
+            pair = true;
+    });
+    return { top: best, pair };
+}
+function EquipWeights({ sheet, st, save, close, setSheet }) {
+    const back = close;
+    const id = sheet.id;
+    const e = EQUIP.find((x) => x.id === id);
+    const c = cfgFor(st, id);
+    const set = (patch) => save({ ...st, equipCfg: { ...(st.equipCfg || {}), [id]: { ...c, ...patch } } });
+    const [w, setW] = useState("");
+    const opts = c.mode === "range"
+        ? (() => { const o = []; for (let x = c.min; x <= c.max + 1e-9 && o.length < 80; x += c.step)
+            o.push(Math.round(x * 100) / 100); return o; })()
+        : [...(c.weights || [])].sort((a, b) => a - b);
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: e ? e.name : "Weights", sub: "What it can actually load", close: back }),
+        React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["range", "Adjustable"], ["fixed", "Fixed weights"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (c.mode === k ? " on" : ""), onClick: () => set({ mode: k }) }, l)))),
+        c.mode === "range" ? (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "The range it covers"),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9 } }, [["min", "Lightest"], ["max", "Heaviest"], ["step", "Jumps of"]].map(([k, l]) => (React.createElement("div", { key: k },
+                React.createElement("div", { className: "il-lbl", style: { textAlign: "center", marginBottom: 4, fontSize: 10 } }, l),
+                React.createElement(NumIn, { value: c[k], step: k === "step" ? 0.25 : 2.5, onChange: (v) => set({ [k]: v }) }))))),
+            React.createElement("div", { className: "il-row", style: { marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 13.5 } }, "Does the lightest include the handle?"),
+                    React.createElement("div", { className: "il-sub" }, "Adjustable dumbbells usually can't go below the bare bar")),
+                React.createElement("button", { className: "il-chip" + (c.incBar ? " on" : ""), onClick: () => set({ incBar: !c.incBar }) }, c.incBar ? "Yes" : "No")))) : (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "The weights you own"),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 } },
+                opts.map((x) => (React.createElement("button", { key: x, className: "il-chip on", onClick: () => set({ weights: (c.weights || []).filter((y) => y !== x) }) },
+                    x,
+                    "kg \u00D7"))),
+                !opts.length && React.createElement("div", { className: "il-note" }, "None added yet.")),
+            React.createElement("div", { className: "il-fld" },
+                React.createElement(NumIn, { value: w, step: 2.5, placeholder: "kg", onChange: (v) => setW(v) }),
+                React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: !w, onClick: () => { set({ weights: [...new Set([...(c.weights || []), Number(w)])] }); setW(""); } }, "Add")))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "How many have you got?"),
+            React.createElement("div", { style: { display: "flex", gap: 7 } }, [[1, "One"], [2, "A pair"], [4, "Four or more"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + ((c.qty || 1) === v ? " on" : ""), onClick: () => set({ qty: v }) }, l)))),
+            React.createElement("div", { className: "il-note", style: { marginTop: 10 } }, (c.qty || 1) === 1
+                ? "With one, you're limited to single-arm work, goblet holds and anything you can do one side at a time. Worth knowing before a session tells you to do two-handed presses."
+                : "A pair means both sides can be loaded at once, which opens up every bilateral movement.")),
+        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "So you can make"),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, opts.length
+                ? `${opts.length} different loads, from ${Math.min(...opts)}kg to ${Math.max(...opts)}kg${c.mode === "range" ? ` in ${c.step}kg steps` : ""}.`
+                : "Nothing yet — add some weights above."),
+            opts.length > 0 && (React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" } },
+                opts.slice(0, 24).map((x) => (React.createElement("span", { key: x, className: "il-chip", style: { pointerEvents: "none" } }, x))),
+                opts.length > 24 && React.createElement("span", { className: "il-chip", style: { pointerEvents: "none" } },
+                    "+",
+                    opts.length - 24,
+                    " more")))),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", onClick: back }, "Done")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Everything here saves as you change it, so nothing is lost either way.")));
+}
+/* ============ EQUIPMENT ============
+   Everything you might train with, at home or in a gym. "maps" points at
+   the coarse tag the exercise library still uses.                     */
+const EQUIP = [
+    ["db", "Dumbbells", "Free weights", "db", "home"],
+    ["db_adj", "Adjustable dumbbells", "Free weights", "db", "home"],
+    ["kb", "Kettlebells", "Free weights", "kb", "home"],
+    ["bar_olympic", "Olympic barbell", "Free weights", null, "gym"],
+    ["bar_ez", "EZ curl bar", "Free weights", null, "gym"],
+    ["bar_trap", "Trap bar", "Free weights", null, "gym"],
+    ["plates", "Weight plates", "Free weights", null, "gym"],
+    ["vest", "Weighted vest", "Free weights", null, "home"],
+    ["ankle_w", "Ankle weights", "Free weights", null, "home"],
+    ["sandbag", "Sandbag", "Free weights", null, "home"],
+    ["medball", "Medicine ball", "Free weights", null, "home"],
+    ["slamball", "Slam ball", "Free weights", null, "home"],
+    ["bench_flat", "Flat bench", "Benches & racks", "bench", "home"],
+    ["bench_adj", "Adjustable bench", "Benches & racks", "bench", "home"],
+    ["bench_decline", "Decline bench", "Benches & racks", "bench", "gym"],
+    ["rack_squat", "Squat rack", "Benches & racks", null, "gym"],
+    ["rack_power", "Power rack", "Benches & racks", null, "gym"],
+    ["preacher", "Preacher bench", "Benches & racks", "bench", "gym"],
+    ["roman", "Roman chair / back extension", "Benches & racks", null, "gym"],
+    ["ghd", "Glute ham developer", "Benches & racks", null, "gym"],
+    ["pullup", "Pull-up bar", "Bars & bodyweight", "bar", "home"],
+    ["dip", "Dip bars", "Bars & bodyweight", "dip", "home"],
+    ["rings", "Gymnastic rings", "Bars & bodyweight", "bar", "home"],
+    ["trx", "Suspension trainer", "Bars & bodyweight", "band", "home"],
+    ["parallettes", "Parallettes", "Bars & bodyweight", null, "home"],
+    ["wheel", "Ab wheel", "Bars & bodyweight", "wheel", "home"],
+    ["box", "Plyo box or step", "Bars & bodyweight", null, "home"],
+    ["mat", "Exercise mat", "Bars & bodyweight", "none", "home"],
+    ["band_loop", "Loop resistance bands", "Bands & cables", "band", "home"],
+    ["band_tube", "Tube bands with handles", "Bands & cables", "band", "home"],
+    ["band_mini", "Mini bands", "Bands & cables", "band", "home"],
+    ["cable", "Cable machine", "Bands & cables", null, "gym"],
+    ["functional", "Functional trainer", "Bands & cables", null, "gym"],
+    ["smith", "Smith machine", "Machines", null, "gym"],
+    ["legpress", "Leg press", "Machines", null, "gym"],
+    ["hacksquat", "Hack squat", "Machines", null, "gym"],
+    ["legext", "Leg extension", "Machines", null, "gym"],
+    ["legcurl", "Leg curl", "Machines", null, "gym"],
+    ["calf_machine", "Calf raise machine", "Machines", null, "gym"],
+    ["chestpress", "Chest press machine", "Machines", null, "gym"],
+    ["shoulderpress", "Shoulder press machine", "Machines", null, "gym"],
+    ["pecdeck", "Pec deck", "Machines", null, "gym"],
+    ["latpull", "Lat pulldown", "Machines", null, "gym"],
+    ["seatedrow", "Seated row", "Machines", null, "gym"],
+    ["assistpull", "Assisted pull-up machine", "Machines", null, "gym"],
+    ["abduct_m", "Hip abduction machine", "Machines", null, "gym"],
+    ["glute_m", "Glute kickback machine", "Machines", null, "gym"],
+    ["treadmill", "Treadmill", "Cardio", null, "gym"],
+    ["bike", "Exercise bike", "Cardio", null, "home"],
+    ["spin", "Spin bike", "Cardio", null, "gym"],
+    ["rower_m", "Rowing machine", "Cardio", null, "gym"],
+    ["elliptical", "Cross trainer", "Cardio", null, "gym"],
+    ["stair", "Stair climber", "Cardio", null, "gym"],
+    ["skierg", "SkiErg", "Cardio", null, "gym"],
+    ["airbike", "Air bike", "Cardio", null, "gym"],
+    ["rope", "Skipping rope", "Cardio", null, "home"],
+    ["sled", "Sled", "Other", null, "gym"],
+    ["landmine", "Landmine", "Other", null, "gym"],
+    ["battle", "Battle ropes", "Other", null, "gym"],
+    ["dipbelt", "Dip belt", "Other", null, "gym"],
+    ["straps", "Lifting straps", "Other", null, "home"],
+    ["roller", "Foam roller", "Other", null, "home"],
+    ["timer", "Interval timer", "Other", null, "home"]
+].map(([id, name, cat, maps, place]) => ({ id, name, cat, maps, place }));
 const KIT = [
     { id: "none", label: "Nothing (bodyweight)", always: true }, { id: "db", label: "Dumbbells" },
     { id: "bench", label: "Bench" }, { id: "bar", label: "Pull-up bar" }, { id: "dip", label: "Dip bars" },
@@ -347,6 +544,18 @@ const RAW = [
     ["Dumbbell clean and press", ["db"], "ohp", ["fdelt", "quad"], ["traps", "glute", "tri"], 6, 10, 1, ["From the floor to the shoulder to overhead", "One flowing movement, not three", "Technical — go light until it feels smooth"]],
     ["Devil's press", ["db"], "burpee", ["chest", "fdelt"], ["quad", "abs"], 6, 12, 0, ["Burpee holding the weights, then swing them overhead", "The hardest thing you can do with two dumbbells", "Very light to start"]],
     ["Bear crawl hold", ["none"], "bearcrawl", ["abs"], ["fdelt", "quad"], 20, 45, 0, ["Knees an inch off the floor and hold still", "Timed in seconds", "Harder than it sounds after 20 seconds"]],
+    ["Seated calf raise", ["db", "bench"], "calf", ["calf"], [], 12, 20, 0, ["Dumbbells on your knees, heels off a book or step", "Bent knee takes the gastrocnemius out and leaves the soleus doing the work", "Pause a full second at the bottom — that stretch is the point"]],
+    ["Tibialis raise", ["none"], "calf", ["calf"], [], 15, 25, 0, ["Heels against a wall, toes pointing up, lower them slowly", "The muscle down the front of your shin, which almost nobody trains", "Fixes shin splints better than resting does"]],
+    ["Band lateral walk", ["band"], "lunge", ["glute"], ["quad"], 12, 20, 0, ["Band above the knees, half squat, step sideways without letting the knees fall in", "Hits gluteus medius, which stabilises the hip on every single-leg movement", "Ten steps each way is one set"]],
+    ["Side-lying hip abduction", ["none"], "lunge", ["glute"], [], 15, 25, 1, ["Lie on your side, top leg straight, lift it slowly", "Small range, slow tempo. Rushing it just swings the leg", "Weak here shows up as knees caving on squats"]],
+    ["Copenhagen plank", ["bench"], "plank", ["obl"], ["quad"], 20, 45, 1, ["Top leg on a bench, forearm down, lift your hips", "One of the few things that loads the adductors hard", "Start with the knee on the bench, not the ankle"]],
+    ["Dumbbell seal row", ["db", "bench"], "row", ["uback"], ["lats", "bi"], 8, 12, 0, ["Face down on a raised bench, row without any body English", "Removes the lower back entirely, so the rhomboids and mid traps have to do it", "Squeeze for a second at the top"]],
+    ["Prone Y-T-W raise", ["bench"], "reardelt", ["uback"], ["rdelt"], 10, 15, 0, ["Face down on an incline, arms out in a Y, then a T, then a W", "Lower traps and rhomboids, which sit under almost everything else", "Barely any weight needed. Two kilos is plenty"]],
+    ["Serratus punch", ["db"], "fly", ["chest"], [], 12, 20, 0, ["Lying on your back, press the weight up and then push your shoulder blade off the floor", "That last few inches is the serratus, and nothing else trains it", "It also keeps the shoulder blade tracking properly overhead"]],
+    ["Straight-arm pullover", ["db", "bench"], "pullover", ["lats"], ["chest"], 10, 15, 0, ["Arms nearly locked, weight travelling in an arc over your head", "Loads the lats and teres major in a way rowing never does", "Ribs stay down — the arch is not extra range"]],
+    ["Hanging knee raise", ["bar"], "legraise", ["abs"], ["obl"], 8, 15, 0, ["Hang, then curl your pelvis up rather than just lifting the knees", "Tilting the pelvis is what makes it abs instead of hip flexors", "Stop swinging before you add reps"]],
+    ["Standing hip flexor raise", ["band"], "legraise", ["abs"], [], 12, 20, 1, ["Band round the ankle, drive the knee up against it", "Trains the hip flexors directly, which sprinting and kicking need", "Neglected until it strains, then very much noticed"]],
+    ["Dumbbell shrug hold", ["db"], "shrug", ["traps"], ["fore"], 20, 45, 0, ["Shrug up and hold there", "Traps respond to time under tension more than to reps", "Do not roll the shoulders. Straight up and down"]]
 ];
 /* conditioning: [name, kit, move, primary, secondary, met, quiet, cues] — all timed in seconds */
 const CARDIO_RAW = [
@@ -395,6 +604,194 @@ const AEROBIC_RAW = [
     ["Circuit training", ["none"], 7.5, 0, ["Continuous movement, minimal rest", "Counts as conditioning rather than strength"]],
     ["Dog walk", ["none"], 3.5, 1, ["Stop-start, but it all counts", "The easiest daily habit to keep"]],
 ];
+/* ============ ANATOMY ============
+   Proper muscle heads, not "biceps". 1 = prime mover, 0.5 = meaningful
+   assistance, 0.25 = stabilising.                                   */
+const MUS = [
+    ["pec_clav", "Pectoralis major, clavicular head", "Upper chest", "chest", 6, 12],
+    ["pec_stern", "Pectoralis major, sternal head", "Mid chest", "chest", 8, 16],
+    ["pec_abd", "Pectoralis major, abdominal head", "Lower chest", "chest", 4, 10],
+    ["serratus", "Serratus anterior", "Serratus", "chest", 4, 8],
+    ["delt_ant", "Anterior deltoid", "Front shoulder", "shoulder", 6, 12],
+    ["delt_lat", "Lateral deltoid", "Side shoulder", "shoulder", 10, 20],
+    ["delt_post", "Posterior deltoid", "Rear shoulder", "shoulder", 8, 16],
+    ["rot_cuff", "Rotator cuff", "Rotator cuff", "shoulder", 4, 8],
+    ["bi_long", "Biceps brachii, long head", "Biceps, outer head", "arm", 6, 12],
+    ["bi_short", "Biceps brachii, short head", "Biceps, inner head", "arm", 6, 12],
+    ["brachialis", "Brachialis", "Brachialis", "arm", 4, 10],
+    ["brachiorad", "Brachioradialis", "Forearm, upper", "arm", 4, 10],
+    ["tri_long", "Triceps brachii, long head", "Triceps, long head", "arm", 6, 14],
+    ["tri_lat", "Triceps brachii, lateral head", "Triceps, outer head", "arm", 6, 12],
+    ["tri_med", "Triceps brachii, medial head", "Triceps, inner head", "arm", 4, 10],
+    ["fore_flex", "Wrist flexors", "Forearm flexors", "arm", 3, 8],
+    ["fore_ext", "Wrist extensors", "Forearm extensors", "arm", 3, 8],
+    ["lat", "Latissimus dorsi", "Lats", "back", 10, 20],
+    ["teres", "Teres major", "Teres major", "back", 4, 10],
+    ["rhomboid", "Rhomboids", "Rhomboids", "back", 6, 14],
+    ["trap_up", "Trapezius, upper", "Upper traps", "back", 4, 12],
+    ["trap_mid", "Trapezius, middle", "Mid traps", "back", 6, 14],
+    ["trap_low", "Trapezius, lower", "Lower traps", "back", 4, 10],
+    ["erector", "Erector spinae", "Lower back", "back", 4, 10],
+    ["rect_up", "Rectus abdominis, upper", "Upper abs", "core", 6, 14],
+    ["rect_low", "Rectus abdominis, lower", "Lower abs", "core", 6, 14],
+    ["obl_ext", "External obliques", "Obliques", "core", 4, 12],
+    ["transverse", "Transverse abdominis", "Deep core", "core", 3, 8],
+    ["glute_max", "Gluteus maximus", "Glutes", "leg", 8, 16],
+    ["glute_med", "Gluteus medius", "Side glutes", "leg", 4, 10],
+    ["rect_fem", "Rectus femoris", "Thigh, front", "leg", 6, 14],
+    ["vast_lat", "Vastus lateralis", "Thigh, outer", "leg", 8, 16],
+    ["vast_med", "Vastus medialis", "Thigh, inner", "leg", 8, 16],
+    ["adductor", "Adductors", "Inner thigh", "leg", 4, 10],
+    ["ham_bf", "Biceps femoris", "Hamstring, outer", "leg", 8, 16],
+    ["ham_st", "Semitendinosus & semimembranosus", "Hamstring, inner", "leg", 8, 16],
+    ["gastroc_med", "Gastrocnemius, medial head", "Calf, inner", "leg", 6, 14],
+    ["gastroc_lat", "Gastrocnemius, lateral head", "Calf, outer", "leg", 6, 14],
+    ["soleus", "Soleus", "Soleus", "leg", 6, 14],
+    ["tib_ant", "Tibialis anterior", "Shin", "leg", 3, 8],
+    ["hip_flex", "Hip flexors", "Hip flexors", "leg", 3, 8]
+].map(([id, anat, plain, region, lo, hi]) => ({ id, anat, plain, region, lo, hi }));
+const MUSBY = Object.fromEntries(MUS.map((m) => [m.id, m]));
+const REGIONS = [["chest", "Chest"], ["shoulder", "Shoulders"], ["back", "Back"], ["arm", "Arms"], ["core", "Core"], ["leg", "Legs"]];
+const ANAT = Object.fromEntries([
+    ["Dumbbell bench press", { "pec_stern": 1, "pec_abd": 0.5, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "tri_long": 0.25 }],
+    ["Incline dumbbell press", { "pec_clav": 1, "pec_stern": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.25, "tri_long": 0.25 }],
+    ["Dumbbell floor press", { "pec_stern": 1, "pec_abd": 0.5, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "tri_long": 0.25 }],
+    ["Dumbbell fly", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.25 }],
+    ["Incline dumbbell fly", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.25 }],
+    ["Press-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "transverse": 0.25, "tri_long": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Deficit press-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "transverse": 0.25, "tri_long": 0.25 }],
+    ["Band chest press", { "pec_stern": 1, "pec_abd": 0.5, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "tri_long": 0.25 }],
+    ["Chest dip", { "pec_abd": 1, "tri_long": 1, "pec_stern": 0.5, "tri_lat": 0.5, "delt_ant": 0.5, "pec_clav": 0.5, "tri_med": 0.25 }],
+    ["Seated dumbbell shoulder press", { "delt_ant": 1, "delt_lat": 0.5, "tri_long": 0.5, "tri_lat": 0.5, "serratus": 0.5, "trap_up": 0.25, "tri_med": 0.25 }],
+    ["Standing dumbbell shoulder press", { "delt_ant": 1, "delt_lat": 0.5, "tri_long": 0.5, "tri_lat": 0.5, "serratus": 0.5, "trap_up": 0.25, "tri_med": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Arnold press", { "delt_ant": 1, "delt_lat": 0.5, "tri_long": 0.5, "tri_lat": 0.5, "serratus": 0.5, "trap_up": 0.25, "tri_med": 0.25 }],
+    ["Seated lateral raise", { "delt_lat": 1, "trap_up": 0.25, "rot_cuff": 0.25 }],
+    ["Standing lateral raise", { "delt_lat": 1, "trap_up": 0.25, "rot_cuff": 0.25 }],
+    ["Band lateral raise", { "delt_lat": 1, "trap_up": 0.25, "rot_cuff": 0.25 }],
+    ["Front raise", { "delt_ant": 1, "pec_clav": 0.25, "pec_stern": 0.25 }],
+    ["Rear delt fly", { "delt_post": 1, "rhomboid": 0.5, "trap_mid": 0.5, "rot_cuff": 0.25, "trap_up": 0.25 }],
+    ["Band face pull", { "delt_post": 1, "trap_mid": 0.5, "rhomboid": 0.5, "rot_cuff": 0.5, "trap_up": 0.25 }],
+    ["Pike press-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "transverse": 0.25, "tri_long": 0.25 }],
+    ["Single-arm dumbbell row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Chest-supported row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Bent-over dumbbell row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Dumbbell pullover", { "lat": 1, "teres": 0.5, "pec_stern": 0.5, "tri_long": 0.25, "serratus": 0.25, "pec_clav": 0.25, "tri_lat": 0.25, "tri_med": 0.25 }],
+    ["Pull-up", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "rect_up": 0.25, "fore_flex": 0.25, "bi_short": 0.25, "rhomboid": 0.25, "trap_mid": 0.25 }],
+    ["Chin-up", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "bi_short": 0.5, "rect_up": 0.25, "fore_flex": 0.25, "rhomboid": 0.25, "trap_mid": 0.25 }],
+    ["Band pulldown", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "rect_up": 0.25, "fore_flex": 0.25, "bi_short": 0.25 }],
+    ["Band row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Dumbbell shrug", { "trap_up": 1, "trap_mid": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Dumbbell curl", { "bi_long": 1, "bi_short": 1, "brachialis": 0.5, "brachiorad": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Hammer curl", { "brachiorad": 1, "brachialis": 1, "bi_long": 0.5, "fore_ext": 0.5, "bi_short": 0.5, "fore_flex": 0.5 }],
+    ["Incline curl", { "bi_long": 1, "bi_short": 0.5, "brachialis": 0.5, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Concentration curl", { "bi_short": 1, "bi_long": 0.5, "brachialis": 0.5 }],
+    ["Zottman curl", { "bi_long": 1, "bi_short": 1, "brachialis": 0.5, "fore_flex": 0.5, "fore_ext": 0.5, "brachiorad": 0.25 }],
+    ["Band curl", { "bi_long": 1, "bi_short": 1, "brachialis": 0.5, "brachiorad": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Dumbbell skull crusher", { "tri_long": 1, "tri_med": 0.5, "tri_lat": 0.5 }],
+    ["Overhead triceps extension", { "tri_long": 1, "tri_med": 0.5, "tri_lat": 0.5 }],
+    ["Triceps kickback", { "tri_lat": 1, "tri_med": 0.5, "tri_long": 0.5 }],
+    ["Close-grip dumbbell press", { "tri_lat": 1, "tri_med": 1, "tri_long": 0.5, "pec_stern": 0.5, "delt_ant": 0.5, "pec_clav": 0.25 }],
+    ["Bench dip", { "pec_abd": 1, "tri_long": 1, "pec_stern": 0.5, "tri_lat": 0.5, "delt_ant": 0.5, "tri_med": 0.5, "pec_clav": 0.25 }],
+    ["Parallel bar dip", { "pec_abd": 1, "tri_long": 1, "pec_stern": 0.5, "tri_lat": 0.5, "delt_ant": 0.5, "tri_med": 0.5, "pec_clav": 0.25 }],
+    ["Wrist curl", { "fore_flex": 1, "fore_ext": 0.5 }],
+    ["Goblet squat", { "vast_lat": 1, "vast_med": 1, "rect_fem": 1, "glute_max": 0.5, "adductor": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Dumbbell front squat", { "vast_lat": 1, "vast_med": 1, "rect_fem": 1, "glute_max": 0.5, "adductor": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Bulgarian split squat", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "glute_med": 0.5, "adductor": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Reverse lunge", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "glute_med": 0.5, "adductor": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Walking lunge", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "glute_med": 0.5, "adductor": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Step-up", { "vast_lat": 1, "glute_max": 1, "vast_med": 0.5, "glute_med": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Dumbbell Romanian deadlift", { "ham_bf": 1, "ham_st": 1, "glute_max": 1, "erector": 0.5, "lat": 0.25, "fore_flex": 0.25 }],
+    ["Single-leg Romanian deadlift", { "ham_bf": 1, "ham_st": 1, "glute_max": 1, "erector": 0.5, "lat": 0.25, "fore_flex": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Dumbbell hip thrust", { "glute_max": 1, "ham_bf": 0.5, "ham_st": 0.5, "vast_lat": 0.25 }],
+    ["Glute bridge", { "glute_max": 1, "ham_bf": 0.5, "ham_st": 0.5, "vast_lat": 0.25 }],
+    ["Calf raise", { "gastroc_med": 1, "gastroc_lat": 1, "soleus": 0.5 }],
+    ["Bodyweight squat", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "rect_fem": 0.5, "adductor": 0.5, "erector": 0.5, "transverse": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Wall sit", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "rect_fem": 0.5, "adductor": 0.5, "erector": 0.5, "transverse": 0.25 }],
+    ["Plank", { "transverse": 1, "rect_up": 0.5, "obl_ext": 0.5, "rect_low": 0.5, "delt_ant": 0.25 }],
+    ["Side plank", { "obl_ext": 1, "transverse": 0.5, "glute_med": 0.5, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Weighted crunch", { "rect_up": 1, "rect_low": 0.5, "obl_ext": 0.25 }],
+    ["Lying leg raise", { "rect_low": 1, "hip_flex": 0.5, "rect_up": 0.5, "obl_ext": 0.25 }],
+    ["Hanging leg raise", { "rect_low": 1, "hip_flex": 0.5, "rect_up": 0.5, "fore_flex": 0.25, "fore_ext": 0.25, "obl_ext": 0.25 }],
+    ["Ab wheel rollout", { "rect_up": 1, "rect_low": 1, "transverse": 0.5, "lat": 0.25, "teres": 0.25, "obl_ext": 0.25 }],
+    ["Russian twist", { "obl_ext": 1, "transverse": 0.5, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Side bend", { "obl_ext": 1, "erector": 0.25 }],
+    ["Dead bug", { "obl_ext": 1, "transverse": 1, "rect_up": 0.5, "rect_low": 0.5 }],
+    ["Back extension on bench", { "ham_bf": 1, "ham_st": 1, "glute_max": 1, "erector": 0.5, "lat": 0.25, "fore_flex": 0.25 }],
+    ["Diamond press-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "tri_long": 0.5, "transverse": 0.25 }],
+    ["Archer press-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "transverse": 0.25, "tri_long": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Decline press-up", { "pec_abd": 1, "pec_stern": 0.5, "tri_lat": 0.5, "pec_clav": 0.5, "delt_ant": 0.5, "tri_long": 0.25, "tri_med": 0.25 }],
+    ["Svend press", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.25 }],
+    ["Floor fly", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.25 }],
+    ["Band chest crossover", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.25 }],
+    ["Seal row", { "rhomboid": 1, "trap_mid": 1, "lat": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.25, "bi_short": 0.25 }],
+    ["Gorilla row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Band pull-apart", { "delt_post": 1, "trap_mid": 0.5, "rhomboid": 0.5, "rot_cuff": 0.5, "trap_up": 0.25 }],
+    ["Inverted row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "erector": 0.25, "bi_short": 0.25 }],
+    ["Dead hang", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "fore_flex": 0.5, "fore_ext": 0.5, "rect_up": 0.25, "rhomboid": 0.25, "trap_mid": 0.25 }],
+    ["Single-arm lat pulldown", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "rect_up": 0.25, "fore_flex": 0.25, "bi_short": 0.25 }],
+    ["Reverse fly on bench", { "delt_post": 1, "rhomboid": 0.5, "trap_mid": 0.5, "rot_cuff": 0.25, "trap_up": 0.25 }],
+    ["Leaning lateral raise", { "delt_lat": 1, "trap_up": 0.25, "rot_cuff": 0.25 }],
+    ["Upright row", { "delt_lat": 1, "trap_up": 0.5, "bi_short": 0.25, "bi_long": 0.25 }],
+    ["Y-raise", { "trap_low": 1, "trap_mid": 0.5, "delt_post": 0.5, "trap_up": 0.5, "delt_lat": 0.25 }],
+    ["Cuban press", { "rot_cuff": 1, "delt_post": 0.5, "delt_lat": 0.5, "trap_up": 0.25, "tri_long": 0.25, "tri_lat": 0.25, "tri_med": 0.25 }],
+    ["Band external rotation", { "rot_cuff": 1, "delt_post": 0.5 }],
+    ["Scapular push-up", { "pec_stern": 1, "pec_clav": 0.5, "delt_ant": 0.5, "tri_lat": 0.5, "tri_med": 0.5, "serratus": 0.5, "rhomboid": 0.5, "trap_mid": 0.5, "transverse": 0.25 }],
+    ["Cross-body hammer curl", { "brachiorad": 1, "brachialis": 1, "bi_long": 0.5, "fore_ext": 0.5, "bi_short": 0.5, "fore_flex": 0.5 }],
+    ["Drag curl", { "bi_long": 1, "bi_short": 1, "brachialis": 0.5, "brachiorad": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Preacher curl on bench", { "bi_short": 1, "bi_long": 0.5, "brachialis": 0.5, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Reverse curl", { "brachiorad": 1, "fore_ext": 1, "brachialis": 0.5, "bi_long": 0.5, "fore_flex": 0.5, "bi_short": 0.5 }],
+    ["Tate press", { "tri_long": 1, "tri_med": 0.5, "tri_lat": 0.5, "pec_stern": 0.25, "pec_clav": 0.25 }],
+    ["JM press", { "tri_long": 1, "tri_med": 0.5, "tri_lat": 0.5, "pec_stern": 0.25, "pec_clav": 0.25 }],
+    ["Band triceps pushdown", { "tri_lat": 1, "tri_med": 0.5, "tri_long": 0.5 }],
+    ["Towel grip hang", { "lat": 1, "teres": 0.5, "bi_long": 0.5, "brachialis": 0.5, "trap_low": 0.5, "fore_flex": 0.5, "fore_ext": 0.5, "rect_up": 0.25 }],
+    ["Goblet reverse lunge", { "vast_lat": 1, "vast_med": 1, "rect_fem": 1, "glute_max": 0.5, "adductor": 0.25, "ham_bf": 0.25, "ham_st": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Curtsy lunge", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "glute_med": 0.5, "adductor": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Cossack squat", { "adductor": 1, "glute_max": 0.5, "vast_med": 0.5, "vast_lat": 0.5, "rect_fem": 0.5, "ham_st": 0.25, "ham_bf": 0.25, "gastroc_med": 0.25, "gastroc_lat": 0.25, "soleus": 0.25 }],
+    ["Sissy squat", { "vast_lat": 1, "vast_med": 1, "rect_fem": 1, "glute_max": 0.5, "adductor": 0.25 }],
+    ["Single-leg calf raise", { "gastroc_med": 1, "gastroc_lat": 1, "soleus": 0.5 }],
+    ["Nordic curl", { "ham_bf": 1, "ham_st": 1, "gastroc_med": 0.25, "gastroc_lat": 0.25, "glute_max": 0.25 }],
+    ["Glute kickback", { "tri_lat": 1, "tri_med": 0.5, "glute_max": 0.5, "tri_long": 0.25, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Frog pump", { "glute_max": 1, "ham_bf": 0.5, "ham_st": 0.5, "vast_lat": 0.25 }],
+    ["Box squat", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "rect_fem": 0.5, "adductor": 0.5, "erector": 0.5, "transverse": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Heel-elevated goblet squat", { "vast_lat": 1, "vast_med": 1, "rect_fem": 1, "glute_max": 0.5, "adductor": 0.25 }],
+    ["Single-leg hip thrust", { "glute_max": 1, "ham_bf": 0.5, "ham_st": 0.5, "vast_lat": 0.25 }],
+    ["Good morning", { "erector": 1, "ham_bf": 0.5, "ham_st": 0.5, "glute_max": 0.5 }],
+    ["Step-down", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "glute_med": 0.5, "adductor": 0.5, "rect_fem": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Wall sit with weight", { "vast_lat": 1, "vast_med": 1, "glute_max": 1, "rect_fem": 0.5, "adductor": 0.5, "erector": 0.5, "transverse": 0.25 }],
+    ["Bicycle crunch", { "rect_up": 1, "rect_low": 0.5, "obl_ext": 0.5 }],
+    ["V-up", { "rect_low": 1, "hip_flex": 0.5, "rect_up": 0.5, "obl_ext": 0.25 }],
+    ["Hollow hold", { "transverse": 1, "rect_up": 0.5, "obl_ext": 0.5, "rect_low": 0.5, "delt_ant": 0.25 }],
+    ["Reverse crunch", { "rect_up": 1, "rect_low": 0.5, "obl_ext": 0.25 }],
+    ["Pallof press", { "obl_ext": 1, "transverse": 1, "rect_up": 0.5, "rect_low": 0.5 }],
+    ["Suitcase carry", { "obl_ext": 1, "fore_flex": 1, "trap_up": 0.5, "transverse": 0.5, "fore_ext": 0.25 }],
+    ["Side plank with rotation", { "obl_ext": 1, "transverse": 0.5, "glute_med": 0.5, "rect_up": 0.25, "rect_low": 0.25, "delt_ant": 0.25 }],
+    ["Flutter kick", { "rect_low": 1, "hip_flex": 0.5, "rect_up": 0.5 }],
+    ["Toe touch", { "rect_up": 1, "rect_low": 0.5, "obl_ext": 0.25 }],
+    ["Jumping lunge", { "vast_lat": 1.0, "vast_med": 0.5, "rect_fem": 0.5, "glute_max": 0.5, "gastroc_med": 0.25, "gastroc_lat": 0.25, "soleus": 0.25 }],
+    ["Tuck jump", { "vast_lat": 1.0, "vast_med": 0.5, "rect_fem": 0.5, "rect_up": 0.25, "rect_low": 0.25, "gastroc_med": 0.25, "gastroc_lat": 0.25, "soleus": 0.25 }],
+    ["Sprawl", { "pec_stern": 1.0, "pec_clav": 0.5, "vast_lat": 0.5, "vast_med": 0.5, "rect_fem": 0.5, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Plank jack", { "transverse": 1, "rect_up": 0.5, "obl_ext": 0.5, "rect_low": 0.5, "delt_ant": 0.25, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25 }],
+    ["Inchworm", { "rect_up": 1.0, "rect_low": 0.5, "delt_ant": 0.25, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Shuttle steps", { "vast_lat": 1.0, "vast_med": 0.5, "rect_fem": 0.5, "gastroc_med": 0.5, "gastroc_lat": 0.5, "soleus": 0.5, "glute_max": 0.25 }],
+    ["Skipping", { "gastroc_med": 1.0, "gastroc_lat": 0.5, "soleus": 0.5, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }],
+    ["Jog on the spot", { "vast_lat": 1.0, "vast_med": 0.5, "rect_fem": 0.5, "gastroc_med": 0.5, "gastroc_lat": 0.5, "soleus": 0.5, "ham_bf": 0.25, "ham_st": 0.25 }],
+    ["Dumbbell clean and press", { "delt_ant": 1, "delt_lat": 0.5, "tri_long": 0.5, "tri_lat": 0.5, "serratus": 0.5, "vast_lat": 0.5, "vast_med": 0.5, "rect_fem": 0.5, "trap_up": 0.25, "glute_max": 0.25, "tri_med": 0.25 }],
+    ["Devil's press", { "pec_stern": 1.0, "pec_clav": 0.5, "delt_ant": 0.5, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25, "rect_up": 0.25, "rect_low": 0.25 }],
+    ["Bear crawl hold", { "rect_up": 1.0, "rect_low": 0.5, "delt_ant": 0.25, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25 }],
+    ["Seated calf raise", { "soleus": 1, "gastroc_med": 0.5, "gastroc_lat": 0.5 }],
+    ["Tibialis raise", { "tib_ant": 1, "gastroc_med": 0.5, "gastroc_lat": 0.5, "soleus": 0.5 }],
+    ["Band lateral walk", { "glute_med": 1, "glute_max": 0.5, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25 }],
+    ["Side-lying hip abduction", { "glute_med": 1, "glute_max": 0.5 }],
+    ["Copenhagen plank", { "adductor": 1, "obl_ext": 1, "transverse": 0.5, "glute_med": 0.5, "vast_lat": 0.25, "vast_med": 0.25, "rect_fem": 0.25 }],
+    ["Dumbbell seal row", { "rhomboid": 1, "trap_mid": 1, "lat": 0.5, "delt_post": 0.5, "teres": 0.5, "bi_long": 0.25, "bi_short": 0.25 }],
+    ["Prone Y-T-W raise", { "trap_low": 1, "trap_mid": 0.5, "delt_post": 0.5, "rhomboid": 0.5 }],
+    ["Serratus punch", { "serratus": 1, "pec_stern": 0.5, "pec_clav": 0.5 }],
+    ["Straight-arm pullover", { "teres": 1, "lat": 1, "teres": 0.5, "pec_stern": 0.5, "tri_long": 0.25, "serratus": 0.25, "pec_clav": 0.25 }],
+    ["Hanging knee raise", { "rect_low": 1, "hip_flex": 0.5, "rect_up": 0.5, "obl_ext": 0.25 }],
+    ["Standing hip flexor raise", { "hip_flex": 1, "rect_low": 0.5, "rect_up": 0.5 }],
+    ["Dumbbell shrug hold", { "trap_up": 1, "trap_mid": 0.25, "fore_flex": 0.25, "fore_ext": 0.25 }]
+]);
+const anatOf = (ex) => (ex && ANAT[ex.name]) || {};
 const MET_BY_MOVE = {
     bench: 5, incline: 5, fly: 3.5, skull: 3.5, pullover: 3.5, ohp: 5, ohtri: 3.5, lateral: 3.5,
     front: 3.5, curl: 3.5, kickback: 3.5, shrug: 4, sidebend: 3.5, row: 5, reardelt: 3.5,
@@ -1345,7 +1742,20 @@ const STEP = 2.5;
 const LB = 2.2046226218, INCH = 0.3937007874, OZ = 0.0352739619;
 const DEFAULT_UNITS = { bw: "kg", ht: "cm", tape: "cm", lift: "kg", food: "g" };
 let UNIT = { ...DEFAULT_UNITS };
+let LOADS = null; // set each render from the current kit
 const stepKg = () => (UNIT.lift === "lb" ? 5 / LB : 2.5);
+/* the app should never suggest a weight you cannot physically make */
+const fitLoad = (kg) => {
+    if (!LOADS || LOADS.length < 2 || !kg)
+        return kg;
+    return LOADS.reduce((a, b) => (Math.abs(b - kg) < Math.abs(a - kg) ? b : a));
+};
+const nextLoad = (kg) => {
+    if (!LOADS || LOADS.length < 2)
+        return kg + stepKg();
+    const up = LOADS.find((w) => w > kg + 0.01);
+    return up != null ? up : kg;
+};
 const stepDisp = () => (UNIT.lift === "lb" ? 5 : 2.5);
 const LU = () => (UNIT.lift === "lb" ? "lb" : "kg");
 const wn = (kg) => (UNIT.lift === "lb" ? Math.round(kg * LB * 10) / 10 : Math.round(kg * 100) / 100);
@@ -1428,16 +1838,21 @@ function nextTarget(ex, sets, intent) {
     const allTop = work.every((s) => Number(s.reps) >= ex.hi);
     const lastRir = work[work.length - 1]?.rir;
     // three or more left in the tank means the load is the limiter, not you
-    if (lastRir != null && lastRir >= 3 && ex.loaded)
-        return { hold: false, w: w + stepKg(), rir: lastRir,
-            msg: `You finished with ${lastRir} reps still in you. That's the weight holding you back rather than the effort — go to ${W(w + stepKg())}${ex.perSide ? " per dumbbell" : ""} next time.` };
+    const up = nextLoad(w);
+    if (lastRir != null && lastRir >= 3 && ex.loaded) {
+        if (up <= w)
+            return { hold: true, w, rir: lastRir,
+                msg: `You finished with ${lastRir} in the tank but ${W(w)} is the heaviest you can load. Add reps, slow the lowering right down, or move to a single-limb version — the weight can't go up.` };
+        return { hold: false, w: up, rir: lastRir,
+            msg: `You finished with ${lastRir} reps still in you. That's the weight holding you back rather than the effort — go to ${W(up)}${ex.perSide ? " per dumbbell" : ""} next time.` };
+    }
     if (lastRir === 0 && !allTop)
         return { hold: true, w, rir: 0,
             msg: `You went to failure and still came up short of ${ex.hi}. Stay at ${W(w)} — the reps will come. Going to failure every set costs more than it gives.` };
     if (!ex.loaded)
         return { hold: !allTop, msg: allTop ? `All sets hit ${ex.hi}. Make it harder next time.` : `Keep going until you reach ${ex.hi} on every set.` };
-    if (allTop)
-        return { hold: false, w: w + stepKg(), msg: `Every set hit ${ex.hi} reps. Go up to ${W(w + stepKg())}${ex.perSide ? " per dumbbell" : ""} next time and drop back to ${ex.lo} reps.` };
+    if (allTop && up > w)
+        return { hold: false, w: up, msg: `Every set hit ${ex.hi} reps. Go up to ${W(w + stepKg())}${ex.perSide ? " per dumbbell" : ""} next time and drop back to ${ex.lo} reps.` };
     const worst = Math.min(...work.map((s) => Number(s.reps)));
     return { hold: true, w, msg: `Stay at ${W(w)}${ex.perSide ? " per dumbbell" : ""}. Lowest set was ${worst}. Add reps until all sets reach ${ex.hi}.` };
 }
@@ -2364,7 +2779,7 @@ const DEFAULT_STATE = () => {
         kit: ["none", "db", "bench", "bar", "band"],
         profile: { age: 34, heightCm: 180, weightKg: 82, years: 2, goal: "muscle", sleep: 7, sex: "male", job: "desk", proteinTarget: 148, carbTarget: 300, fatTarget: 74, done: false, units: { ...DEFAULT_UNITS } },
         rings: { kcalGoal: 600, minGoal: 30 },
-        focus: null, actions: [], hiddenTips: [], apiKey: "", reviewModel: "mid", pastVolume: {}, pastTdee: [], reviews: [], photos: [], videos: {}, exNotes: {}, daily: {}, bugs: [], routines: makeRoutines(PROF), myFoods: [], recent: [], foodCount: {}, dishes: [],
+        focus: null, actions: [], hiddenTips: [], apiKey: "", reviewModel: "mid", equip: { home: ["db", "bench_adj", "pullup", "band_loop", "mat"], gym: [] }, where: "home", kitFilter: true, byMeal: {}, portions: {}, pastVolume: {}, pastTdee: [], reviews: [], photos: [], videos: {}, exNotes: {}, daily: {}, bugs: [], routines: makeRoutines(PROF), myFoods: [], recent: [], foodCount: {}, dishes: [],
         sessions: s.sessions, foods: s.foods, meas: s.meas, weights: s.weights,
     };
 };
@@ -2427,6 +2842,7 @@ function analyse(st) {
         .map(([key, arr]) => ({ key, n: arr.length, carbs: arr.length ? Math.round(arr.reduce((a, s) => a + s.carbsPrev, 0) / arr.length) : 0, val: arr.length ? (arr.reduce((a, s) => a + s.idx, 0) / arr.length) * 100 : 0 }));
     const cut = iso(new Date(Date.now() - 28 * 864e5));
     const spm = Object.fromEntries(MK.map((k) => [k, 0]));
+    const apm = Object.fromEntries(MUS.map((k) => [k.id, 0]));
     sessions.filter((s) => s.date >= cut).forEach((s) => s.exercises.forEach((e) => {
         const ex = exOf(e.exId);
         if (!ex)
@@ -2435,9 +2851,15 @@ function analyse(st) {
         const w = ex.cardio ? 0.5 : 1; // conditioning counts at half
         ex.primary.forEach((m) => (spm[m] += n * w));
         ex.secondary.forEach((m) => (spm[m] += n * 0.5 * w));
+        // and again against the anatomical muscles, weighted by involvement
+        const an = anatOf(ex);
+        Object.entries(an).forEach(([mu, share]) => { if (apm[mu] != null)
+            apm[mu] += n * w * share; });
     }));
     const weekly = MK.map((m) => ({ m, label: M[m], sets: Math.round((spm[m] / 4) * 10) / 10 }));
     const weeklyMap = Object.fromEntries(weekly.map((w) => [w.m, w.sets]));
+    const anatWeekly = MUS.map((m) => ({ ...m, sets: Math.round((apm[m.id] / 4) * 10) / 10 }));
+    const anatMap = Object.fromEntries(anatWeekly.map((x) => [x.id, x.sets]));
     const freq = {};
     MK.forEach((m) => {
         const days = new Set();
@@ -2471,7 +2893,7 @@ function analyse(st) {
         return { id, name: ex.name, ex, group: ex.group, now: m(now), before: m(before), change: (m(now) / m(before) - 1) * 100, sessions: now.length, latest, spark };
     });
     const pumpCount = sessions.filter((s) => s.date >= cut && isPump(s)).length;
-    return { byEx, base, perf, buckets, cGroups, readyGroups, sleepGroups, weekly, weeklyMap, freq, avgP, avgC, avgF, avgKcal, maint, trendKgWk, review, pumpCount };
+    return { byEx, base, perf, buckets, cGroups, readyGroups, sleepGroups, anatWeekly, anatMap, weekly, weeklyMap, freq, avgP, avgC, avgF, avgKcal, maint, trendKgWk, review, pumpCount };
 }
 const muscleLoad = (s) => {
     const raw = {};
@@ -2587,119 +3009,384 @@ function RestTimer({ secs, onClose }) {
         React.createElement("button", { className: "il-chip", onClick: () => setLeft(left + 30) }, "+30s"),
         React.createElement("button", { className: "il-x", onClick: onClose }, "\u00D7")));
 }
-function Body3D({ weekly, onPick }) {
-    const host = useRef(null), store = useRef({}), pickRef = useRef(onPick);
+/* ============ THE BODY ============
+   Faces are coloured whole rather than vertices being blended, so each
+   muscle has a defined edge like an anatomy chart. Bellies are pushed
+   proud of the frame so they read as separate forms.                 */
+function muscleAt(part, u, ang, side) {
+    const A = Math.abs(ang);
+    const front = A < 1.02, back = A > 2.12;
+    if (part === "torso") {
+        if (front) {
+            if (u > 0.855)
+                return "trap_up";
+            if (u > 0.70)
+                return A < 0.72 ? "pec_clav" : "delt_ant";
+            if (u > 0.575)
+                return "pec_stern";
+            if (u > 0.495)
+                return "pec_abd";
+            if (A < 0.40)
+                return u > 0.30 ? "rect_up" : "rect_low";
+            if (A < 0.72)
+                return "obl_ext";
+            return "serratus";
+        }
+        if (back) {
+            if (u > 0.865)
+                return "trap_up";
+            if (u > 0.68)
+                return A > 2.80 ? "rhomboid" : "trap_mid";
+            if (u > 0.44)
+                return A > 2.80 ? "trap_low" : "lat";
+            return A > 2.85 ? "erector" : "lat";
+        }
+        if (u > 0.76)
+            return "delt_lat";
+        if (u > 0.52)
+            return "lat";
+        if (u > 0.34)
+            return "serratus";
+        return "obl_ext";
+    }
+    if (part === "shoulder")
+        return front ? "delt_ant" : back ? "delt_post" : "delt_lat";
+    if (part === "upperarm") {
+        if (u > 0.86)
+            return front ? "delt_ant" : back ? "delt_post" : "delt_lat";
+        if (front)
+            return A < 0.52 ? "bi_long" : "bi_short";
+        if (back)
+            return u < 0.30 ? "tri_med" : (A > 2.78 ? "tri_long" : "tri_lat");
+        return u < 0.36 ? "brachialis" : (ang * side > 0 ? "tri_lat" : "bi_short");
+    }
+    if (part === "forearm") {
+        if (u > 0.74 && !back)
+            return "brachiorad";
+        return front ? "fore_flex" : "fore_ext";
+    }
+    if (part === "hip")
+        return back ? "glute_max" : front ? "hip_flex" : "glute_med";
+    if (part === "thigh") {
+        if (front)
+            return A < 0.38 ? "rect_fem" : (ang * side > 0 ? "vast_lat" : "vast_med");
+        if (back)
+            return ang * side > 0 ? "ham_bf" : "ham_st";
+        return ang * side < 0 ? "adductor" : "vast_lat";
+    }
+    if (part === "calf") {
+        if (front)
+            return "tib_ant";
+        if (u < 0.34)
+            return "soleus";
+        return ang * side > 0 ? "gastroc_lat" : "gastroc_med";
+    }
+    return null;
+}
+/* how far proud of the frame each belly sits, so the forms separate */
+const BULGE = {
+    pec_clav: .022, pec_stern: .030, pec_abd: .022, serratus: .012,
+    delt_ant: .026, delt_lat: .030, delt_post: .024,
+    bi_long: .026, bi_short: .022, brachialis: .012, brachiorad: .018,
+    tri_long: .026, tri_lat: .024, tri_med: .014, fore_flex: .014, fore_ext: .014,
+    lat: .028, rhomboid: .016, trap_up: .022, trap_mid: .018, trap_low: .012, erector: .020,
+    rect_up: .018, rect_low: .014, obl_ext: .016,
+    glute_max: .034, glute_med: .020, hip_flex: .008,
+    rect_fem: .026, vast_lat: .030, vast_med: .026, adductor: .020,
+    ham_bf: .028, ham_st: .026,
+    gastroc_med: .026, gastroc_lat: .024, soleus: .014, tib_ant: .012,
+};
+function Body3D({ weekly, onPick, height = 460 }) {
+    const host = useRef(null);
+    const api = useRef({ zoom: 1, spin: true });
+    const [sel, setSel] = useState(null);
+    const [zoom, setZoom] = useState(1);
     const [spin, setSpin] = useState(true);
-    useEffect(() => { pickRef.current = onPick; }, [onPick]);
+    const [view, setView] = useState("front");
     useEffect(() => {
-        const el = host.current;
-        if (!el)
+        if (!host.current || typeof THREE === "undefined")
             return;
-        const w = el.clientWidth, h = 330;
+        const el = host.current;
+        const W = el.clientWidth, H = height;
         const scene = new THREE.Scene();
-        const cam = new THREE.PerspectiveCamera(34, w / h, 0.1, 100);
-        cam.position.set(0, 0.85, 9.4);
-        cam.lookAt(0, 0.6, 0);
-        const rend = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        rend.setSize(w, h);
-        rend.setPixelRatio(Math.min(2, window.devicePixelRatio));
+        const cam = new THREE.PerspectiveCamera(28, W / H, 0.1, 100);
+        const rnd = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        rnd.setSize(W, H);
+        rnd.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
         el.innerHTML = "";
-        el.appendChild(rend.domElement);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.62));
-        const d1 = new THREE.DirectionalLight(0xffffff, 0.85);
-        d1.position.set(3, 6, 6);
-        scene.add(d1);
-        const d2 = new THREE.DirectionalLight(0x88aaff, 0.3);
-        d2.position.set(-4, 2, -5);
-        scene.add(d2);
-        const group = new THREE.Group(), meshes = [];
-        PARTS.forEach(([muscle, kind, args, pos]) => {
-            const geo = kind === "s" ? new THREE.SphereGeometry(...args) : kind === "c" ? new THREE.CylinderGeometry(...args) : new THREE.BoxGeometry(...args);
-            const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: muscle ? 0x3a3d43 : 0x2a2c31 }));
-            m.position.set(...pos);
-            m.userData.muscle = muscle;
-            group.add(m);
-            meshes.push(m);
-        });
-        group.position.y = -0.35;
-        scene.add(group);
-        store.current = { meshes, spin: true };
-        const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), cv = rend.domElement;
-        let px = 0, py = 0, dragging = false, moved = 0;
-        const xy = (e) => e.touches ? [e.touches[0].clientX, e.touches[0].clientY] : [e.clientX, e.clientY];
-        const down = (e) => { const [x, y] = xy(e); dragging = true; moved = 0; px = x; py = y; };
-        const move = (e) => {
-            if (!dragging)
-                return;
-            const [x, y] = xy(e);
-            moved += Math.abs(x - px) + Math.abs(y - py);
-            group.rotation.y += (x - px) * 0.011;
-            px = x;
-            py = y;
-            if (moved > 8) {
-                store.current.spin = false;
-                if (e.cancelable)
-                    e.preventDefault();
-            }
-        };
-        const up = (e) => {
-            if (dragging && moved < 8) {
-                const [x, y] = e.changedTouches ? [e.changedTouches[0].clientX, e.changedTouches[0].clientY] : [e.clientX, e.clientY];
-                const r = cv.getBoundingClientRect();
-                ndc.x = ((x - r.left) / r.width) * 2 - 1;
-                ndc.y = -((y - r.top) / r.height) * 2 + 1;
-                if (Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1) {
-                    ray.setFromCamera(ndc, cam);
-                    const hit = ray.intersectObjects(meshes).find((o) => o.object.userData.muscle);
-                    if (hit && pickRef.current)
-                        pickRef.current(hit.object.userData.muscle);
+        el.appendChild(rnd.domElement);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.70));
+        const k1 = new THREE.DirectionalLight(0xffffff, 0.72);
+        k1.position.set(2, 3, 4);
+        scene.add(k1);
+        const k2 = new THREE.DirectionalLight(0x9ec0ff, 0.34);
+        k2.position.set(-3, 2, -3);
+        scene.add(k2);
+        const k3 = new THREE.DirectionalLight(0xffffff, 0.22);
+        k3.position.set(0, -2, 1);
+        scene.add(k3);
+        const root = new THREE.Group();
+        scene.add(root);
+        const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.58, metalness: 0.03 });
+        const plain = new THREE.MeshStandardMaterial({ color: 0x2f343b, roughness: 0.85 });
+        const parts = [];
+        /* Non-indexed so every triangle owns its colour outright — that is what
+           gives a hard edge between one muscle and the next. */
+        const build = (geo, part, side, squashZ) => {
+            const g = geo.toNonIndexed();
+            const pos = g.attributes.position;
+            const nrm = g.attributes.normal;
+            const n = pos.count;
+            const col = new Float32Array(n * 3);
+            const tag = new Array(n);
+            const box = new THREE.Box3().setFromBufferAttribute(pos);
+            const lo = box.min.y, span = Math.max(0.0001, box.max.y - box.min.y);
+            for (let f = 0; f < n; f += 3) {
+                let cx = 0, cy = 0, cz = 0;
+                for (let k = 0; k < 3; k++) {
+                    cx += pos.getX(f + k);
+                    cy += pos.getY(f + k);
+                    cz += pos.getZ(f + k);
+                }
+                cx /= 3;
+                cy /= 3;
+                cz /= 3;
+                const u = (cy - lo) / span;
+                const id = muscleAt(part, u, Math.atan2(cx, cz / (squashZ || 1)), side);
+                const push = BULGE[id] || 0;
+                for (let k = 0; k < 3; k++) {
+                    tag[f + k] = id;
+                    if (push) {
+                        pos.setXYZ(f + k, pos.getX(f + k) + nrm.getX(f + k) * push, pos.getY(f + k) + nrm.getY(f + k) * push * 0.35, pos.getZ(f + k) + nrm.getZ(f + k) * push);
+                    }
                 }
             }
-            dragging = false;
+            pos.needsUpdate = true;
+            g.computeVertexNormals();
+            g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+            const m = new THREE.Mesh(g, mat);
+            m.userData = { tag, part, side };
+            root.add(m);
+            parts.push(m);
+            return m;
         };
+        const seg = (part, rT, rB, len, x, y, side, squashZ = 1, tilt = 0) => {
+            const geo = new THREE.CylinderGeometry(rT, rB, len, 40, 22, false);
+            geo.scale(1, 1, squashZ);
+            const m = build(geo, part, side, squashZ);
+            m.position.set(x, y, 0);
+            m.rotation.z = tilt;
+            return m;
+        };
+        const ball = (part, r, x, y, side, sq = 1) => {
+            const geo = new THREE.SphereGeometry(r, 34, 26);
+            geo.scale(1, sq, 1);
+            const m = build(geo, part, side, 1);
+            m.position.set(x, y, 0);
+            return m;
+        };
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 26, 20), plain);
+        head.position.set(0, 1.815, 0);
+        head.scale.set(1, 1.2, 1.04);
+        root.add(head);
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.078, 0.12, 18), plain);
+        neck.position.set(0, 1.665, 0);
+        root.add(neck);
+        // broad at the shoulders, narrow at the waist, like the chart
+        seg("torso", 0.232, 0.158, 0.68, 0, 1.285, 1, 0.62);
+        seg("hip", 0.172, 0.176, 0.19, 0, 0.895, 1, 0.74);
+        [1, -1].forEach((sd) => {
+            ball("shoulder", 0.098, sd * 0.238, 1.535, sd, 0.96);
+            seg("upperarm", 0.070, 0.052, 0.33, sd * 0.276, 1.355, sd, 0.94, sd * 0.045);
+            seg("forearm", 0.050, 0.038, 0.30, sd * 0.305, 1.035, sd, 0.92, sd * 0.028);
+            const hand = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 12), plain);
+            hand.position.set(sd * 0.318, 0.858, 0);
+            hand.scale.set(0.78, 1.25, 0.58);
+            root.add(hand);
+            seg("thigh", 0.104, 0.066, 0.45, sd * 0.090, 0.575, sd, 0.86);
+            const knee = new THREE.Mesh(new THREE.SphereGeometry(0.057, 16, 12), plain);
+            knee.position.set(sd * 0.096, 0.340, 0);
+            root.add(knee);
+            seg("calf", 0.060, 0.032, 0.34, sd * 0.098, 0.170, sd, 0.84);
+            const foot = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.042, 0.19), plain);
+            foot.position.set(sd * 0.098, 0.018, 0.05);
+            root.add(foot);
+        });
+        const HEX = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
+        const paint = (map, selId) => {
+            parts.forEach((m) => {
+                const col = m.geometry.attributes.color, tag = m.userData.tag;
+                for (let i = 0; i < col.count; i++) {
+                    const id = tag[i];
+                    let c = HEX(0x363b43);
+                    if (id) {
+                        const mu = MUSBY[id];
+                        const v = (map || {})[id] || 0;
+                        if (selId && id === selId)
+                            c = HEX(0xffffff);
+                        else if (!mu || v <= 0)
+                            c = HEX(0x4d545d);
+                        else if (v < mu.lo * 0.5)
+                            c = HEX(0xff5a4e);
+                        else if (v < mu.lo)
+                            c = HEX(0xe5b94e);
+                        else if (v <= mu.hi)
+                            c = HEX(0x35c26b);
+                        else
+                            c = HEX(0x7f5af0);
+                    }
+                    col.setXYZ(i, c[0], c[1], c[2]);
+                }
+                col.needsUpdate = true;
+            });
+        };
+        /* ---- input: drag to turn, pinch to zoom, smoothed so it never judders ---- */
+        const ray = new THREE.Raycaster(), pt = new THREE.Vector2();
+        const ptrs = new Map();
+        let rotY = 0.35, rotX = 0, moved = 0, pinchStart = 0, zoomStart = 1, auto = true;
+        let camZ = 4.3, camZTarget = 4.3, rotYT = rotY, rotXT = rotX;
+        const down = (e) => {
+            ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            moved = 0;
+            auto = false;
+            if (ptrs.size === 2) {
+                const [a, b] = [...ptrs.values()];
+                pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
+                zoomStart = api.current.zoom || 1;
+            }
+            cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+        };
+        const move = (e) => {
+            const p = ptrs.get(e.pointerId);
+            if (!p)
+                return;
+            const dx = e.clientX - p.x, dy = e.clientY - p.y;
+            ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (ptrs.size === 2) {
+                const [a, b] = [...ptrs.values()];
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (pinchStart > 0) {
+                    const z = Math.max(0.8, Math.min(4.2, zoomStart * (d / pinchStart)));
+                    api.current.zoom = z;
+                    api.current.onZoom && api.current.onZoom(z);
+                }
+                moved += 20;
+                return;
+            }
+            moved += Math.abs(dx) + Math.abs(dy);
+            rotYT += dx * 0.0095;
+            rotXT = Math.max(-0.62, Math.min(0.62, rotXT + dy * 0.0055));
+        };
+        const up = (e) => {
+            const had = ptrs.size;
+            if (had === 1 && moved < 6) {
+                const r = cv.getBoundingClientRect();
+                pt.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+                pt.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+                ray.setFromCamera(pt, cam);
+                const hit = ray.intersectObjects(parts)[0];
+                if (hit && hit.face) {
+                    const id = hit.object.userData.tag[hit.face.a];
+                    if (id) {
+                        setSel(id);
+                        onPick && onPick(id);
+                    }
+                    else
+                        setSel(null);
+                }
+                else
+                    setSel(null);
+            }
+            ptrs.delete(e.pointerId);
+            if (ptrs.size < 2)
+                pinchStart = 0;
+        };
+        const wheel = (e) => {
+            e.preventDefault();
+            const z = Math.max(0.8, Math.min(4.2, (api.current.zoom || 1) * (1 - e.deltaY * 0.0015)));
+            api.current.zoom = z;
+            api.current.onZoom && api.current.onZoom(z);
+        };
+        const cv = rnd.domElement;
+        cv.style.touchAction = "none";
         cv.addEventListener("pointerdown", down);
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-        cv.addEventListener("touchstart", down, { passive: true });
-        window.addEventListener("touchmove", move, { passive: false });
-        window.addEventListener("touchend", up);
-        let raf, live = true;
-        const tick = () => { if (!live)
-            return; if (!dragging && store.current.spin)
-            group.rotation.y += 0.004; rend.render(scene, cam); raf = requestAnimationFrame(tick); };
-        tick();
+        cv.addEventListener("pointermove", move);
+        cv.addEventListener("pointerup", up);
+        cv.addEventListener("pointercancel", up);
+        cv.addEventListener("wheel", wheel, { passive: false });
+        let raf;
+        const loop = () => {
+            raf = requestAnimationFrame(loop);
+            if (auto && api.current.spin)
+                rotYT += 0.0045;
+            if (api.current.snap != null) {
+                rotYT = api.current.snap;
+                rotXT = 0;
+                api.current.snap = null;
+                auto = false;
+            }
+            // ease towards the target so nothing jumps
+            rotY += (rotYT - rotY) * 0.18;
+            rotX += (rotXT - rotX) * 0.18;
+            camZTarget = 4.3 / (api.current.zoom || 1);
+            camZ += (camZTarget - camZ) * 0.16;
+            root.rotation.y = rotY;
+            root.rotation.x = rotX;
+            cam.position.set(0, 1.0, camZ);
+            cam.lookAt(0, 0.98, 0);
+            rnd.render(scene, cam);
+        };
+        loop();
+        api.current = { ...api.current, paint, stop: (v) => { auto = v; } };
         return () => {
-            live = false;
             cancelAnimationFrame(raf);
             cv.removeEventListener("pointerdown", down);
-            window.removeEventListener("pointermove", move);
-            window.removeEventListener("pointerup", up);
-            cv.removeEventListener("touchstart", down);
-            window.removeEventListener("touchmove", move);
-            window.removeEventListener("touchend", up);
-            meshes.forEach((m) => { m.geometry.dispose(); m.material.dispose(); });
-            rend.dispose();
+            cv.removeEventListener("pointermove", move);
+            cv.removeEventListener("pointerup", up);
+            cv.removeEventListener("pointercancel", up);
+            cv.removeEventListener("wheel", wheel);
+            rnd.dispose();
+            el.innerHTML = "";
         };
-    }, []);
-    useEffect(() => { store.current.spin = spin; }, [spin]);
-    useEffect(() => {
-        const s = store.current;
-        if (!s.meshes)
-            return;
-        s.meshes.forEach((m) => { const k = m.userData.muscle; if (!k)
-            return; const v = weekly[k] ?? 0; m.material.color.set(v <= 0 ? SCOL.none : SCOL[status(v)]); });
-    }, [weekly]);
+    }, [height]);
+    useEffect(() => { api.current.zoom = zoom; }, [zoom]);
+    useEffect(() => { api.current.onZoom = (z) => setZoom(+z.toFixed(2)); }, []);
+    useEffect(() => { api.current.spin = spin; api.current.stop && api.current.stop(spin); }, [spin]);
+    useEffect(() => { api.current.paint && api.current.paint(weekly, sel); }, [weekly, sel]);
+    const face = (v) => {
+        setView(v);
+        setSpin(false);
+        api.current.snap = v === "front" ? 0 : v === "back" ? Math.PI : v === "left" ? -Math.PI / 2 : Math.PI / 2;
+    };
+    const mu = sel ? MUSBY[sel] : null;
+    const v = sel ? (weekly || {})[sel] || 0 : 0;
     return (React.createElement("div", null,
-        React.createElement("div", { ref: host, style: { width: "100%", height: 330 } }),
-        React.createElement("div", { className: "il-row", style: { padding: "0 4px" } },
-            React.createElement("div", { style: { display: "flex", gap: 11, flexWrap: "wrap" } }, [["green", "10–20 sets"], ["amber", "Close"], ["red", "Too few"]].map(([k, l]) => (React.createElement("span", { key: k, style: { fontSize: 11, color: "var(--dim)", display: "flex", alignItems: "center" } },
-                React.createElement("i", { className: "il-dot", style: { background: SCOL[k] } }),
-                l)))),
-            React.createElement("button", { className: "il-chip", onClick: () => setSpin(!spin) }, spin ? "Stop" : "Spin")),
-        React.createElement("div", { className: "il-note", style: { marginTop: 8, fontSize: 12 } },
-            "Drag to turn it round. ",
-            React.createElement("strong", { style: { color: "var(--txt)" } }, "Tap any muscle"),
-            " to see the exercises that work it.")));
+        React.createElement("div", { ref: host, style: { width: "100%", height, cursor: "grab" } }),
+        React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", padding: "2px 0 0" } },
+            [["front", "Front"], ["back", "Back"], ["left", "Left"], ["right", "Right"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (view === k && !spin ? " on" : ""), onClick: () => face(k) }, l))),
+            React.createElement("button", { className: "il-chip" + (spin ? " on" : ""), onClick: () => setSpin(!spin) }, spin ? "Stop" : "Spin")),
+        React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", padding: "10px 2px 0" } },
+            React.createElement("button", { className: "il-chip", onClick: () => setZoom(Math.max(0.8, +(zoom - 0.4).toFixed(2))) }, "\u2212"),
+            React.createElement("input", { type: "range", min: "0.8", max: "4.2", step: "0.02", value: zoom, onChange: (e) => setZoom(+e.target.value), style: { flex: 1, accentColor: "var(--acc)" } }),
+            React.createElement("button", { className: "il-chip", onClick: () => setZoom(Math.min(4.2, +(zoom + 0.4).toFixed(2))) }, "+")),
+        React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Drag to turn it, pinch to zoom, tap a muscle for its detail.")));
+}
+function MuscleList({ weekly, sel, onPick }) {
+    return (React.createElement("div", { style: { marginTop: 14 } },
+        REGIONS.map(([r, label]) => {
+            const list = MUS.filter((m) => m.region === r);
+            return (React.createElement("div", { key: r, style: { marginBottom: 12 } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 7 } }, label),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, list.map((m) => {
+                    const n = (weekly || {})[m.id] || 0;
+                    const c = n === 0 ? "var(--faint)" : n < m.lo * 0.5 ? "var(--red)" : n < m.lo ? "var(--gold)" : n <= m.hi ? "var(--grn)" : "#7F5AF0";
+                    return (React.createElement("button", { key: m.id, className: "il-chip" + (sel === m.id ? " on" : ""), onClick: () => onPick && onPick(m.id), style: { display: "inline-flex", alignItems: "center", gap: 6 } },
+                        React.createElement("span", { style: { width: 7, height: 7, borderRadius: 4, background: c, flexShrink: 0 } }),
+                        m.plain,
+                        React.createElement("span", { className: "il-n", style: { color: "var(--faint)", fontSize: 11 } }, Math.round(n * 10) / 10)));
+                }))));
+        }),
+        React.createElement("div", { className: "il-note", style: { fontSize: 11.5 } }, "Rotator cuff, teres major and the deep core sit under other muscles, so they aren't on the surface. They're here and they're counted.")));
 }
 /* ============ FORM ANIMATION ============
    One skeleton with a real left and right side, so the camera can sit in
@@ -3102,13 +3789,17 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v57 · 31 Jul";
+const APP_VERSION = "v70 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
     const [tab, setTab] = useState("you");
     const [st, setSt] = useState(null);
-    const [sheet, setSheet] = useState(null);
+    /* sheets stack, so closing one hands you back to whatever opened it
+       rather than dropping you out to the tab underneath */
+    const [stack, setStack] = useState([]);
+    const sheet = stack.length ? stack[stack.length - 1] : null;
+    const setSheet = (x) => setStack((s) => (x == null ? [] : [...s, x]));
     const [ready, setReady] = useState(false);
     const [bootNote, setBootNote] = useState("");
     const canWrite = useRef(false); // never write until we know what's already stored
@@ -3300,6 +3991,7 @@ function HomeLedgerInner() {
                     React.createElement("span", { style: { fontSize: 11.5, color: "var(--faint)" } }, "If this sticks for more than a few seconds, close and reopen."))));
     const today = iso(new Date());
     UNIT = { ...DEFAULT_UNITS, ...(st.profile.units || {}) };
+    LOADS = loadOptions(st);
     const go = ({ tab: t, sheet: sh } = {}) => { if (t)
         setTab(t); if (sh)
         setSheet(sh); };
@@ -3340,7 +4032,7 @@ function HomeLedgerInner() {
             React.createElement("nav", { className: "il-tabs" }, ["you", "train", "fuel", "body", "progress"].map((k) => (React.createElement("button", { key: k, className: "il-tab" + (tab === k ? " on" : ""), onClick: () => setTab(k) },
                 React.createElement(Ico, { d: ICONS[k] }),
                 TITLE[k])))),
-            sheet && React.createElement(Sheet, { sheet, setSheet, st, save, a, today, health }))));
+            sheet && React.createElement(Sheet, { sheet, setSheet, st, save, a, today, health, go, depth: stack.length, back: () => setStack((s) => s.slice(0, -1)) }))));
 }
 /* ---------------- TRAIN ---------------- */
 function LiveSession({ st, save, s, setSheet }) {
@@ -3414,7 +4106,7 @@ function LiveSession({ st, save, s, setSheet }) {
             const nx = nextTarget(ex, e.sets, s.intent);
             return (React.createElement("div", { key: i, className: "il-ex", style: { opacity: complete ? 0.72 : 1 } },
                 React.createElement("div", { className: "il-exh", style: { cursor: "default" } },
-                    React.createElement("div", { className: "il-thumb" }, ex.aerobic ? React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 20 } }, "\uD83C\uDFC3") : React.createElement(FormDemo, { ex: ex, h: 52, weight: false })),
+                    React.createElement("div", { className: "il-thumb" }, ex.aerobic ? React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: 20 } }, "\uD83C\uDFC3") : React.createElement(FormDemo, { ex: ex, h: 52 })),
                     React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                         React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } },
                             ex.name,
@@ -3514,6 +4206,13 @@ function Train({ st, save, a, today, setSheet }) {
                     " this week \u2014 same weights, half the sets. You'll come back stronger in seven days than by pushing through.")),
             React.createElement("div", { style: { padding: "0 12px 4px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach to build me a session"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "progs" }) }, "Browse known programmes"),
+                React.createElement("button", { className: "il-btn g", onClick: () => {
+                        const gen = generateRoutines(st, a);
+                        if (!gen.length)
+                            return;
+                        save({ ...st, routines: [...gen, ...(st.routines || []).filter((r) => !r.generated)] });
+                    } }, "Build sessions from the kit I've got"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick", title: "Log cardio", onPick: (e) => {
                             const n = new Date();
                             const sessions = [...st.sessions];
@@ -4423,6 +5122,21 @@ function recSets(ex, P, a) {
     n = Math.max(2, Math.min(cap, n));
     return { n, why: why.length ? why.join(", and ") : "the standard starting point" };
 }
+/* ============ KNOWN PROGRAMMES ============
+   The splits people actually run. Rated honestly for whether they work
+   with dumbbells at home — two of them plainly do not.               */
+const PROGRAMMES = [
+    ["fullbody", "Full body", 3, "Everything, three times a week", "Your first year or two, anyone with three days, or coming back after a break.", "Every muscle gets hit three times a week, which is more frequency than any split gives you. For a beginner the limit is skill and recovery, not volume, so three exposures a week beats one big battering.", "Works perfectly with dumbbells. Nothing here needs a barbell.", 3, [["Full body A", "full", "Squat pattern, press, row"], ["Full body B", "full", "Hinge, pull, press"], ["Full body C", "full", "Lunge, vertical press, row"]]],
+    ["upperlower", "Upper / lower", 4, "Two upper, two lower", "Once full body stops fitting. Intermediates, and anyone who wants long-term progress without living in the gym.", "Twice-a-week frequency per muscle, which the literature supports over once, with enough room per session to do proper volume. The most forgiving four-day structure there is.", "Ideal at home. Upper days are dumbbell-friendly; lower days lean on split squats and hinges rather than heavy back squats.", 3, [["Upper A", "upper", "Horizontal press and row emphasis"], ["Lower A", "lower", "Squat pattern led"], ["Upper B", "upper", "Vertical press and pull emphasis"], ["Lower B", "lower", "Hinge led"]]],
+    ["ppl", "Push pull legs", 6, "The default for a reason", "Any level, if you can genuinely train five or six days. Also good if you have no idea what to run.", "Muscles that work together train together, so nothing gets hit twice in a row while sore. Run twice a week it gives the twice-weekly frequency that works; run once it becomes a bro split.", "The best-known split and it maps cleanly onto dumbbells. Leg day is the only compromise — no barbell squat means more unilateral work.", 3, [["Push", "push", "Chest, shoulders, triceps"], ["Pull", "pull", "Back, rear delts, biceps"], ["Legs", "legs", "Quads, hamstrings, glutes, calves"], ["Push", "push", "Second exposure, different angles"], ["Pull", "pull", "Second exposure"], ["Legs", "legs", "Second exposure"]]],
+    ["ppl3", "Push pull legs, three days", 3, "The same idea, half the week", "Three days a week and you want a split rather than full body.", "Each muscle once a week, which is the weak point — but it lets you do proper volume per session and it is simple to run.", "Fine at home, though once-a-week frequency is the trade-off you are accepting.", 3, [["Push", "push", "Chest, shoulders, triceps"], ["Pull", "pull", "Back and biceps"], ["Legs", "legs", "Everything below the waist"]]],
+    ["bro", "Bro split", 5, "One muscle a day", "People who genuinely enjoy training five days, and advanced lifters who have stalled on higher frequency.", "Maximum volume per muscle in one go, and plenty of recovery before it comes round again. Once-weekly frequency is the cost, and the research generally favours twice — but adherence beats theory, and some people just prefer it.", "Workable, but hard at home. A whole session for one muscle needs enough load to keep the sets hard, and forty kilos runs out quickly on legs.", 2, [["Chest", "chest", "Everything pressing and flying"], ["Back", "back", "Rows and pulls"], ["Shoulders", "push", "Delts, all three heads"], ["Arms", "arms", "Biceps and triceps"], ["Legs", "legs", "Quads, hamstrings, calves"]]],
+    ["arnold", "Arnold split", 6, "Chest and back, shoulders and arms, legs", "Advanced lifters who like long sessions and can commit to six days.", "Antagonist pairing — chest with back, biceps with triceps — lets you superset and keeps the pump. Twice-weekly frequency across six days. It is a lot of volume and it assumes your recovery is in order.", "Long sessions and a lot of volume. At home the chest and back day works well; shoulders and arms is fine; legs is where dumbbells limit you.", 2, [["Chest & back", "chest", "Supersetted, press against row"], ["Shoulders & arms", "arms", "Delts, biceps, triceps"], ["Legs", "legs", "Quads, hamstrings, calves"], ["Chest & back", "chest", "Second exposure"], ["Shoulders & arms", "arms", "Second exposure"], ["Legs", "legs", "Second exposure"]]],
+    ["phul", "Power hypertrophy upper / lower", 4, "Two heavy days, two lighter", "Intermediate to advanced lifters who want size and strength together, or anyone bored of chasing only one.", "Two days in the three-to-five rep range for strength, two in the eight-to-fifteen range for size. You get the neural adaptations and the hypertrophy without picking one.", "The hypertrophy days translate perfectly. The power days want heavy compounds, and with dumbbells capped at forty a hand you will run out of load on lower body before you run out of effort.", 2, [["Upper power", "upper", "Heavy pressing and rowing, 3-5 reps"], ["Lower power", "lower", "Heavy squat and hinge, 3-5 reps"], ["Upper hypertrophy", "upper", "8-15 reps, more isolation"], ["Lower hypertrophy", "lower", "8-15 reps"]]],
+    ["phat", "PHAT", 5, "Power days then bodypart days", "Advanced lifters whose nutrition and recovery are genuinely sorted. Not a starting point.", "Layne Norton's design: two power days built on heavy compounds, three hypertrophy days organised by bodypart. Very high volume, and it only works if you are eating and sleeping properly.", "Honestly, this one is a stretch at home. The power days are the whole point and they need loading you cannot reach with dumbbells.", 1, [["Upper power", "upper", "Heavy, 3-5 reps"], ["Lower power", "lower", "Heavy, 3-5 reps"], ["Back & shoulders", "pull", "Hypertrophy, high volume"], ["Legs", "legs", "Hypertrophy"], ["Chest & arms", "chest", "Hypertrophy"]]],
+    ["texas", "Texas method", 3, "Volume, recovery, intensity", "Post-beginners who have exhausted adding weight every session, and want strength over looks.", "Monday is volume, Wednesday is light, Friday you set a new five-rep max. Weekly rather than session-to-session progression, which is what you move to when linear progression dies.", "Built around barbell squat, bench and press with percentage-based loading. Dumbbells in 2.5kg jumps cannot deliver that. This is a gym programme.", 0, [["Volume day", "full", "5x5 across the main lifts"], ["Light day", "full", "Same lifts, 80% of Monday"], ["Intensity day", "full", "Work up to a five-rep max"]]],
+    ["531", "5/3/1", 4, "Percentage-based, slow and certain", "Intermediates who want strength specifically, and who are patient.", "Jim Wendler's programme. Four-week cycles built on percentages of your training max, adding a small amount each cycle. Deliberately unambitious week to week, which is exactly why it keeps working for years.", "Entirely built on barbell squat, bench, deadlift and overhead press at set percentages of a one-rep max. There is no dumbbell version of this that is still 5/3/1.", 0, [["Overhead press", "push", "5/3/1 sets then assistance"], ["Deadlift", "lower", "5/3/1 sets then assistance"], ["Bench press", "push", "5/3/1 sets then assistance"], ["Squat", "lower", "5/3/1 sets then assistance"]]]
+].map(([id, name, days, tag, who, why, caveat, home, sessions]) => ({ id, name, days, tag, who, why, caveat, home, sessions }));
 /* ============ SPLITS ============
    Tight, muscle-focused sessions rather than a spread of whatever fits.
    Rep range comes from where an exercise sits in the session, not from
@@ -4479,6 +5193,14 @@ function buildSplit(key, st, a, nEx) {
     const count = nEx || (mins <= 20 ? 4 : mins <= 30 ? 5 : mins <= 45 ? 6 : 7);
     const pool = EX.filter((e) => e.kit.every((k) => st.kit.includes(k)))
         .filter((e) => !banned.has(e.name) && !e.cardio && !PLYO.has(e.move))
+        // one dumbbell cannot do a two-handed press
+        .filter((e) => {
+        if (!e.loaded || e.perSide)
+            return true;
+        const owned = (st.equip || {})[st.where || "home"] || [];
+        const pairs = owned.filter((id) => WEIGHTED.includes(id)).some((id) => (cfgFor(st, id).qty || 1) >= 2);
+        return pairs || !owned.length;
+    })
         .filter((e) => e.primary.some((m) => sp.muscles.includes(m)))
         // a loaded session should be loaded — bodyweight only if there's nothing else
         .sort((x, y) => (y.loaded ? 1 : 0) - (x.loaded ? 1 : 0));
@@ -4522,16 +5244,42 @@ function buildSplit(key, st, a, nEx) {
         exercises: picked,
     };
 }
-/* rest is the bulk of a session, so estimate from it */
+/* Rest is the bulk of a session, but how long you rest depends entirely on
+   what you just did. Nobody takes 80 seconds between sets of side bends. */
+const SHORT_REST = ["abs", "obl", "lback", "calf", "fore"];
+function restFor(e) {
+    if (!e)
+        return 60;
+    if (e.aerobic)
+        return 0;
+    if (e.isCompound && e.loaded)
+        return 150; // a heavy compound
+    if (e.isCompound)
+        return 90; // bodyweight compound
+    if (e.primary.some((m) => SHORT_REST.includes(m)))
+        return 40; // small muscles recover fast
+    return 65; // ordinary isolation
+}
 function routineMinutes(list) {
-    const secs = list.reduce((a, x) => {
+    let secs = 0, heavy = false;
+    (list || []).forEach((x) => {
         const e = exOf(x.exId);
         if (!e)
-            return a;
-        const rest = e.isCompound ? 165 : 80;
-        return a + x.sets * (35 + rest) + 45; // 45s to set up each exercise
-    }, 300); // plus a five minute warm-up
-    return Math.round(secs / 60);
+            return;
+        if (e.aerobic) {
+            secs += (Number(x.mins) || 20) * 60;
+            return;
+        }
+        if (e.isCompound && e.loaded)
+            heavy = true;
+        const rest = restFor(e);
+        const work = (e.timed || e.cardio) ? ((x.lo ?? e.lo) + (x.hi ?? e.hi)) / 2 : 30;
+        const n = Math.max(1, x.sets || 3);
+        secs += n * work + (n - 1) * rest + 30; // no rest after the last set; 30s to get set up
+    });
+    if (heavy)
+        secs += 210; // a warm-up, but only if something needs one
+    return Math.max(4, Math.round(secs / 60));
 }
 const prettyMins = (m) => m >= 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`;
 function MuscleTags({ ex }) {
@@ -4646,8 +5394,11 @@ function Diary({ st, save, a, close, setSheet }) {
                 MEALS.filter((m) => d.food.some((e) => (e.meal || "Snacks") === m)).map((meal) => (React.createElement("div", { key: meal, style: { paddingTop: 8, borderTop: "1px solid var(--line)" } },
                     React.createElement("div", { className: "il-lbl", style: { color: "var(--dim)", marginBottom: 4 } }, meal),
                     d.food.filter((e) => (e.meal || "Snacks") === meal).map((e) => (React.createElement("div", { key: e.id, className: "il-row", style: { padding: "4px 0" } },
-                        React.createElement("span", { style: { fontSize: 13, color: "var(--dim)" } }, e.name),
-                        React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--faint)" } }, Math.round(e.kcal)))))))))),
+                        React.createElement("span", { style: { fontSize: 13, color: "var(--dim)", minWidth: 0 } }, e.name),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--faint)", flexShrink: 0 } },
+                            Math.round(e.p),
+                            "g P \u00B7 ",
+                            Math.round(e.kcal)))))))))),
             d.dev && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--move)" } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 12 } },
                     React.createElement("div", { className: "il-lbl" }, "From your devices"),
@@ -4688,7 +5439,7 @@ function Diary({ st, save, a, close, setSheet }) {
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7 } }, d.photos.map((p) => React.createElement("img", { key: p.id, src: p.url, alt: "", style: { width: "100%", borderRadius: 9, display: "block" } }))))));
     }
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "Diary", sub: `${days.length} days with something logged`, close: close }),
+        React.createElement(SH, { title: "Diary", sub: `${days.length} days · slide a day left to clear it`, close: close }),
         withDev.length > 1 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Steps, from your cross-checks"),
             React.createElement("div", { style: { height: 130 } },
@@ -4708,18 +5459,26 @@ function Diary({ st, save, a, close, setSheet }) {
                 return `Your devices average ${avg} calories burned a day. Your own weight trend puts maintenance at ${a.maint} — so they're running ${Math.abs(off)}% ${off > 0 ? "high" : "low"}. Trust the weight trend for food decisions.`;
             })()))),
         days.length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing logged yet. Days appear here once you train, eat or weigh in."),
-        days.map((d) => (React.createElement("div", { key: d.date, className: "il-list", style: { margin: "0 12px 8px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setOpen(d.date) },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, display: "flex", alignItems: "center", gap: 7 } },
-                        dlong(d.date),
-                        d.chk && React.createElement("span", { className: "il-tag", style: { background: "var(--c2)", color: "var(--dim)" } }, readinessWord(readinessScore(d.chk)))),
-                    React.createElement("div", { className: "il-sub il-n" }, [d.sessions.length ? `${d.sessions.length} session${d.sessions.length > 1 ? "s" : ""}` : null,
-                        d.ft.k ? `${Math.round(d.ft.k)} cal` : null,
-                        d.dev?.steps != null ? `${d.dev.steps.toLocaleString()} steps` : null,
-                        d.weight != null ? fmtBW(d.weight, 1) : null,
-                        d.meas ? "tape" : null, d.photos.length ? "photo" : null].filter(Boolean).join(" · "))),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))));
+        days.map((d) => (React.createElement(SwipeDelete, { key: d.date, onDelete: () => {
+                if (!window.confirm(`Clear everything logged on ${dlong(d.date)}?`))
+                    return;
+                save({ ...st, sessions: st.sessions.filter((x) => x.date !== d.date),
+                    foods: st.foods.filter((x) => x.date !== d.date),
+                    weights: st.weights.filter((x) => x.date !== d.date),
+                    daily: Object.fromEntries(Object.entries(st.daily || {}).filter(([k]) => k !== d.date)) });
+            } },
+            React.createElement("div", { className: "il-list", style: { margin: 0 } },
+                React.createElement("div", { className: "il-li", onClick: () => setOpen(d.date) },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, display: "flex", alignItems: "center", gap: 7 } },
+                            dlong(d.date),
+                            d.chk && React.createElement("span", { className: "il-tag", style: { background: "var(--c2)", color: "var(--dim)" } }, readinessWord(readinessScore(d.chk)))),
+                        React.createElement("div", { className: "il-sub il-n" }, [d.sessions.length ? `${d.sessions.length} session${d.sessions.length > 1 ? "s" : ""}` : null,
+                            d.ft.k ? `${Math.round(d.ft.k)} cal` : null,
+                            d.dev?.steps != null ? `${d.dev.steps.toLocaleString()} steps` : null,
+                            d.weight != null ? fmtBW(d.weight, 1) : null,
+                            d.meas ? "tape" : null, d.photos.length ? "photo" : null].filter(Boolean).join(" · "))),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))));
 }
 /* ============ DIAGNOSTICS ============
    Catches crashes automatically, lets you jot down anything odd, and
@@ -4933,7 +5692,7 @@ ${JSON.stringify(snapshot(), null, 1)}
                             React.createElement("span", { style: { display: "flex", gap: 7, alignItems: "center", flexShrink: 0 } },
                                 b.pri === "high" && React.createElement("span", { className: "il-tag t3" }, "WANT"),
                                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, short(b.at)),
-                                React.createElement("button", { className: "il-x", style: { width: 24, height: 24, fontSize: 14 }, onClick: () => save({ ...st, bugs: bugs.filter((x) => x.id !== b.id) }) }, "\u00D7"))),
+                                React.createElement("button", { className: "il-x", style: { width: 30, height: 30, fontSize: 16 }, onClick: () => save({ ...st, bugs: bugs.filter((x) => x.id !== b.id) }) }, "\u00D7"))),
                         React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, b.note),
                         b.shot && React.createElement("img", { src: b.shot, alt: "", style: { width: "100%", borderRadius: 9, display: "block", marginTop: 8 } })))));
             }))),
@@ -5658,6 +6417,52 @@ function readPdfBase64(file) {
         fr.readAsDataURL(file);
     });
 }
+/* ============ HOW WELL A FOOD FITS ============
+   Not a judgement about the food. A read on how easily it fits the numbers
+   you're chasing. A doughnut isn't immoral; it's just expensive in calories
+   for what it gives you back, and on a cut that matters more than it does
+   on a bulk. Nothing is off limits — this only tells you the price.   */
+function foodFit(f, P) {
+    if (!f || !f.kcal)
+        return null;
+    const goal = P?.goal || "muscle";
+    const pPer100 = f.p || 0;
+    const kcalPer100 = f.kcal || 1;
+    const pPerCal = pPer100 / kcalPer100; // grams of protein per calorie
+    const dense = kcalPer100; // calories per 100g
+    // drinks and vegetables are barely worth scoring on protein
+    const trivial = kcalPer100 < 25;
+    if (trivial)
+        return { tier: "free", label: "Barely counts", why: `${Math.round(kcalPer100)} cal per 100g — it hardly touches your day.` };
+    let score = 0;
+    score += Math.min(3, pPerCal * 25); // protein per calorie, the main thing
+    if (goal === "lean")
+        score += dense < 150 ? 1.2 : dense < 250 ? 0.4 : dense > 400 ? -1.4 : -0.4;
+    else if (goal === "muscle") {
+        // when you're trying to gain, easy energy is a feature, not a cost
+        if (dense >= 30 && dense <= 400 && (f.f || 0) < 15)
+            score += 0.9;
+        else if (dense > 400)
+            score += 0.5;
+    }
+    if (pPer100 >= 20)
+        score += 0.6;
+    if ((f.f || 0) > 25 && pPerCal < 0.04)
+        score -= 0.7;
+    if ((f.c || 0) > 50 && pPerCal < 0.02)
+        score -= 0.5;
+    if (score >= 2.6)
+        return { tier: "great", label: "Fits easily",
+            why: `${Math.round(pPer100)}g protein for ${Math.round(kcalPer100)} calories. Cheap protein — the kind of thing that makes hitting your target painless.` };
+    if (score >= 1.3)
+        return { tier: "good", label: "Fine",
+            why: `Reasonable balance. Fits your day without needing much thought.` };
+    return { tier: "poor", label: goal === "lean" ? "Costs you" : "Pair it up",
+        why: goal === "lean"
+            ? `${Math.round(kcalPer100)} calories per 100g and not much protein. Fine occasionally — just know what it's spending.`
+            : `Light on protein for what it costs. Nothing wrong with it — just put something with protein next to it.` };
+}
+const FIT_COLOUR = { great: "#35C26B", good: "#7FA8F0", poor: "#E5B94E", free: "#5C626B" };
 /* ============ IMPORT FROM OTHER APPS ============
    Withings, Apple Health, MacroFactor, Hevy and most others will export a
    CSV. Rather than guess at each format, read the headers and let you say
@@ -6393,6 +7198,7 @@ function PickExercise({ st, close, onPick, title }) {
     const [mus, setMus] = useState(null);
     const [tab, setTab] = useState("all");
     const [kitOnly, setKitOnly] = useState(true);
+    const [load, setLoad] = useState("any");
     const [openGrp, setOpenGrp] = useState({});
     const counts = useMemo(() => {
         const c = {};
@@ -6400,9 +7206,13 @@ function PickExercise({ st, close, onPick, title }) {
         return c;
     }, [st.sessions]);
     const list = EX.filter((e) => {
-        if (kitOnly && !e.kit.every((k) => st.kit.includes(k)))
+        if (kitOnly && st.kitFilter !== false && !e.kit.every((k) => st.kit.includes(k)))
             return false;
         if (tab === "done" && !counts[e.id])
+            return false;
+        if (load === "loaded" && !e.loaded)
+            return false;
+        if (load === "bw" && e.loaded)
             return false;
         if (mus && !(e.primary.includes(mus) || e.secondary.includes(mus)))
             return false;
@@ -6421,7 +7231,8 @@ function PickExercise({ st, close, onPick, title }) {
         React.createElement(SH, { title: title || "Add an exercise", sub: `${list.length} of ${EX.length}`, close: close }),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } },
             [["all", "All"], ["done", `Done before${Object.keys(counts).length ? ` · ${Object.keys(counts).length}` : ""}`]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l))),
-            React.createElement("button", { className: "il-chip" + (kitOnly ? " on" : ""), onClick: () => setKitOnly(!kitOnly) }, "My kit only")),
+            React.createElement("button", { className: "il-chip" + (kitOnly ? " on" : ""), onClick: () => setKitOnly(!kitOnly) }, "My kit only"),
+            [["any", "Any"], ["loaded", "With weight"], ["bw", "Bodyweight"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (load === v ? " on" : ""), onClick: () => setLoad(v) }, l)))),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 12, gap: 8 } },
             React.createElement(MuscleChip, { m: "chest", on: false, onClick: () => setMus(null) }),
             musList.map((m) => React.createElement(MuscleChip, { key: m, m: m, on: mus === m, onClick: () => setMus(mus === m ? null : m) }))),
@@ -6444,7 +7255,7 @@ function PickExercise({ st, close, onPick, title }) {
                                 : e.name.startsWith("Run") ? "🏃" : e.name.startsWith("Cyc") || e.name.startsWith("Stat") ? "🚲"
                                     : e.name.startsWith("Row") ? "🚣" : e.name.startsWith("Swim") ? "🏊" : e.name.startsWith("Skip") ? "🪢"
                                         : e.name.startsWith("Stair") ? "🪜" : "🏅")
-                            : React.createElement(FormDemo, { ex: e, h: 56, weight: false })),
+                            : React.createElement(FormDemo, { ex: e, h: 56 })),
                         React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                             React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, marginBottom: 3 } }, e.name),
                             React.createElement("div", { className: "il-sub", style: { margin: 0, lineHeight: 1.35 } }, e.aerobic
@@ -6535,7 +7346,7 @@ function LogCardio({ sheet, st, save, today, close, setSheet }) {
                     React.createElement("div", { className: "v" }, Math.round(Number(b.mins))),
                     React.createElement("div", { className: "l" }, "minutes")),
                 ex.dist && React.createElement("div", { className: "il-mini" },
-                    React.createElement("div", { className: "v", style: { fontSize: 17 } }, pace(b) || "\u2014"),
+                    React.createElement("div", { className: "v", style: { fontSize: 17 } }, pace(b) || "—"),
                     React.createElement("div", { className: "l" }, "pace"))))))),
         React.createElement("div", { style: { padding: "0 12px" } },
             React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => setBouts([...bouts, { mins: "", km: "", done: true }]) }, "+ Another bout today")),
@@ -6558,8 +7369,8 @@ function LogCardio({ sheet, st, save, today, close, setSheet }) {
                 React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)" } },
                     Math.round(h.mins),
                     " min",
-                    h.km ? ` \u00b7 ${Number(h.km).toFixed(1)} km \u00b7 ${pace(h)}` : "",
-                    " \\u00b7 ",
+                    h.km ? ` · ${Number(h.km).toFixed(1)} km · ${pace(h)}` : "",
+                    " \u00B7 ",
                     boutKcal(ex, h, kg),
                     " cal")))))),
         ex.cues.length > 1 && (React.createElement("div", { className: "il-card" },
@@ -6579,7 +7390,7 @@ function reviewDossier(st, a) {
     const P = st.profile;
     const L = [];
     const push = (h, ...lines) => { L.push(`## ${h}`); lines.filter(Boolean).forEach((x) => L.push(x)); L.push(""); };
-    push("WHO", `${P.sex || "unspecified"}, ${P.age}, ${P.heightCm}cm, currently ${P.weightKg}kg`, `Goal: ${{ muscle: "build muscle", lean: "get leaner", strength: "get stronger", health: "general health" }[P.goal] || P.goal}`, `${P.years ?? 2} years training, trains at home only, ${P.daysWk ?? 3} days a week, ${P.minsSess ?? 45} min a session, usually ${P.trainTime || "unspecified"}`, `Kit: ${st.kit.filter((k) => k !== "none").map((k) => (KIT.find((x) => x.id === k) || {}).label).join(", ") || "bodyweight only"}`, `Sleeps ${P.sleep ?? "?"}h${P.sleepQual ? `, quality ${P.sleepQual}` : ""}. Stress ${P.stress ?? "?"}/5. Job: ${P.job || "?"}`, manyOf(P.pain).length ? `Reports pain: ${manyOf(P.pain).join(", ")}` : null, manyOf(P.diet).length ? `Diet: ${manyOf(P.diet).join(", ")}` : null, manyOf(P.focusPart).length ? `Says the priority is: ${manyOf(P.focusPart).map((f) => (GOALS.find((g) => g.id === f) || {}).label || f).join(", ")}` : null, manyOf(P.derail).length ? `What derails them: ${manyOf(P.derail).join(", ")}` : null);
+    push("WHO", `${P.sex || "unspecified"}, ${P.age}, ${P.heightCm}cm, currently ${P.weightKg}kg`, `Goal: ${{ muscle: "build muscle", lean: "get leaner", strength: "get stronger", health: "general health" }[P.goal] || P.goal}`, `${P.years ?? 2} years training, trains at home only, ${P.daysWk ?? 3} days a week, ${P.minsSess ?? 45} min a session, usually ${P.trainTime || "unspecified"}`, `Kit: ${st.kit.filter((k) => k !== "none").map((k) => (KIT.find((x) => x.id === k) || {}).label).join(", ") || "bodyweight only"}`, `Training at ${st.where === "gym" ? "a gym" : "home"}. Equipment there: ${((st.equip || {})[st.where || "home"] || []).map((id) => (EQUIP.find((e2) => e2.id === id) || {}).name).filter(Boolean).join(", ") || "nothing listed"}`, `Sleeps ${P.sleep ?? "?"}h${P.sleepQual ? `, quality ${P.sleepQual}` : ""}. Stress ${P.stress ?? "?"}/5. Job: ${P.job || "?"}`, manyOf(P.pain).length ? `Reports pain: ${manyOf(P.pain).join(", ")}` : null, manyOf(P.diet).length ? `Diet: ${manyOf(P.diet).join(", ")}` : null, manyOf(P.focusPart).length ? `Says the priority is: ${manyOf(P.focusPart).map((f) => (GOALS.find((g) => g.id === f) || {}).label || f).join(", ")}` : null, manyOf(P.derail).length ? `What derails them: ${manyOf(P.derail).join(", ")}` : null);
     // week by week, 12 weeks back
     const weeks = [];
     for (let w = 0; w < 12; w++) {
@@ -6648,7 +7459,21 @@ function reviewDossier(st, a) {
     const prev = (st.reviews || [])[0];
     if (prev)
         push("WHAT YOU ADVISED LAST TIME", `On ${dlong(iso(new Date(prev.at)))}: ${prev.headline || "(no headline)"}`, prev.plan ? `You planned ${prev.plan.week?.sessions} sessions of ${prev.plan.week?.minutesEach} minutes. They ${prev.accepted ? "accepted it" : "did not accept it"}.` : null, "Say plainly whether that advice worked, and change course if it didn't.");
-    push("CURRENT ROUTINES", ...(st.routines || []).map((r) => `${r.name}: ${r.exercises.map((x) => `${exOf(x.exId)?.name} ${x.sets}x${x.lo ?? "?"}-${x.hi ?? "?"}`).join("; ")}`));
+    const doneCount = {};
+    st.sessions.forEach((sn) => sn.exercises.forEach((e) => { doneCount[e.exId] = (doneCount[e.exId] || 0) + 1; }));
+    push("ROUTINES THEY HAVE SAVED", "IMPORTANT: a saved routine is an intention, not a record. Times performed is what actually happened.", ...(st.routines || []).map((r) => {
+        const ex = r.exercises.map((x) => {
+            const n = doneCount[x.exId] || 0;
+            return `${exOf(x.exId)?.name} ${x.sets}x${x.lo ?? "?"}-${x.hi ?? "?"} (done ${n}x)`;
+        }).join("; ");
+        const everRun = st.sessions.some((sn) => sn.routineName === r.name);
+        return `${r.name} [${everRun ? "has been run" : "NEVER RUN — saved but not yet done"}]: ${ex}`;
+    }));
+    const never = (st.routines || []).flatMap((r) => r.exercises.map((x) => x.exId))
+        .filter((id, i, arr) => arr.indexOf(id) === i && !doneCount[id])
+        .map((id) => exOf(id)?.name).filter(Boolean);
+    if (never.length)
+        push("PLANNED BUT NEVER PERFORMED", `${never.join(", ")}. There is no log for any of these, so do not ask why they are doing them, whether they are working, or how they feel. There is nothing to comment on yet.`);
     return L.join("\n");
 }
 const PROF_PROMPT = `You are a strength and conditioning academic reviewing one person's training log.
@@ -6685,7 +7510,16 @@ Return ONLY a JSON object, no markdown fences:
 }
 
 Six to nine sections. Three to five questions, and only ones where the answer genuinely
-changes what you would prescribe — not questions whose answers are already in the data.`;
+changes what you would prescribe — not questions whose answers are already in the data.
+
+Hard rules on what you may not do:
+- Never comment on, question, or draw conclusions about an exercise they have not performed.
+  A saved routine is an intention. If something shows "done 0x", it has no data and no story.
+- Never ask why they chose an exercise. That is their business and the answer changes nothing
+  you would prescribe. Ask about constraints, time, pain and preference instead.
+- Never invent history. If the log is thin, say the log is thin.
+- If they have only just started logging, say so plainly and keep the review short. A short
+  honest review beats a long one built on four sessions.`;
 const PLAN_PROMPT = `Now write the coming week, using their answers.
 
 Return ONLY a JSON object, no markdown fences:
@@ -6697,7 +7531,10 @@ Return ONLY a JSON object, no markdown fences:
       "why": "one line on what this session is for",
       "exercises": [
         { "name": "exact name from their exercise list", "sets": number,
-          "lo": number, "hi": number, "rir": number, "note": "one short line, or empty" }
+          "lo": number, "hi": number, "rir": number,
+          "note": "one short line, or empty",
+          "changed": "if this differs from what they were doing, say what changed AND why, in one sentence. Otherwise empty.",
+          "basis": "if changed, the reasoning: the mechanism, and the evidence if there is any. One or two sentences. Otherwise empty." }
       ] }
   ],
   "changes": ["each thing that differs from what they were doing, and the reason"],
@@ -6712,7 +7549,20 @@ Rules:
 - Give an RIR target for every exercise. 1-2 for most work, 2-3 on the first heavy compound
   of a session, 0-1 only on the final set of an isolation movement.
 - Respect anything that aggravates a reported injury.
-- If their answers mean the sensible thing is to do less, prescribe less and say why.`;
+- If their answers mean the sensible thing is to do less, prescribe less and say why.
+
+DEFENDING WHAT YOU PRESCRIBE — this is the part that matters most.
+- Any change to sets, reps or exercise selection MUST have "changed" and "basis" filled in.
+  Cutting someone's bench from four sets to two without a stated reason is worthless advice,
+  and they will rightly ignore it.
+- "basis" means the actual reasoning, not a restatement. Bad: "to manage fatigue". Good:
+  "you're averaging 0.3 RIR on pressing, which is near-maximal every set; the hypertrophy
+  return above about 2 RIR is small (Robinson 2024) while the fatigue cost keeps climbing,
+  so two hard sets should hold your progress at a fraction of the recovery debt."
+- Be decisive. Commit to a number and defend it. Do not hedge with "you might consider".
+- Being decisive is not the same as being certain. Where the evidence is thin, say the
+  reasoning is mechanistic rather than evidenced, and say what would change your mind.
+- If nothing needs changing, leave "changed" empty. Do not manufacture changes to look useful.`;
 function DeepReview({ st, save, a, today, close, setSheet }) {
     const [stage, setStage] = useState("intro"); // intro | thinking | analysis | planning | plan
     const [res, setRes] = useState(null);
@@ -6721,7 +7571,77 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
     const [plan, setPlan] = useState(null);
     const [err, setErr] = useState("");
     const [elapsed, setElapsed] = useState(0);
+    const [chat, setChat] = useState([]);
+    const [ask2, setAsk2] = useState("");
+    const [chatBusy, setChatBusy] = useState(false);
+    const chatRef = useRef(null);
     const last = (st.reviews || [])[0];
+    /* Talking about the plan. It gets everything it had when it wrote the plan,
+       plus the conversation, and may hand back a revised plan.              */
+    const askPlan = async (preset) => {
+        const q = (preset || ask2).trim();
+        if (!q || chatBusy)
+            return;
+        setAsk2("");
+        setChatBusy(true);
+        setTimeout(() => chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+        setChat((c) => [...c, { role: "user", text: q }]);
+        try {
+            const history = chat.map((m) => `${m.role === "user" ? "THEY ASKED" : "YOU SAID"}: ${m.text}`).join("\n\n");
+            const txt = await callClaude(`You wrote this training plan and they have a question about it.
+
+If they ask WHY you prescribed something, give them the real answer, in this order:
+  1. The specific thing in THEIR data that prompted it — the number, the trend, the week.
+  2. The mechanism. Why that number means what you think it means, physiologically.
+  3. The evidence, if there is any. Name it: Robinson 2024 on proximity to failure, Refalo 2024
+     on failure versus reps in reserve, the volume dose-response literature, protein distribution
+     work. Say roughly how strong it is and where it disagrees with itself.
+  4. The size of the effect. If following your advice would change their results by a rounding
+     error, say so plainly — that is useful information, not a failure.
+  5. What would change your mind. Be concrete: "if you come back next week having hit the top of
+     the range at 2 RIR, I was wrong and we put the sets back."
+
+Be decisive. You are allowed to disagree with them and to say a change is a bad idea. Do not
+soften a recommendation you believe in. But do not pretend to certainty you do not have — if
+your reasoning is mechanistic rather than evidenced, say which it is. "I am fairly sure, and
+here is why" beats both false confidence and mush.
+
+Never comment on an exercise they have never performed. Length: as long as the reasoning
+genuinely needs, no longer.
+
+If the question means the plan itself should change, return a revised plan. If it doesn't, don't —
+most questions are questions, not change requests.
+
+Return ONLY JSON, no fences:
+{ "reply": "your answer, plain text",
+  "revised": null OR a complete replacement plan in exactly the same shape as before }
+
+=== THE PLAN YOU WROTE ===
+${JSON.stringify(plan)}
+
+=== YOUR ANALYSIS ===
+${res.headline}
+${res.sections.map((x) => `${x.title}: ${x.body}`).join("\n")}
+
+=== EXERCISES THEY CAN DO (exact names) ===
+${exList()}
+
+=== THEIR DATA ===
+${reviewDossier(st, a)}
+${history ? `\n=== THIS CONVERSATION SO FAR ===\n${history}` : ""}
+
+=== THEIR QUESTION ===
+${q}`, 6000, "deep");
+            const j = looseJson(txt) || { reply: txt.trim(), revised: null };
+            if (j.revised && Array.isArray(j.revised.plan))
+                setPlan(j.revised);
+            setChat((c) => [...c, { role: "coach", text: j.reply || txt.trim(), revised: !!j.revised }]);
+        }
+        catch (e) {
+            setChat((c) => [...c, { role: "coach", text: `Couldn't answer that — ${e.message || e}` }]);
+        }
+        setChatBusy(false);
+    };
     useEffect(() => {
         if (stage !== "thinking" && stage !== "planning")
             return;
@@ -6793,7 +7713,7 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
         const keep = mode === "replace" ? (st.routines || []).filter((r) => !r.generated) : (st.routines || []);
         save({
             ...st, routines: [...rts, ...keep],
-            reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, accepted: true },
+            reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, chat, accepted: true },
                 ...(st.reviews || [])].slice(0, 8),
         });
         close();
@@ -6828,8 +7748,8 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
             React.createElement("div", { style: { padding: "0 12px" } },
                 React.createElement("button", { className: "il-btn", onClick: analyse2 }, "Analyse everything"),
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } }, (st.reviewModel || "mid") === "deep"
-                    ? "Running on Opus \u00b7 about 11p \u00b7 takes a minute or two"
-                    : "Running on Sonnet \u00b7 about 4p \u00b7 takes about a minute"))),
+                    ? "Running on Opus · about 11p · takes a minute or two"
+                    : "Running on Sonnet · about 4p · takes about a minute"))),
         (stage === "thinking" || stage === "planning") && (React.createElement("div", { className: "il-card", style: { textAlign: "center", padding: "40px 20px" } },
             React.createElement("div", { className: "il-d", style: { fontSize: 30, fontWeight: 600, marginBottom: 10 } }, clock(elapsed)),
             React.createElement("div", { className: "il-note" }, stage === "thinking"
@@ -6891,6 +7811,11 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
                         d.minutes,
                         " min")),
                 d.why && React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, d.why),
+                (d.exercises || []).some((x) => x.changed) && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginBottom: 6, color: "var(--gold)" } },
+                    (d.exercises || []).filter((x) => x.changed).length,
+                    " change",
+                    (d.exercises || []).filter((x) => x.changed).length > 1 ? "s" : "",
+                    " here \u2014 each with its reasoning.")),
                 (d.exercises || []).map((x, j) => {
                     const hit = EX.find((e) => e.name.toLowerCase() === String(x.name).toLowerCase())
                         || EX.find((e) => e.name.toLowerCase().includes(String(x.name).toLowerCase()));
@@ -6904,7 +7829,13 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
                                 "\u2013",
                                 x.hi,
                                 x.rir != null ? ` @ ${x.rir} RIR` : "")),
-                        x.note && React.createElement("div", { className: "il-sub", style: { marginTop: 3 } }, x.note)));
+                        x.note && React.createElement("div", { className: "il-sub", style: { marginTop: 3 } }, x.note),
+                        x.changed ? (React.createElement("div", { style: { marginTop: 7, padding: "9px 11px", background: "var(--c2)", borderRadius: 9, borderLeft: "2px solid var(--gold)" } },
+                            React.createElement("div", { style: { fontSize: 12.5, color: "var(--gold)", marginBottom: x.basis ? 5 : 0 } },
+                                "Changed \u00B7 ",
+                                x.changed),
+                            x.basis && React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, x.basis),
+                            React.createElement("button", { className: "il-chip", style: { marginTop: 9 }, onClick: () => askPlan(`Why ${x.sets} sets of ${hit?.name || x.name}? Give me the evidence, the effect size, and what would change your mind.`) }, "Make the case properly"))) : (React.createElement("button", { className: "il-chip", style: { marginTop: 7 }, onClick: () => askPlan(`Why have you prescribed ${x.sets} × ${x.lo}–${x.hi} at ${x.rir} RIR for ${hit?.name || x.name}?`) }, "Why?"))));
                 })))),
             (plan.changes || []).length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What's different, and why"),
@@ -6918,6 +7849,21 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
                     c))))),
             err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
                 React.createElement("div", { className: "il-note" }, err)),
+            React.createElement("div", { className: "il-card", ref: chatRef },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Questions about this plan?"),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Push back on it. It has your whole history and the reasoning behind this week in front of it, so ask why it chose something, tell it what won't work, or ask it to change a session."),
+                chat.map((m, i) => m.role === "user" ? (React.createElement("div", { key: i, style: { display: "flex", justifyContent: "flex-end", padding: "6px 0" } },
+                    React.createElement("div", { style: { background: "var(--acc)", color: "#fff", borderRadius: "13px 13px 4px 13px",
+                            padding: "10px 13px", maxWidth: "88%", fontSize: 14 } }, m.text))) : (React.createElement("div", { key: i, style: { padding: "6px 0" } },
+                    React.createElement("div", { style: { background: "var(--c2)", borderRadius: "13px 13px 13px 4px", padding: "11px 13px", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap" } },
+                        m.text,
+                        m.revised && React.createElement("div", { className: "il-note", style: { marginTop: 10, color: "var(--grn)", fontSize: 12 } }, "The plan above has been updated."))))),
+                chatBusy && React.createElement("div", { className: "il-empty", style: { padding: "14px 0" } }, "Thinking\u2026"),
+                React.createElement("div", { className: "il-fld", style: { marginTop: 10 } },
+                    React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1 }, placeholder: "Ask it something\u2026", value: ask2, enterKeyHint: "send", onChange: (e) => setAsk2(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                            askPlan(); } }),
+                    React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: chatBusy || !ask2.trim(), onClick: askPlan }, "Ask")),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } }, ["Why that exercise order?", "Can you make Thursday shorter?", "Swap something out", "Is this too much?"].map((q) => (React.createElement("button", { key: q, className: "il-chip", onClick: () => { setAsk2(q); setTimeout(() => askPlan(q), 30); } }, q))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => accept("replace") }, "Use this instead of my current sessions"),
                 React.createElement("button", { className: "il-btn g", onClick: () => accept("add") }, "Add it alongside what I've got"),
@@ -6927,6 +7873,403 @@ function DeepReview({ st, save, a, today, close, setSheet }) {
                     } }, "Just save the review, don't change anything")),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Either way the review is kept, so the next one can tell you whether this worked."))));
+}
+function PastReviews({ st, save, close }) {
+    const [open, setOpen] = useState(null);
+    const rs = st.reviews || [];
+    const conf = (c) => c === "solid" ? ["#10281A", "#6FDC9B", "Solid"] : c === "suggestive" ? ["#132241", "#7FA8F0", "Suggestive"] : ["#241F12", "#E5C87E", "Speculative"];
+    if (open != null && rs[open]) {
+        const r = rs[open];
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: dlong(iso(new Date(r.at))), sub: r.accepted ? "You took this plan on" : "You didn't take the plan", close: () => setOpen(null) }),
+            React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "The headline"),
+                React.createElement("div", { style: { fontSize: 15.5, lineHeight: 1.45 } }, r.headline)),
+            (r.sections || []).map((sec, i) => {
+                const [bg, fg, word] = conf(sec.confidence);
+                return (React.createElement("div", { key: i, className: "il-card" },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                        React.createElement("div", { className: "il-h2", style: { minWidth: 0 } }, sec.title),
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
+                                background: bg, color: fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0 } }, word)),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 13.5, whiteSpace: "pre-wrap" } }, sec.body)));
+            }),
+            r.plan && React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "The week it wrote"),
+                (r.plan.plan || []).map((d, i) => (React.createElement("div", { key: i, className: "il-card" },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                        React.createElement("div", { className: "il-h2" },
+                            d.day ? `${d.day} · ` : "",
+                            d.name),
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                            d.minutes,
+                            " min")),
+                    (d.exercises || []).map((x, j) => (React.createElement("div", { key: j, className: "il-row", style: { padding: "5px 0" } },
+                        React.createElement("span", { style: { fontSize: 13 } }, x.name),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--dim)" } },
+                            x.sets,
+                            " \u00D7 ",
+                            x.lo,
+                            "\u2013",
+                            x.hi)))))))),
+            (r.chat || []).length > 0 && (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What you asked it"),
+                r.chat.map((m, i) => (React.createElement("div", { key: i, style: { padding: "7px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                    React.createElement("div", { className: "il-lbl", style: { color: m.role === "user" ? "var(--acc)" : "var(--dim)", marginBottom: 3 } }, m.role === "user" ? "You" : "Coach"),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 13, whiteSpace: "pre-wrap" } }, m.text)))))));
+    }
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Past reviews", sub: `${rs.length} kept`, close: close }),
+        !rs.length && React.createElement("div", { className: "il-empty" }, "Nothing yet. Run a full review from the You tab and it'll be kept here so you can read it again."),
+        rs.map((r, i) => (React.createElement("div", { key: i, className: "il-list", style: { margin: "0 12px 8px" } },
+            React.createElement("div", { className: "il-li", onClick: () => setOpen(i) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 500, marginBottom: 3 } }, dlong(iso(new Date(r.at)))),
+                    React.createElement("div", { className: "il-sub", style: { lineHeight: 1.4 } }, r.headline),
+                    React.createElement("div", { className: "il-sub il-n", style: { marginTop: 4, color: r.accepted ? "var(--grn)" : "var(--faint)" } },
+                        r.accepted ? "Plan taken on" : "Plan not taken",
+                        r.chat?.length ? ` · ${r.chat.filter((m) => m.role === "user").length} questions asked` : "")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))));
+}
+function AnatMuscle({ sheet, st, a, close, setSheet }) {
+    const m = MUSBY[sheet.m];
+    if (!m)
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "Muscle", close: close }),
+            React.createElement("div", { className: "il-empty" }, "Not found."));
+    const v = (a.anatMap || {})[m.id] || 0;
+    const rows = EX.map((e) => ({ e, share: (anatOf(e)[m.id] || 0) }))
+        .filter((x) => x.share > 0 && x.e.kit.every((k) => st.kit.includes(k)))
+        .sort((x, y) => y.share - x.share);
+    const prime = rows.filter((x) => x.share >= 1);
+    const help = rows.filter((x) => x.share < 1);
+    const tone = v === 0 ? "var(--faint)" : v < m.lo ? "var(--gold)" : v <= m.hi ? "var(--grn)" : "#7F5AF0";
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: m.plain, sub: m.anat, close: close }),
+        React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${tone}` } },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { className: "il-lbl" }, "Sets a week"),
+                React.createElement("span", { className: "il-d il-n", style: { fontSize: 25, fontWeight: 600, color: tone } }, v)),
+            React.createElement("div", { className: "il-bar", style: { marginBottom: 8 } },
+                React.createElement("i", { style: { width: Math.min(100, (v / m.hi) * 100) + "%", background: tone } })),
+            React.createElement("div", { className: "il-note" }, v === 0 ? `Nothing in four weeks. It wants ${m.lo} to ${m.hi} hard sets a week to grow, and about ${Math.max(2, Math.round(m.lo / 3))} just to hold its ground.`
+                : v < m.lo ? `Short of the ${m.lo} to ${m.hi} that usually works. Another ${Math.ceil(m.lo - v)} sets a week would put it in range.`
+                    : v <= m.hi ? `Inside the ${m.lo} to ${m.hi} range. Leave it alone.`
+                        : `Above ${m.hi}. Past that the returns flatten while the fatigue doesn't, so the extra is mostly costing you recovery.`)),
+        prime.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Trains it directly"),
+            prime.map(({ e }) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => setSheet({ t: "info", exId: e.id }) },
+                React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center" } },
+                    React.createElement("div", { style: { width: 42, height: 50, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
+                        React.createElement(FormDemo, { ex: e, h: 50 })),
+                    React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14 } }, e.name),
+                        React.createElement("div", { className: "il-sub" }, Object.entries(anatOf(e)).filter(([, w]) => w >= 1).map(([k]) => MUSBY[k]?.plain).filter(Boolean).slice(0, 3).join(", "))),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        help.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Works it as an assister"),
+            help.slice(0, 12).map(({ e, share }) => (React.createElement("div", { key: e.id, className: "il-list", style: { margin: "0 12px 6px" } },
+                React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "info", exId: e.id }) },
+                    React.createElement("span", { style: { fontSize: 13.5 } }, e.name),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, share >= 0.5 ? "meaningful" : "stabilising")))))));
+}
+function Programmes({ st, save, a, close, setSheet }) {
+    const [open, setOpen] = useState(null);
+    const [built, setBuilt] = useState("");
+    const days = Number(st.profile.daysWk) || 3;
+    const HOME = [
+        ["Not at home", "var(--red)", "This one needs a barbell and a rack. Included so you know what it is, not so you run it."],
+        ["A stretch", "var(--gold)", "You could approximate it, but the parts that make it what it is need loading you haven't got."],
+        ["Workable", "#7FA8F0", "Runs at home with some compromise, usually on legs."],
+        ["Suits home training", "var(--grn)", "Nothing here needs a barbell. Runs as designed."],
+    ];
+    if (open) {
+        const p = PROGRAMMES.find((x) => x.id === open);
+        const [label, colour, note] = HOME[p.home];
+        const fits = p.days <= days + 1;
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: p.name, sub: `${p.days} days a week · ${p.tag}`, close: () => setOpen(null) }),
+            React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${colour}` } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "At home, with what you own"),
+                    React.createElement("span", { style: { fontSize: 12, fontWeight: 600, color: colour } }, label)),
+                React.createElement("div", { className: "il-note" }, p.caveat)),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Who it's for"),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, p.who),
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Why it's built that way"),
+                React.createElement("div", { className: "il-note" }, p.why)),
+            !fits && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-note" },
+                    "It wants ",
+                    p.days,
+                    " days a week and you've told me you train ",
+                    days,
+                    ". Running a ",
+                    p.days,
+                    "-day programme on",
+                    " ",
+                    days,
+                    " days isn't a scaled-down version of it \u2014 it's a different programme with the same name."))),
+            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "The week"),
+            p.sessions.map(([name, key, note2], i) => (React.createElement("div", { key: i, className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                    React.createElement("div", { className: "il-h2" },
+                        ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][i] || `Day ${i + 1}`,
+                        " \u00B7 ",
+                        name),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, (SPLITS[key] || {}).name || key)),
+                React.createElement("div", { className: "il-note" }, note2)))),
+            built && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
+                React.createElement("div", { className: "il-note", style: { color: "var(--grn)" } }, built)),
+            React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", disabled: p.home === 0, onClick: () => {
+                        const made = p.sessions.map(([name, key], i) => {
+                            const r = buildSplit(key, st, a);
+                            if (!r)
+                                return null;
+                            return { ...r, id: "pg" + Date.now() + i, name: `${name}`, blurb: `${p.name}. ${p.sessions[i][2]}` };
+                        }).filter(Boolean);
+                        if (!made.length) {
+                            setBuilt("Couldn't build it from the kit you've got.");
+                            return;
+                        }
+                        save({ ...st, routines: [...made, ...(st.routines || []).filter((r) => !r.generated)] });
+                        setBuilt(`${made.length} sessions built and waiting on your Train tab.`);
+                    } }, p.home === 0 ? "Can't be built with dumbbells" : `Build these ${p.sessions.length} sessions`),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach whether this suits me")),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Building it fills each day with exercises from your own kit, at the sets and reps that suit your goal and training age. The shape is the programme's; the contents are yours.")));
+    }
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Known programmes", sub: "The splits people actually run, and who they're for", close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "None of these is magic. The differences between them matter far less than whether you turn up, and the best one is whichever you'll still be running in six months. They're here because a familiar structure is easier to stick to than something invented on the spot.")),
+        [3, 2, 1, 0].map((rating) => {
+            const list = PROGRAMMES.filter((p) => p.home === rating);
+            if (!list.length)
+                return null;
+            const [label, colour, note] = HOME[rating];
+            return (React.createElement("div", { key: rating },
+                React.createElement("div", { className: "il-row", style: { margin: "20px 14px 4px" } },
+                    React.createElement("span", { className: "il-lbl", style: { color: colour } }, label)),
+                React.createElement("div", { className: "il-note", style: { margin: "0 14px 10px", fontSize: 11.5 } }, note),
+                list.map((p) => (React.createElement("div", { key: p.id, className: "il-rt", onClick: () => { setOpen(p.id); setBuilt(""); } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                        React.createElement("div", { className: "il-h2", style: { minWidth: 0 } }, p.name),
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } },
+                            p.days,
+                            " days")),
+                    React.createElement("div", { className: "il-sub", style: { marginBottom: 6 } }, p.tag),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, p.who),
+                    p.days === days && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--grn)" } },
+                        "Matches the ",
+                        days,
+                        " days you train.")))))));
+        }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What actually decides this"),
+            React.createElement("div", { className: "il-note" }, "How many days you'll genuinely do, and whether each muscle gets trained about twice a week. Everything else is preference. A three-day full body and a six-day push pull legs both work; a five-day programme you do three days of works less well than a three-day programme you finish.")));
+}
+/* ============ EQUIPMENT ============
+   Two places you might train, each with its own kit. What you tick decides
+   which exercises the app will offer you — and you can turn that filter
+   off whenever you want to see everything.                            */
+const EQ_CATS = ["Free weights", "Benches & racks", "Bars & bodyweight", "Bands & cables", "Machines", "Cardio", "Other"];
+const eqById = Object.fromEntries(EQUIP.map((e) => [e.id, e]));
+/* what the exercise library still calls things */
+const oldKitFor = (ids) => {
+    const out = new Set(["none"]);
+    ids.forEach((id) => { const m = eqById[id]?.maps; if (m)
+        out.add(m); });
+    return [...out];
+};
+const EQ_PROMPT = `You are looking at a photograph of gym or home training equipment.
+
+Return ONLY a JSON object, no fences:
+{ "items": [ { "name": "what it is, plainly", "match": "the closest id from the list below, or null",
+               "confidence": "high" | "medium" | "low" } ],
+  "notes": "anything ambiguous" }
+
+Only list equipment you can actually see. Do not guess at things that might be out of frame.
+If you can see a rack of dumbbells, that is one item, not twenty.`;
+function Equipment({ st, save, close, setSheet }) {
+    const [where, setWhere] = useState(st.where || "home");
+    const [q, setQ] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [found, setFound] = useState(null);
+    const [err, setErr] = useState("");
+    const file = useRef(null);
+    const eq = st.equip || { home: [], gym: [] };
+    const mine = eq[where] || [];
+    const toggle = (id) => {
+        const next = mine.includes(id) ? mine.filter((x) => x !== id) : [...mine, id];
+        save({ ...st, equip: { ...eq, [where]: next } });
+    };
+    const shot = async (e) => {
+        const f = e.target.files?.[0];
+        if (!f)
+            return;
+        setBusy(true);
+        setErr("");
+        setFound(null);
+        try {
+            const url = await readPhoto(f, 1100, 0.82);
+            const list = EQUIP.map((x) => `${x.id} = ${x.name}`).join("\n");
+            const txt = await callClaude([
+                { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
+                { type: "text", text: `${EQ_PROMPT}\n\nTHE LIST\n${list}` },
+            ], 1200, "cheap");
+            const j = looseJson(txt);
+            if (!j || !Array.isArray(j.items) || !j.items.length)
+                throw new Error("Couldn't make out any equipment.");
+            setFound(j);
+        }
+        catch (x) {
+            setErr(x.message || "Couldn't read that photo.");
+        }
+        setBusy(false);
+    };
+    const list = q
+        ? EQUIP.filter((x) => x.name.toLowerCase().includes(q.toLowerCase()) || x.cat.toLowerCase().includes(q.toLowerCase()))
+        : null;
+    const usable = EX.filter((x) => x.kit.every((k) => oldKitFor(mine).includes(k))).length;
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "My equipment", sub: `${mine.length} things at ${where === "home" ? "home" : "the gym"}`, close: close }),
+        React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["home", "At home"], ["gym", "At the gym"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (where === k ? " on" : ""), onClick: () => setWhere(k) },
+            l,
+            (eq[k] || []).length ? ` · ${(eq[k] || []).length}` : "")))),
+        React.createElement("div", { className: "il-card", style: { marginTop: 10 } },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { className: "il-lbl" }, "Filter exercises to my kit"),
+                React.createElement("button", { className: "il-chip" + (st.kitFilter !== false ? " on" : ""), onClick: () => save({ ...st, kitFilter: st.kitFilter === false }) }, st.kitFilter !== false ? "On" : "Off")),
+            React.createElement("div", { className: "il-note" }, st.kitFilter !== false
+                ? `On. You'll only be offered the ${usable} exercises you can actually do with what you've ticked.`
+                : "Off. Every exercise is offered, whether you can do it or not. Useful for planning ahead."),
+            React.createElement("div", { className: "il-row", style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 13.5 } }, "Training at"),
+                    React.createElement("div", { className: "il-sub" }, "Which kit list the app uses right now")),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } }, [["home", "Home"], ["gym", "Gym"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + ((st.where || "home") === k ? " on" : ""), onClick: () => save({ ...st, where: k, kit: oldKitFor(eq[k] || []) }) }, l)))))),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: file, style: { display: "none" }, onChange: shot }),
+            React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => file.current?.click() }, busy ? "Looking…" : "Photograph what's there"),
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search equipment\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", value: q, onChange: (e) => setQ(e.target.value) })),
+        err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-note" }, err)),
+        found && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "In that photo"),
+            found.items.map((it, i) => {
+                const hit = it.match && eqById[it.match];
+                const on = hit && mine.includes(hit.id);
+                return (React.createElement("div", { key: i, className: "il-row", style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 13.5 } }, hit ? hit.name : it.name),
+                        React.createElement("div", { className: "il-sub" },
+                            hit ? hit.cat : "not in the list — add it by hand",
+                            " \u00B7 ",
+                            it.confidence)),
+                    hit && React.createElement("button", { className: "il-chip" + (on ? " on" : ""), onClick: () => toggle(hit.id) }, on ? "Added" : "Add")));
+            }),
+            found.notes && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, found.notes),
+            React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => {
+                    const ids = found.items.map((i) => i.match).filter((m) => m && eqById[m]);
+                    save({ ...st, equip: { ...eq, [where]: [...new Set([...mine, ...ids])] } });
+                    setFound(null);
+                } }, "Add everything it found"))),
+        list ? (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } },
+                list.length,
+                " match",
+                list.length === 1 ? "" : "es"),
+            list.map((x) => (React.createElement("div", { key: x.id, className: "il-list", style: { margin: "0 12px 6px" } },
+                React.createElement("div", { className: "il-li", onClick: () => toggle(x.id) },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14 } }, x.name),
+                        React.createElement("div", { className: "il-sub" }, x.cat)),
+                    React.createElement("button", { className: "il-chip" + (mine.includes(x.id) ? " on" : "") }, mine.includes(x.id) ? "Have it" : "Add"))))))) : EQ_CATS.map((cat) => {
+            const items = EQUIP.filter((x) => x.cat === cat);
+            const n = items.filter((x) => mine.includes(x.id)).length;
+            return (React.createElement("div", { key: cat },
+                React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
+                    React.createElement("span", { className: "il-lbl" }, cat),
+                    n > 0 && React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                        n,
+                        " of ",
+                        items.length)),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", padding: "0 12px" } }, items.map((x) => (React.createElement("button", { key: x.id, className: "il-chip" + (mine.includes(x.id) ? " on" : ""), onClick: () => toggle(x.id) }, x.name)))),
+                items.filter((x) => mine.includes(x.id) && WEIGHTED.includes(x.id)).map((x) => {
+                    const c = cfgFor(st, x.id);
+                    const summary = c.mode === "range"
+                        ? `${c.min}–${c.max}kg in ${c.step}kg steps`
+                        : (c.weights || []).length ? `${[...c.weights].sort((p, q) => p - q).join(", ")}kg` : "no weights set";
+                    return (React.createElement("div", { key: x.id, className: "il-list", style: { margin: "8px 12px 0" } },
+                        React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "eqw", id: x.id }) },
+                            React.createElement("div", { style: { minWidth: 0 } },
+                                React.createElement("div", { style: { fontSize: 13.5 } },
+                                    x.name,
+                                    " \u2014 what it loads"),
+                                React.createElement("div", { className: "il-sub" },
+                                    summary,
+                                    " \u00B7 ",
+                                    (c.qty || 1) === 1 ? "one of them" : (c.qty || 1) === 2 ? "a pair" : `${c.qty} of them`)),
+                            React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))));
+                })));
+        }),
+        React.createElement("div", { className: "il-card", style: { marginTop: 18 } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What this unlocks"),
+            React.createElement("div", { className: "il-ring", style: { marginBottom: 12 } },
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, mine.length),
+                    React.createElement("div", { className: "l" }, "things ticked")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, usable),
+                    React.createElement("div", { className: "l" }, "exercises")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, new Set(EX.filter((x) => x.kit.every((k) => oldKitFor(mine).includes(k))).flatMap((x) => Object.keys(anatOf(x)))).size),
+                    React.createElement("div", { className: "l" }, "muscles reachable"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { save({ ...st, kit: oldKitFor(mine), where }); close(); } }, "Use this kit and close")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Machines and barbells are in the list so a gym setup is properly described, but the exercise library is built around what you can do at home. Ticking a leg press won't invent leg press exercises \u2014 it tells the coach what's available when it writes you a session.")));
+}
+function Tips({ st, save, a, close, setSheet, go }) {
+    const readAll = coachRead(st, a);
+    const hidden = st.hiddenTips || [];
+    const read = readAll.filter((r) => !hidden.includes(r.id));
+    const acts = st.actions || [];
+    const doneIds = acts.filter((x) => x.status === "done").map((x) => x.id);
+    const hide = (id) => save({ ...st, hiddenTips: [...hidden, id] });
+    const markDone = (id) => save({ ...st,
+        actions: [{ id, status: "done", date: iso(new Date()) }, ...acts.filter((x) => x.id !== id)].slice(0, 30) });
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Suggestions", sub: read.length ? `${read.length} worth a look, most important first` : "Nothing outstanding", close: close }),
+        read.length === 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Nothing needs fixing"),
+            React.createElement("div", { className: "il-note" }, "Everything I check is where it should be, or you have dismissed it. That is a good place to be."))),
+        read.map((r, i) => (React.createElement("div", { key: r.id, className: "il-card", style: { borderLeft: `3px solid ${r.sev >= 5 ? "var(--red)" : r.sev >= 4 ? "var(--gold)" : i === 0 ? "var(--grn)" : "var(--line)"}` } },
+            i === 0 && r.sev >= 4 && React.createElement("div", { className: "il-tag t3", style: { display: "inline-block", marginBottom: 10 } }, "WORTH ACTING ON"),
+            React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } },
+                r.title,
+                doneIds.includes(r.id) ? " \u2713" : ""),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, r.body),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("button", { className: "il-btn sm" + (i === 0 ? "" : " g"), style: { flex: 1 }, onClick: () => { markDone(r.id); if (r.goto) {
+                        close();
+                        setTimeout(() => go(r.goto), 40);
+                    } } },
+                    r.action,
+                    r.goto ? " \u2192" : ""),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => hide(r.id) }, "Dismiss")),
+            doneIds.includes(r.id) && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--faint)" } }, "You have taken this on \\u2014 it drops off once the number behind it moves.")))),
+        hidden.length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { className: "il-lbl" },
+                    hidden.length,
+                    " dismissed"),
+                React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, hiddenTips: [] }) }, "Bring them back")),
+            React.createElement("div", { className: "il-note" }, "Gone for good unless you want them again. They will not reappear on their own, even if the number behind one gets worse."))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "These come from rules run against your own logs \\u2014 volume per muscle, how hard you have been training, adherence, how long you have been in a deficit. Ordered by how much they matter, not how recent they are.")));
 }
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
@@ -7199,8 +8542,9 @@ function Body({ st, save, a, setSheet }) {
         view === "model" && (React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Last 4 weeks"),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Green means the right amount of work each week. Conditioning counts at half."),
-                React.createElement(Body3D, { weekly: a.weeklyMap, onPick: (m) => setSheet({ t: "muscle", m }) }),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Forty-one muscles, each with its own useful weekly range. Green is inside it, amber is short, red is barely touched, purple is more than pays."),
+                React.createElement(Body3D, { weekly: a.anatMap, onPick: (m) => setSheet({ t: "anatmus", m }) }),
+                React.createElement(MuscleList, { weekly: a.anatMap, sel: null, onPick: (m) => setSheet({ t: "anatmus", m }) }),
                 React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
                     React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "volume" }) }, "What volume actually works for me"),
                     React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "ask", ctx: "body" }) }, "Ask coach about my coverage"))),
@@ -7278,7 +8622,7 @@ function Progress({ a, setSheet }) {
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["lift", "By exercise"], ["when", "What helps"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (view === k ? " on" : ""), onClick: () => setView(k) }, l)))),
         view === "lift" && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: { padding: "12px 12px 0" } },
-                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search exercise\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", value: q, onChange: (e) => setQ(e.target.value) })),
+                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search exercise\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", onFocus: (e) => setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 260), value: q, onChange: (e) => setQ(e.target.value) })),
             React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
                 React.createElement("button", { className: "il-chip" + (grp === "all" ? " on" : ""), onClick: () => setGrp("all") }, "All"),
                 Object.entries(GROUPS).filter(([k]) => k !== "cardio").map(([k, g]) => (React.createElement("button", { key: k, className: "il-chip" + (grp === k ? " on" : ""), onClick: () => setGrp(k) }, g.label))),
@@ -7661,6 +9005,20 @@ function coachRead(st, a) {
     const db = dietBreak(st, a);
     if (db)
         push(3, "dietbreak", `${db.weeks} weeks in a deficit without a break`, `Past a couple of months, a planned week back at maintenance — about ${db.target} calories — makes the next block easier to hold and gives your appetite and training a rest. It isn't lost progress; it's what makes the rest of it stick.`, "Take a week at maintenance", { sheet: { t: "coach" } });
+    // a lift that has run out of iron
+    const ceil = ceilingFor(st);
+    if (ceil.top > 0) {
+        const maxed = Object.entries(a.byEx || {}).map(([id, h]) => {
+            const ex = exOf(id);
+            const last = h[h.length - 1];
+            if (!ex || !ex.loaded || !last)
+                return null;
+            const w = last.best?.w || 0;
+            return w >= ceil.top - 0.01 ? ex.name : null;
+        }).filter(Boolean);
+        if (maxed.length)
+            push(3, "maxed", `${maxed.length > 1 ? "Some lifts have" : maxed[0] + " has"} outgrown your weights`, `${maxed.slice(0, 3).join(", ")} ${maxed.length > 1 ? "are" : "is"} at ${W(ceil.top)}, which is everything you own. From here you add reps, slow the lowering to three or four seconds, shorten the rest, or switch to a single-limb version so one side carries what two used to. All of those keep the stimulus climbing without more iron.`, "See what to do instead", { tab: "train" });
+    }
     const dl = deloadCheck(st, a);
     if (dl.need)
         push(4, "deload", "You need an easy week, not a harder one", `${dl.streak} weeks of hard training with no break, and ${dl.down > 0 ? `${dl.down} of your lifts ${dl.down === 1 ? "is" : "are"} going backwards` : "your lifts have gone flat"}. That pattern is fatigue, not a bad programme. Keep the weights exactly where they are and halve the sets for a week — start any routine in deload mode.`, "Run this week as a deload", { tab: "train" });
@@ -7716,7 +9074,7 @@ function You({ st, save, a, setSheet, go }) {
     const done = answered(P), pct = Math.round((done / ALLQ.length) * 100);
     const readAll = coachRead(st, a);
     const read = readAll.filter((r) => !(st.hiddenTips || []).includes(r.id));
-    const top = read[0] || readAll[0] || { id: "none", sev: 1, title: "Nothing needs fixing", body: "Everything I check is where it should be.", action: "Carry on" };
+    const top = read[0] || null;
     const rest = read.slice(1);
     const acts = st.actions || [];
     const T = targets(P, a.maint || estMaint(P));
@@ -7742,6 +9100,22 @@ function You({ st, save, a, setSheet, go }) {
                 React.createElement("i", { style: { width: pct + "%", background: "var(--acc)" } })),
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "intake" }) }, done === 0 ? "Start" : "Carry on"),
             React.createElement("button", { className: "il-btn g", style: { marginTop: 8 }, onClick: () => setSheet({ t: "importwo" }) }, "Import past workouts from screenshots"))),
+        (() => {
+            const eq = st.equip || { home: [], gym: [] };
+            const w = st.where || "home";
+            const n = (eq[w] || []).length;
+            const usable = EX.filter((x) => x.kit.every((k) => (st.kit || ["none"]).includes(k))).length;
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--acc)" } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "My equipment"),
+                    React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "equip" }) }, n ? `${n} at ${w === "home" ? "home" : "the gym"}` : "Set it up")),
+                React.createElement("div", { className: "il-note" }, n
+                    ? `Training at ${w === "home" ? "home" : "the gym"}. ${usable} exercises available${st.kitFilter === false ? ", filter off so you're shown everything" : ""}.`
+                    : "Tell me what you've got, at home and at the gym, and everything the app offers you narrows to what you can actually do."),
+                n > 0 && React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 10 } }, [["home", "Home"], ["gym", "Gym"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (w === k ? " on" : ""), onClick: () => save({ ...st, where: k, kit: oldKitFor(eq[k] || []) }) },
+                    l,
+                    (eq[k] || []).length ? ` · ${(eq[k] || []).length}` : ""))))));
+        })(),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything")),
@@ -7757,33 +9131,23 @@ function You({ st, save, a, setSheet, go }) {
                 React.createElement("div", { className: "il-note" }, lastR.headline),
                 days >= 7 && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "A week's worth of new data since then \u2014 worth running it again.")));
         })(),
-        React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "This week, one thing"),
-        React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${top.sev >= 5 ? "var(--red)" : top.sev >= 4 ? "var(--gold)" : "var(--grn)"}` } },
-            top.sev >= 5 && React.createElement("div", { className: "il-tag t3", style: { display: "inline-block", marginBottom: 10 } }, "WORTH ACTING ON"),
-            React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, top.title),
-            React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, top.body),
-            React.createElement("div", { style: { display: "flex", gap: 8 } },
-                React.createElement("button", { className: "il-btn sm", style: { flex: 1 }, onClick: () => { markDone(top.id, "done"); if (top.goto)
-                        go(top.goto); } },
-                    top.action,
-                    top.goto ? " →" : ""),
-                React.createElement("button", { className: "il-btn g sm", onClick: () => hide(top.id) }, "Dismiss")),
-            doneIds.includes(top.id) && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--faint)" } }, "You've taken this one on already \u2014 it'll drop off the list once the number behind it moves.")),
-        rest.length > 0 && React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Then, in order"),
-            rest.map((r) => (React.createElement("div", { key: r.id, className: "il-ins " + (r.sev >= 4 ? "w" : r.sev >= 3 ? "" : "g"), style: r.goto ? { cursor: "pointer" } : undefined, onClick: r.goto ? () => { markDone(r.id, "done"); go(r.goto); } : undefined },
-                React.createElement("div", { className: "il-row", style: { alignItems: "flex-start" } },
-                    React.createElement("h4", { style: { minWidth: 0 } },
-                        r.title,
-                        doneIds.includes(r.id) ? " ✓" : ""),
-                    r.goto && React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0, marginLeft: 8 } }, "\u203A")),
-                React.createElement("div", { className: "il-note" }, r.body),
-                React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
-                    React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: (e) => { e.stopPropagation(); markDone(r.id, "done"); if (r.goto)
-                            go(r.goto); } },
-                        r.action,
-                        r.goto ? " →" : ""),
-                    React.createElement("button", { className: "il-btn g sm", onClick: (e) => { e.stopPropagation(); hide(r.id); } }, "Dismiss")))))),
+        top ? (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
+            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "tips" }) },
+                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "flex-start" } },
+                    React.createElement("span", { style: { width: 7, height: 7, borderRadius: 4, marginTop: 6, flexShrink: 0,
+                            background: top.sev >= 5 ? "var(--red)" : top.sev >= 4 ? "var(--gold)" : "var(--grn)" } }),
+                    React.createElement("span", { style: { minWidth: 0 } },
+                        React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } },
+                            "Suggestions",
+                            read.length > 1 ? ` · ${read.length}` : ""),
+                        React.createElement("span", { style: { display: "block", fontSize: 14.5, lineHeight: 1.35 } }, top.title))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))) : (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
+            React.createElement("div", { className: "il-li", onClick: () => (st.hiddenTips || []).length && save({ ...st, hiddenTips: [] }) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } }, "Suggestions"),
+                    React.createElement("span", { style: { fontSize: 14 } },
+                        "Nothing outstanding",
+                        (st.hiddenTips || []).length ? " \u2014 tap to bring back the dismissed ones" : ""))))),
         prev.length > 0 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What I asked you to do before"),
             prev.slice(0, 4).map((x) => {
@@ -7938,13 +9302,14 @@ function You({ st, save, a, setSheet, go }) {
         React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "Settings & tools"),
         React.createElement("div", { className: "il-menu" }, [
             ["Diary", "Every day you've logged something", { t: "diary" }, null],
+            ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }, null],
             ["Sticking to it", (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions this month`; })(), { t: "adhere" }, null],
-            ["Import from another app", "Withings, Hevy, MacroFactor \u2014 any CSV", { t: "importcsv" }, null],
+            ["Import from another app", "Withings, Hevy, MacroFactor — any CSV", { t: "importcsv" }, null],
             ["Import past workouts", "From screenshots of your old app", { t: "importwo" }, null],
             ["Health apps", "Apple Health and Health Connect", { t: "health" }, null],
             ["Cross-check my devices", "Reconcile steps and calories", { t: "crosscheck" }, null],
             ["Units", `${UNIT.bw === "st" ? "Stones" : UNIT.bw === "lb" ? "Pounds" : "Kilograms"}, ${UNIT.ht === "ftin" ? "feet" : "centimetres"}, lifting in ${LU()}`, { t: "units" }, null],
-            ["AI features", st.apiKey ? "Key added \u2014 everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
+            ["AI features", st.apiKey ? "Key added — everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
             ["Notes for the next update", `${(st.bugs || []).length} on the list`, { t: "diag" }, null],
         ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
             React.createElement("span", { style: { minWidth: 0 } },
@@ -7952,7 +9317,7 @@ function You({ st, save, a, setSheet, go }) {
                 React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
             React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
                 tag && React.createElement("span", { className: "il-tag t2" }, tag),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\\u203a")))))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Health apps & cross-check")),
@@ -8070,8 +9435,8 @@ function HomeLedger() {
     return React.createElement(Boundary, null,
         React.createElement(HomeLedgerInner, null));
 }
-function Sheet({ sheet, setSheet, st, save, a, today, health }) {
-    const close = () => setSheet(null);
+function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go }) {
+    const close = () => back();
     const drag = useRef({ y0: 0, on: false });
     const [dy, setDy] = useState(0);
     const dragStart = (e) => {
@@ -8100,6 +9465,11 @@ function Sheet({ sheet, setSheet, st, save, a, today, health }) {
     const inner = vp ? { maxHeight: `calc(${vp.h}px - env(safe-area-inset-top) - 6px)` } : undefined;
     return (React.createElement("div", { className: "il-sheet", style: wrap, onClick: close },
         React.createElement("div", { className: "il-si", style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) => e.stopPropagation() },
+            depth > 1 && (React.createElement("button", { onClick: close, style: { position: "sticky", top: 17, zIndex: 4, display: "flex", alignItems: "center",
+                    gap: 6, background: "var(--bg)", border: 0, color: "var(--acc)", font: "inherit", fontSize: 13.5,
+                    padding: "6px 16px 0", cursor: "pointer", width: "100%", textAlign: "left" } },
+                React.createElement("span", { style: { fontSize: 17, lineHeight: 1 } }, "\u2039"),
+                " Back")),
             React.createElement("div", { className: "il-grab", onClick: close, title: "Close", onTouchStart: dragStart, onTouchMove: dragMove, onTouchEnd: dragEnd, onPointerDown: dragStart, onPointerMove: dragMove, onPointerUp: dragEnd },
                 React.createElement("i", null)),
             sheet.t === "rings" && React.createElement(RingsSheet, { st, save, today, close }),
@@ -8107,10 +9477,12 @@ function Sheet({ sheet, setSheet, st, save, a, today, health }) {
             sheet.t === "diary" && React.createElement(Diary, { st, save, a, close, setSheet }),
             sheet.t === "diag" && React.createElement(Diagnostics, { st, save, a, close, health }),
             sheet.t === "review" && React.createElement(DeepReview, { st, save, a, today, close, setSheet }),
+            sheet.t === "pastrev" && React.createElement(PastReviews, { st, save, close }),
             sheet.t === "takeaway" && React.createElement(Takeaway, { st, save, today, close }),
             sheet.t === "meals" && React.createElement(MealFinder, { st, save, a, today, close }),
             sheet.t === "pick" && React.createElement(Pick, { st, close, setSheet }),
             sheet.t === "muscle" && React.createElement(MuscleSheet, { sheet, st, a, close, setSheet }),
+            sheet.t === "anatmus" && React.createElement(AnatMuscle, { sheet, st, a, close, setSheet }),
             sheet.t === "exprog" && React.createElement(ExProgress, { sheet, a, close, setSheet }),
             sheet.t === "log" && React.createElement(Log, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "info" && React.createElement(ExerciseSheet, { sheet, st, save, a, close, setSheet }),
@@ -8134,6 +9506,10 @@ function Sheet({ sheet, setSheet, st, save, a, today, health }) {
             sheet.t === "aikey" && React.createElement(ApiKeySheet, { st, save, close }),
             sheet.t === "ask" && React.createElement(AskCoach, { st, save, a, today, ctx: coachCtx(sheet.ctx, st, a, today), close }),
             sheet.t === "past" && React.createElement(Past, { sheet, st, close }),
+            sheet.t === "tips" && React.createElement(Tips, { st, save, a, close, setSheet, go }),
+            sheet.t === "equip" && React.createElement(Equipment, { st, save, close, setSheet }),
+            sheet.t === "eqw" && React.createElement(EquipWeights, { sheet, st, save, close, setSheet }),
+            sheet.t === "progs" && React.createElement(Programmes, { st, save, a, close, setSheet }),
             sheet.t === "startrt" && React.createElement(StartRoutine, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "editrt" && React.createElement(EditRoutine, { sheet, st, save, close, setSheet }),
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close }),
@@ -8413,7 +9789,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
             return (React.createElement("div", { key: i, className: "il-ex", style: { padding: "13px 12px" } },
                 React.createElement("div", { style: { display: "flex", gap: 12 } },
                     React.createElement("div", { style: { width: 64, height: 78, borderRadius: 9, overflow: "hidden", flexShrink: 0 } },
-                        React.createElement(FormDemo, { ex: e, h: 78, weight: false })),
+                        React.createElement(FormDemo, { ex: e, h: 78 })),
                     React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                         React.createElement("div", { style: { fontSize: 15, fontWeight: 500, marginBottom: 7 } }, e.name),
                         Array.from({ length: nSets }, (_, j) => (React.createElement("div", { key: j, style: { display: "flex", alignItems: "center", gap: 9, padding: "2.5px 0" } },
@@ -8578,7 +9954,7 @@ function MuscleSheet({ sheet, st, a, close, setSheet }) {
         React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, main.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
             React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", minWidth: 0 } },
                 React.createElement("div", { style: { width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
-                    React.createElement(FormDemo, { ex: e, h: 44, weight: false })),
+                    React.createElement(FormDemo, { ex: e, h: 44 })),
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } }, e.name),
                     React.createElement("div", { className: "il-sub" },
@@ -8614,7 +9990,7 @@ function Pick({ st, close, setSheet }) {
         React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
             React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", minWidth: 0 } },
                 React.createElement("div", { style: { width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
-                    React.createElement(FormDemo, { ex: e, h: 44, weight: false })),
+                    React.createElement(FormDemo, { ex: e, h: 44 })),
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } }, e.name),
                     React.createElement("div", { className: "il-sub" }, e.cardio ? `Conditioning · ~${Math.round(e.met)} effort` : `${e.primary.map((m) => M[m]).join(", ")} · ${e.lo}–${e.hi} ${e.timed ? "sec" : "reps"}`))))))));
@@ -9017,7 +10393,7 @@ function VideoBlock({ st, save, ex }) {
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Opens in YouTube. Tap Change to swap it."))),
             (edit || !cur) && React.createElement(React.Fragment, null,
                 !cur && React.createElement("div", { className: "il-note", style: { marginBottom: 10, fontSize: 12.5 } }, "Pin a clip from whoever you actually trust on form, and it'll be here every time you open this exercise."),
-                React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, placeholder: "Paste a YouTube link", value: url, onChange: (e) => setUrl(e.target.value) }),
+                React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, placeholder: "Paste a YouTube link", onFocus: (e) => setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 260), value: url, onChange: (e) => setUrl(e.target.value) }),
                 ytId(url) && React.createElement("img", { src: `https://img.youtube.com/vi/${ytId(url)}/hqdefault.jpg`, alt: "", style: { width: "100%", borderRadius: 10, display: "block", marginBottom: 8 } }),
                 React.createElement("div", { style: { display: "flex", gap: 8 } },
                     React.createElement("button", { className: "il-btn sm", style: { flex: 1 }, disabled: !url.trim(), onClick: put }, "Save"),
@@ -9160,7 +10536,7 @@ function Past({ sheet, st, close }) {
             return React.createElement("div", { key: i, className: "il-ex" },
                 React.createElement("div", { className: "il-exh", style: { cursor: "default" } },
                     React.createElement("div", { className: "il-thumb" },
-                        React.createElement(FormDemo, { ex: ex, h: 52, weight: false })),
+                        React.createElement(FormDemo, { ex: ex, h: 52 })),
                     React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                         React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } }, ex.name),
                         React.createElement("div", { className: "il-sub il-n" },
@@ -9297,7 +10673,15 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
     const [sel, setSel] = useState(pre || null);
     const [grams, setGrams] = useState(pre ? pre.serv : 100);
     const [custom, setCustom] = useState(null);
-    const [quick, setQuick] = useState("recent");
+    const [quick, setQuick] = useState("usual");
+    const nowMeal = (() => { const h = new Date().getHours(); return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks"; })();
+    const [mealTab, setMealTab] = useState(nowMeal);
+    // what you actually eat at this meal, most-used first
+    const usual = useMemo(() => {
+        const counts = (st.byMeal || {})[mealTab] || {};
+        return Object.entries(counts).sort((x, y) => y[1] - x[1])
+            .map(([id, n]) => ({ f: pool.find((z) => z.id === id), n })).filter((x) => x.f).slice(0, 12);
+    }, [st.byMeal, mealTab, st.myFoods]);
     const [dish, setDish] = useState(null);
     const [newDish, setNewDish] = useState(false);
     const [scan, setScan] = useState(false);
@@ -9325,15 +10709,30 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
             i = foods.length - 1;
         }
         foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(), name: `${food.name} (${AMT(food, g)})`, meal, fid: food.id, g, ...m }] };
+        // remember what you eat, how often, at which meal, and in what quantity
+        const byMeal = { ...(st.byMeal || {}) };
+        byMeal[meal] = { ...(byMeal[meal] || {}), [food.id]: ((byMeal[meal] || {})[food.id] || 0) + 1 };
+        const portions = { ...(st.portions || {}), [food.id]: g };
         const counts = { ...(st.foodCount || {}) };
         counts[food.id] = (counts[food.id] || 0) + 1;
-        save({ ...st, foods, foodCount: counts, recent: [food.id, ...(st.recent || []).filter((x) => x !== food.id)].slice(0, 40) });
+        save({ ...st, foods, foodCount: counts, byMeal, portions,
+            recent: [food.id, ...(st.recent || []).filter((x) => x !== food.id)].slice(0, 60) });
         close();
     };
     if (sel) {
         const m = scale(sel, grams);
         return React.createElement(React.Fragment, null,
             React.createElement(SH, { title: sel.name, sub: `${sel.kcal} cal per 100${sel.unit === "ml" ? "ml" : "g"}`, close: () => setSel(null) }),
+            (() => {
+                const fit = foodFit(sel, st.profile);
+                if (!fit)
+                    return null;
+                return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${FIT_COLOUR[fit.tier]}` } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                        React.createElement("div", { className: "il-lbl" }, "How it fits"),
+                        React.createElement("span", { style: { fontSize: 12, fontWeight: 600, color: FIT_COLOUR[fit.tier] } }, fit.label)),
+                    React.createElement("div", { className: "il-note" }, fit.why)));
+            })(),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "How much?"),
                 React.createElement("div", { className: "il-scroll", style: { padding: "0 0 10px" } }, [sel.serv, 50, 100, 150, 200, 250].filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (React.createElement("button", { key: v, className: "il-chip" + (grams === v ? " on" : ""), onClick: () => setGrams(v) },
@@ -9398,7 +10797,7 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
             React.createElement("button", { className: "il-chip" + (cat < 0 ? " on" : ""), onClick: () => setCat(-1) }, "All"),
             FCAT.map((c, i) => React.createElement("button", { key: c, className: "il-chip" + (cat === i ? " on" : ""), onClick: () => setCat(i) }, c))),
         !q && cat < 0 && (recent.length > 0 || top.length > 0) && React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { padding: "2px 12px 8px", display: "flex", gap: 7 } }, [["recent", `Recent${recent.length ? " · " + recent.length : ""}`], ["top", "Most used"], ["dishes", `My dishes${(st.dishes || []).length ? " · " + (st.dishes || []).length : ""}`], ["all", "All foods"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (quick === k ? " on" : ""), onClick: () => setQuick(k) }, l)))),
+            React.createElement("div", { style: { padding: "2px 12px 8px", display: "flex", gap: 7 } }, [["usual", "My usuals"], ["recent", `Recent${recent.length ? " · " + recent.length : ""}`], ["top", "Most used"], ["dishes", `My dishes${(st.dishes || []).length ? " · " + (st.dishes || []).length : ""}`], ["all", "All foods"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (quick === k ? " on" : ""), onClick: () => setQuick(k) }, l)))),
             quick === "dishes" && React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "il-list", style: { marginBottom: 10 } },
                     (st.dishes || []).map((d) => {
@@ -9423,18 +10822,53 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
                     !(st.dishes || []).length && React.createElement("div", { className: "il-empty" }, "No dishes yet. Build one from whatever you actually cook \u2014 a chilli, your usual breakfast, your dad's pasta \u2014 and it logs in two taps forever after.")),
                 React.createElement("div", { style: { padding: "0 12px 4px" } },
                     React.createElement("button", { className: "il-btn", onClick: () => setNewDish(true) }, "+ Create a dish"))),
+            quick === "usual" && React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-scroll", style: { paddingTop: 4, paddingBottom: 4 } }, MEALS.map((mm) => (React.createElement("button", { key: mm, className: "il-chip" + (mealTab === mm ? " on" : ""), onClick: () => setMealTab(mm) },
+                    mm,
+                    mm === nowMeal ? " · now" : "")))),
+                React.createElement("div", { className: "il-list", style: { marginBottom: 12 } },
+                    usual.map(({ f, n }) => {
+                        const fit = foodFit(f, st.profile);
+                        const g = (st.portions || {})[f.id] || f.serv;
+                        return (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(g); } },
+                            React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 9, alignItems: "center" } },
+                                fit && React.createElement("span", { style: { width: 4, height: 30, borderRadius: 2, background: FIT_COLOUR[fit.tier], flexShrink: 0 } }),
+                                React.createElement("div", { style: { minWidth: 0 } },
+                                    React.createElement("div", { style: { fontSize: 14 } }, f.name),
+                                    React.createElement("div", { className: "il-sub il-n" },
+                                        AMT(f, g),
+                                        " \u00B7 ",
+                                        Math.round(f.kcal * g / 100),
+                                        " cal \u00B7 P",
+                                        Math.round(f.p * g / 100),
+                                        " \u00B7 ",
+                                        n,
+                                        "\u00D7 at ",
+                                        mealTab.toLowerCase()))),
+                            React.createElement("span", { className: "il-chip" }, "Add")));
+                    }),
+                    !usual.length && React.createElement("div", { className: "il-empty" },
+                        "Nothing logged at ",
+                        mealTab.toLowerCase(),
+                        " yet. Log a few and they'll appear here in the order you actually eat them, with the portion you usually have."))),
             (quick === "recent" || quick === "top") && React.createElement("div", { className: "il-list", style: { marginBottom: 12 } },
-                (quick === "recent" ? recent : top).slice(0, 20).map((f) => (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(f.serv); } },
-                    React.createElement("div", { style: { minWidth: 0 } },
-                        React.createElement("div", { style: { fontSize: 14 } }, f.name),
-                        React.createElement("div", { className: "il-sub il-n" },
-                            AMT(f, f.serv),
-                            " \u00B7 ",
-                            Math.round(f.kcal * f.serv / 100),
-                            " cal \u00B7 P",
-                            Math.round(f.p * f.serv / 100),
-                            quick === "top" && (st.foodCount || {})[f.id] ? ` · logged ${(st.foodCount || {})[f.id]}×` : "")),
-                    React.createElement("span", { className: "il-chip" }, "Add")))),
+                (quick === "recent" ? recent : top).slice(0, 20).map((f) => {
+                    const fit = foodFit(f, st.profile);
+                    const g = (st.portions || {})[f.id] || f.serv;
+                    return (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(g); } },
+                        React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 9, alignItems: "center" } },
+                            fit && React.createElement("span", { style: { width: 4, height: 30, borderRadius: 2, background: FIT_COLOUR[fit.tier], flexShrink: 0 } }),
+                            React.createElement("div", { style: { minWidth: 0 } },
+                                React.createElement("div", { style: { fontSize: 14 } }, f.name),
+                                React.createElement("div", { className: "il-sub il-n" },
+                                    AMT(f, g),
+                                    " \u00B7 ",
+                                    Math.round(f.kcal * g / 100),
+                                    " cal \u00B7 P",
+                                    Math.round(f.p * g / 100),
+                                    quick === "top" && (st.foodCount || {})[f.id] ? ` · logged ${(st.foodCount || {})[f.id]}×` : ""))),
+                        React.createElement("span", { className: "il-chip" }, "Add")));
+                }),
                 (quick === "recent" ? recent : top).length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing yet \u2014 log a few things and they'll collect here."))),
         cat === 9 && React.createElement("div", { className: "il-card", style: { background: "#241F12" } },
             React.createElement("div", { className: "il-note", style: { color: "#E5C87E", fontSize: 12.5 } }, "Alcohol carries about 7 calories a gram of its own, which never shows up in the protein, carb or fat numbers. That is why a pint reads 180 calories with barely any macros against it \u2014 and why a big night wrecks a week's deficit without your macro bars looking any different.")),
