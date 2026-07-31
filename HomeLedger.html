@@ -2989,13 +2989,19 @@ function SwipeDelete({ onDelete, children }) {
         React.createElement("div", { className: "il-sw-body", style: { transform: `translateX(${dx}px)`, transition: live ? "none" : "transform .22s cubic-bezier(.2,.8,.3,1)" }, onPointerDown: (e) => begin(e.clientX), onPointerMove: (e) => move(e.clientX, e), onPointerUp: end, onPointerCancel: end, onTouchStart: (e) => begin(e.touches[0].clientX), onTouchMove: (e) => move(e.touches[0].clientX, e), onTouchEnd: end, onClickCapture: swallow }, children)));
 }
 function RestTimer({ secs, onClose }) {
+    /* Counting down with an interval stops the moment the app is backgrounded.
+       Work from a target time instead, so it keeps running in your pocket. */
+    const endAt = useRef(Date.now() + secs * 1000);
     const [left, setLeft] = useState(secs);
     useEffect(() => {
-        if (left <= 0)
-            return;
-        const t = setTimeout(() => setLeft(left - 1), 1000);
-        return () => clearTimeout(t);
-    }, [left]);
+        const tick = () => setLeft(Math.max(0, Math.round((endAt.current - Date.now()) / 1000)));
+        const t = setInterval(tick, 250);
+        const wake = () => tick();
+        document.addEventListener("visibilitychange", wake);
+        window.addEventListener("focus", wake);
+        return () => { clearInterval(t); document.removeEventListener("visibilitychange", wake); window.removeEventListener("focus", wake); };
+    }, []);
+    const addTime = (n) => { endAt.current += n * 1000; setLeft(Math.max(0, Math.round((endAt.current - Date.now()) / 1000))); };
     const pct = 1 - left / secs;
     return (React.createElement("div", { style: { position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)",
             maxWidth: 436, background: left <= 0 ? "#10281A" : "var(--card)", border: "1px solid var(--line)",
@@ -3006,7 +3012,7 @@ function RestTimer({ secs, onClose }) {
         React.createElement("div", { style: { flex: 1, minWidth: 0 } },
             React.createElement("div", { className: "il-d il-n", style: { fontSize: 19, fontWeight: 600 } }, left <= 0 ? "Go" : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`),
             React.createElement("div", { className: "il-sub", style: { margin: 0 } }, left <= 0 ? "Rest is up" : "Resting")),
-        React.createElement("button", { className: "il-chip", onClick: () => setLeft(left + 30) }, "+30s"),
+        React.createElement("button", { className: "il-chip", onClick: () => addTime(30) }, "+30s"),
         React.createElement("button", { className: "il-x", onClick: onClose }, "\u00D7")));
 }
 /* ============ THE BODY ============
@@ -3409,6 +3415,27 @@ const PRON = (o) => SS({ hd: [17, 55], shL: [31, 57], shR: [29, 58], hpL: [58, 6
     knL: [73, 64], knR: [71, 65], anL: [86, 66], anR: [84, 67], ftL: [90, 69], ftR: [88, 70], ...o });
 const HING2 = (o) => SS({ hd: [18, 30], shL: [30, 37], shR: [28, 38], hpL: [61, 46], hpR: [59, 47],
     knL: [67, 64], knR: [65, 65], anL: [67, 85], anR: [65, 86], ftL: [73, 88], ftR: [71, 89], ...o });
+/* Whether the figure sits, stands or lies is a property of the exercise,
+   not of the movement pattern. A seated shoulder press and a standing one
+   move the arms identically and the legs completely differently.      */
+function stanceOf(ex) {
+    const n = (ex.name || "").toLowerCase();
+    if (/\blying|supine|floor press|bench press|skull|pullover|glute bridge|hip thrust|crunch|sit-up|leg raise|dead bug/.test(n))
+        return "lying";
+    if (/\bprone|plank|press-up|push-up|pushup|superman|bird dog|rollout|bear crawl|y-t-w|seal row/.test(n))
+        return "prone";
+    if (/\bkneeling/.test(n))
+        return "kneeling";
+    if (/\bseated|incline|preacher|chest-supported|chest supported/.test(n))
+        return "seated";
+    if (/\bstanding|upright/.test(n))
+        return "standing";
+    // no word either way: a bench in the kit usually means you are on it
+    return (ex.kit || []).includes("bench") ? "seated" : "standing";
+}
+/* the same upper body, on legs instead of a bench */
+const STAND2 = (o) => SS({ hd: [44, 13], shL: [43, 28], shR: [40, 28], hpL: [44, 57], hpR: [41, 57],
+    knL: [45, 77], knR: [42, 77], anL: [45, 96], anR: [42, 96], ftL: [51, 99], ftR: [48, 99], ...o });
 const SEAT2 = (o) => SS({ hd: [38, 14], shL: [40, 32], shR: [37, 33], hpL: [42, 60], hpR: [39, 61],
     knL: [62, 63], knR: [59, 64], anL: [62, 85], anR: [59, 86], ftL: [68, 87], ftR: [65, 88], ...o });
 const A = (v, ms, f, extra) => ({ v, ms, f, ...extra });
@@ -3534,6 +3561,22 @@ const MOVE = {
     ]),
     cardio: A("f", 1100, [FS({ elL: [40, 40], hnL: [41, 28] }), FS({ elR: [60, 40], hnR: [59, 28] })]),
 };
+/* If the pose was authored seated but the exercise is done standing, keep
+   the arm positions and put the legs underneath instead.              */
+function restance(p, want) {
+    if (!p)
+        return p;
+    const sat = p.knL && p.knL[0] > p.hpL[0] + 8; // knees forward of the hips means sitting
+    if (want === "standing" && sat) {
+        const dx = 44 - p.hd[0];
+        return { ...p, hd: [44, p.hd[1]], shL: [43, p.shL[1]], shR: [40, p.shR[1]],
+            elL: p.elL ? [p.elL[0] + dx, p.elL[1]] : p.elL, elR: p.elR ? [p.elR[0] + dx, p.elR[1]] : p.elR,
+            hnL: p.hnL ? [p.hnL[0] + dx, p.hnL[1]] : p.hnL, hnR: p.hnR ? [p.hnR[0] + dx, p.hnR[1]] : p.hnR,
+            hpL: [44, 57], hpR: [41, 57], knL: [45, 77], knR: [42, 77],
+            anL: [45, 96], anR: [42, 96], ftL: [51, 99], ftR: [48, 99] };
+    }
+    return p;
+}
 function FormDemo({ ex, h = 150, weight = true, controls = false }) {
     const [t, setT] = useState(0);
     const [rate, setRate] = useState(1);
@@ -3572,7 +3615,7 @@ function FormDemo({ ex, h = 150, weight = true, controls = false }) {
     const lt = nF > 2 ? t - i0 : t;
     const Fa = M0.f[i0], Fb = M0.f[Math.min(nF - 1, i0 + 1)];
     const L = (a, b) => [a[0] + (b[0] - a[0]) * lt, a[1] + (b[1] - a[1]) * lt];
-    const p = Object.fromEntries(Object.keys(Fa).map((k) => [k, L(Fa[k], Fb[k])]));
+    const p = restance(Object.fromEntries(Object.keys(Fa).map((k) => [k, L(Fa[k], Fb[k])])), stanceOf(ex));
     const NEAR = "#8E96A2", FAR = front ? "#7A828D" : "#4B515A", BODY = "#7F8792";
     const sg = (a, b, w, c) => React.createElement("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: c, strokeWidth: w, strokeLinecap: "round" });
     const dot = (a, r, c) => React.createElement("circle", { cx: a[0], cy: a[1], r: r, fill: c });
@@ -3789,7 +3832,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v73 · 31 Jul";
+const APP_VERSION = "v76 · 31 Jul";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -4077,8 +4120,42 @@ function LiveSession({ st, save, s, setSheet }) {
     };
     const setField = (exId, j, k, v) => write((sess) => {
         const e = sess.exercises.find((x) => x.exId === exId);
-        if (e)
-            e.sets[j][k] = v;
+        if (!e)
+            return sess;
+        const was = e.sets[j][k];
+        e.sets[j][k] = v;
+        // change a weight and the sets below follow, unless you have already
+        // ticked them or deliberately set them to something else
+        if (k === "w") {
+            for (let n = j + 1; n < e.sets.length; n++) {
+                if (e.sets[n].warm || e.sets[n].done)
+                    continue;
+                if (was != null && e.sets[n].w !== was)
+                    continue;
+                e.sets[n].w = v;
+            }
+        }
+        return sess;
+    });
+    // remove a single set or warm-up
+    const dropSet = (exId, j) => write((sess) => {
+        const e = sess.exercises.find((x) => x.exId === exId);
+        if (e && e.sets.length > 1)
+            e.sets.splice(j, 1);
+        return sess;
+    });
+    // add a warm-up to an exercise mid-session
+    const addWarm = (exId) => write((sess) => {
+        const e = sess.exercises.find((x) => x.exId === exId);
+        const ex = exOf(exId);
+        if (!e || !ex)
+            return sess;
+        const work = e.sets.find((x) => !x.warm);
+        const w = work ? work.w : 0;
+        const ramp = warmupFor(ex, w);
+        const rows = (ramp.length ? ramp : [{ w: Math.max(0, Math.round(w * 0.5)), reps: 8 }])
+            .map((q) => ({ ...q, warm: true, done: false, rir: null }));
+        e.sets = [...rows, ...e.sets];
         return sess;
     });
     const toggle = (exId, j) => {
@@ -4139,26 +4216,40 @@ function LiveSession({ st, save, s, setSheet }) {
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.loaded ? (ex.perSide ? LU() + " ea" : LU()) : "—"),
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.timed || ex.cardio ? "secs" : "reps"),
                         React.createElement("span", null)),
-                    !ex.aerobic && e.sets.map((x, j) => (React.createElement("div", { key: j, className: "il-lrow" + (x.done ? " il-done" : "") },
-                        React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
-                        React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
-                        React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) }),
-                        React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713")))),
+                    !ex.aerobic && !e.sets.some((q) => q.warm) && (React.createElement("button", { className: "il-chip", style: { marginBottom: 8 }, onClick: () => addWarm(e.exId) }, "+ Warm-up sets")),
+                    !ex.aerobic && e.sets.map((x, j) => (React.createElement(SwipeDelete, { key: j, onDelete: () => dropSet(e.exId, j) },
+                        React.createElement("div", { className: "il-lrow" + (x.done ? " il-done" : ""), style: { background: "var(--card)" } },
+                            React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
+                            React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
+                            React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) }),
+                            React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713"))))),
                     (() => {
-                        if (ex.aerobic)
+                        if (ex.aerobic || st.rirOff)
                             return null;
                         const li = lastWorkIdx(e.sets);
                         const lastDone = li >= 0 && e.sets[li].done;
                         if (!lastDone)
                             return null;
                         const cur = e.sets[li].rir;
+                        // only worth asking on the lifts that drive progression
+                        const idx = s.exercises.findIndex((q) => q.exId === e.exId);
+                        if (cur == null && idx > 2 && !ex.isCompound)
+                            return (React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setField(e.exId, li, "rir", 2) }, "Rate how hard that was"));
                         return (React.createElement("div", { style: { marginTop: 12, padding: 11, background: "var(--c2)", borderRadius: 10 } },
-                            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How many could you have done?"),
+                            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                                React.createElement("div", { className: "il-lbl" }, "How many could you have done?"),
+                                React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, rirOff: true }) }, "Stop asking")),
                             React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, RIR_OPTS.map(([v, l, why]) => (React.createElement("button", { key: v, className: "il-chip" + (cur === v ? " on" : ""), onClick: () => setField(e.exId, li, "rir", cur === v ? null : v), title: why }, l)))),
                             cur != null && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, cur === 0 ? "To failure. Fine occasionally, expensive every set."
                                 : cur <= 2 ? "That's the sweet spot — the growth without the fatigue."
                                     : "Plenty left. Worth more weight next time.")));
                     })(),
+                    React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" } },
+                        React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "swap", exId: e.exId, sessionId: s.id }) }, "Swap this"),
+                        React.createElement("button", { className: "il-chip", onClick: () => {
+                                if (window.confirm(`Take ${ex.name} out of this session?`))
+                                    write((sess) => ({ ...sess, exercises: sess.exercises.filter((q) => q.exId !== e.exId) }));
+                            } }, "Remove")),
                     React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10 } },
                         React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => write((sess) => { const t = sess.exercises.find((q) => q.exId === e.exId); t.sets.push({ ...t.sets[t.sets.length - 1], done: false, at: null, rir: null }); return sess; }) }, "+ Set"),
                         e.sets.length > 1 && React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => write((sess) => { const t = sess.exercises.find((q) => q.exId === e.exId); t.sets.pop(); return sess; }) }, "\u2212 Set"),
@@ -4175,7 +4266,9 @@ function LiveSession({ st, save, s, setSheet }) {
                     " sets left")))),
         React.createElement("div", { style: { padding: "4px 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick" }) }, "+ Add exercise"),
-            fin && React.createElement("button", { className: "il-btn g", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, finished: false, startedAt: Date.now() } : x) }) }, "Carry on with this session"),
+            fin && React.createElement("div", { style: { display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, packed: true } : x) }) }, "Done \u2014 put this away"),
+                React.createElement("button", { className: "il-btn g", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, finished: false, startedAt: Date.now() } : x) }) }, "Carry on with this session")),
             fin && React.createElement("div", { className: "il-card", style: { margin: 0, background: "#10281A" } },
                 React.createElement("div", { className: "il-ring" },
                     React.createElement("div", { className: "il-mini" },
@@ -4201,7 +4294,7 @@ function Train({ st, save, a, today, setSheet }) {
     const early = new Date().getHours() < 10;
     const dl = deloadCheck(st, a);
     return (React.createElement(React.Fragment, null,
-        !s && (React.createElement(React.Fragment, null,
+        (!s || (s.finished && s.packed)) && (React.createElement(React.Fragment, null,
             early && React.createElement("div", { className: "il-card", style: { background: "#2A1638", borderLeft: "3px solid var(--pmp)" } },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 5 } }, "It's early"),
                 React.createElement("div", { className: "il-note", style: { color: "#D9BAFF" } }, "Your logs show you're about 5% weaker before 10am. A pump session is the right call \u2014 lighter, higher reps, in and out. None of it counts against your strength numbers.")),
@@ -4263,8 +4356,25 @@ function Train({ st, save, a, today, setSheet }) {
             React.createElement("div", { style: { padding: "6px 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "editrt", id: null }) }, "+ New routine"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick" }) }, "Just pick exercises")))),
-        s && (React.createElement(React.Fragment, null,
+        s && !(s.finished && s.packed) && (React.createElement(React.Fragment, null,
             React.createElement(LiveSession, { st, save, s, setSheet }))),
+        s && s.finished && s.packed && (React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
+            React.createElement("div", { className: "il-li", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, packed: false } : x) }) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } },
+                        "Today: ",
+                        s.routineName || "session",
+                        " \\u2713"),
+                    React.createElement("div", { className: "il-sub il-n" },
+                        VOL(sessVol(s)).toLocaleString(),
+                        " ",
+                        VOLU(),
+                        " \\u00b7 ",
+                        s.exercises.reduce((x, e) => x + e.sets.filter((q) => !q.warm).length, 0),
+                        " sets \\u00b7 ",
+                        dur(s.durationSec),
+                        s.completion && s.completion.status !== "planned" ? ` \u00b7 ${{ extra: "and extra", short: "cut short", much_shorter: "well short" }[s.completion.status] || ""}` : "")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))),
         React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "Last few sessions"),
         recent.map((x) => (React.createElement(SwipeDelete, { key: x.id, onDelete: () => save({ ...st, sessions: st.sessions.filter((y) => y.id !== x.id) }) },
             React.createElement("div", { className: "il-list", style: { margin: 0 } },
@@ -5628,6 +5738,57 @@ function Diagnostics({ st, save, a, close, health }) {
         errors: ERRLOG.slice(0, 12),
         reports: bugs,
     });
+    /* Short enough to paste into a message. The full state dump goes in the
+       file version — pasting 40KB into a chat tends to arrive as an empty
+       attachment, which is exactly what happened.                        */
+    const brief = () => {
+        const d = iso(new Date());
+        const sess = st.sessions.filter((x) => x.date === d);
+        const lines = [];
+        lines.push(`HOME LEDGER ${APP_VERSION} — notes`);
+        lines.push(new Date().toLocaleString("en-GB"));
+        lines.push("");
+        if (!bugs.length)
+            lines.push("(no notes written)");
+        ["bug", "friction", "idea"].forEach((k) => {
+            const g = bugs.filter((b) => (b.kind || "bug") === k);
+            if (!g.length)
+                return;
+            lines.push(`--- ${k === "bug" ? "BROKEN" : k === "friction" ? "ANNOYING" : "IDEAS"} (${g.length})`);
+            g.forEach((b) => {
+                lines.push(`[${b.pri === "high" ? "WANT" : b.pri === "low" ? "whenever" : "would use"}] ${b.where || "?"}`);
+                lines.push(`   ${b.note}`);
+            });
+            lines.push("");
+        });
+        lines.push(`--- CRASHES (${ERRLOG.length})`);
+        if (!ERRLOG.length)
+            lines.push("none");
+        ERRLOG.slice(0, 8).forEach((e) => lines.push(`${short(e.at)} [${e.kind}] ${e.msg}`));
+        lines.push("");
+        lines.push("--- TODAY");
+        if (!sess.length)
+            lines.push("nothing logged today");
+        sess.forEach((x) => {
+            lines.push(`${x.routineName || "session"} · ${Math.round((x.durationSec || 0) / 60)} min · ${x.completion ? x.completion.status : "not finished"}`);
+            if (x.checkin)
+                lines.push(`  turned up: ${x.checkin.sleep}h sleep, feel ${x.checkin.feel}/5, ${x.checkin.sore}`);
+            x.exercises.forEach((e) => {
+                const ex = exOf(e.exId);
+                if (!ex)
+                    return;
+                const w = e.sets.filter((q) => !q.warm);
+                const warm = e.sets.filter((q) => q.warm);
+                lines.push(`  ${ex.name}: ${warm.length ? `${warm.length}w + ` : ""}${w.map((q) => `${q.w}x${q.reps}`).join(", ")}${setRir(e) != null ? ` @${setRir(e)}RIR` : ""}`);
+            });
+        });
+        lines.push("");
+        lines.push(`--- SETUP`);
+        lines.push(`${st.profile.age}, ${st.profile.weightKg}kg, goal ${st.profile.goal}, ${st.profile.daysWk}d/wk, ${st.profile.minsSess}min`);
+        lines.push(`kit: ${((st.equip || {})[st.where || "home"] || []).join(", ") || "none set"}`);
+        lines.push(`logged: ${st.sessions.length} sessions, ${st.foods.filter((f) => f.entries.length).length} food days, ${st.weights.length} weigh-ins`);
+        return lines.join("\n");
+    };
     const text = () => `HOME LEDGER — TRIAL REPORT
 ${new Date().toString()}
 
@@ -5855,7 +6016,26 @@ ${JSON.stringify(snapshot(), null, 1)}
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Send it to me"),
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "This copies your reports, any crashes, and a full picture of your data. Paste the whole lot into the chat."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => copy("all", text()) }, copied === "all" ? "Copied ✓" : "Copy the full report"),
+                React.createElement("button", { className: "il-btn", onClick: () => copy("brief", brief()) }, copied === "brief" ? "Copied ✓ — paste it into the chat" : "Copy my notes"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5 } }, "Short enough to paste straight into a message. Your notes, any crashes, today's session and your setup."),
+                React.createElement("textarea", { readOnly: true, className: "il-in", style: { textAlign: "left", minHeight: 150, fontFamily: "monospace", fontSize: 10.5, marginTop: 4 }, value: brief(), onFocus: (e) => e.target.select() }),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5 } }, "If the copy button misbehaves, tap the box above and it selects everything."),
+                React.createElement("button", { className: "il-btn g", onClick: () => {
+                        try {
+                            const b = new Blob([text()], { type: "text/plain" });
+                            const u = URL.createObjectURL(b);
+                            const link = document.createElement("a");
+                            link.href = u;
+                            link.download = `homeledger-report-${iso(new Date())}.txt`;
+                            link.click();
+                            setTimeout(() => URL.revokeObjectURL(u), 3000);
+                            setCopied("file2");
+                            setTimeout(() => setCopied(""), 2500);
+                        }
+                        catch {
+                            copy("all", text());
+                        }
+                    } }, copied === "file2" ? "Saved to your files ✓" : "Save the full report as a file"),
                 React.createElement("button", { className: "il-btn g", onClick: () => copy("state", JSON.stringify(st)) }, copied === "state" ? "Copied ✓" : "Copy raw data only (backup)")),
             copied === "select" && (React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "il-note", style: { color: "var(--gold)", margin: "10px 0 8px" } }, "Clipboard blocked. Tap in the box, select all, copy."),
@@ -8398,6 +8578,7 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
         const sessions = st.sessions.map((x) => x.id !== s.id ? x : ({
             ...x, finished: true, pausedAt: null,
             durationSec: Math.max(60, Math.round((Date.now() - started - (x.pausedTotal || 0)) / 1000)),
+            packed: true,
             completion: { status: st2, reason: st2 === "planned" || st2 === "extra" ? null : reason, note: note.trim() || null,
                 setsDone: done.length, setsPlanned: all.length },
             // anything untouched shouldn't sit in the log pretending it happened
@@ -8465,6 +8646,66 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: commit }, "Finish the session"),
             React.createElement("button", { className: "il-btn g", onClick: close }, "Not yet, carry on")));
+}
+function SwapExercise({ sheet, st, save, close }) {
+    const cur = exOf(sheet.exId);
+    const sess = st.sessions.find((x) => x.id === sheet.sessionId);
+    const [q, setQ] = useState("");
+    if (!cur || !sess)
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "Swap", close: close }),
+            React.createElement("div", { className: "il-empty" }, "Gone."));
+    const mine = anatOf(cur);
+    const owned = (id) => exOf(id).kit.every((k) => st.kit.includes(k));
+    const already = new Set(sess.exercises.map((x) => x.exId));
+    /* closest first: how much of the same muscle work it does, then whether
+       it is the same kind of movement */
+    const scored = EX.filter((e) => e.id !== cur.id && !already.has(e.id) && !e.aerobic && owned(e.id))
+        .map((e) => {
+        const his = anatOf(e);
+        let overlap = 0, total = 0;
+        Object.entries(mine).forEach(([m, w]) => { total += w; if (his[m])
+            overlap += Math.min(w, his[m]); });
+        const share = total ? overlap / total : 0;
+        return { e, share, same: e.move === cur.move, comp: e.isCompound === cur.isCompound };
+    })
+        .filter((x) => x.share > 0.15)
+        .sort((x, y) => (y.share + (y.same ? 0.3 : 0) + (y.comp ? 0.1 : 0)) - (x.share + (x.same ? 0.3 : 0) + (x.comp ? 0.1 : 0)));
+    const list = q
+        ? EX.filter((e) => e.id !== cur.id && !already.has(e.id) && owned(e.id) && e.name.toLowerCase().includes(q.toLowerCase()))
+            .map((e) => ({ e, share: 0 }))
+        : scored.slice(0, 14);
+    const doSwap = (e) => {
+        const sessions = st.sessions.map((x) => x.id !== sess.id ? x : ({
+            ...x, exercises: x.exercises.map((y) => {
+                if (y.exId !== cur.id)
+                    return y;
+                const keep = y.sets.filter((z) => !z.done);
+                return { exId: e.id, lo: y.lo, hi: y.hi,
+                    sets: (keep.length ? keep : y.sets).map((z) => ({ ...z, done: false, rir: null, w: e.loaded ? z.w : 0 })) };
+            }),
+        }));
+        save({ ...st, sessions });
+        close();
+    };
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: `Swap ${cur.name}`, sub: "Closest match first", close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "#132241" } },
+            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Sorted by how much of the same muscle work each one does, so the top of the list is the closest substitute rather than just something in the same category. Any sets you have already ticked stay logged.")),
+        React.createElement("div", { style: { padding: "0 12px 4px" } },
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Or search for something specific", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", value: q, onChange: (e) => setQ(e.target.value) })),
+        list.map(({ e, share }) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => doSwap(e) },
+            React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center" } },
+                React.createElement("div", { style: { width: 44, height: 52, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
+                    React.createElement(FormDemo, { ex: e, h: 52 })),
+                React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14.5 } }, e.name),
+                    React.createElement("div", { className: "il-sub" }, Object.entries(anatOf(e)).filter(([, w]) => w >= 1).map(([k]) => MUSBY[k]?.plain).filter(Boolean).slice(0, 3).join(", ")),
+                    share > 0 && React.createElement("div", { className: "il-sub il-n", style: { color: share > 0.7 ? "var(--grn)" : "var(--dim)", marginTop: 2 } },
+                        Math.round(share * 100),
+                        "% the same work")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))),
+        !list.length && React.createElement("div", { className: "il-empty" }, "Nothing close enough with the kit you have. Try searching."));
 }
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
@@ -9713,6 +9954,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "aikey" && React.createElement(ApiKeySheet, { st, save, close }),
             sheet.t === "ask" && React.createElement(AskCoach, { st, save, a, today, ctx: coachCtx(sheet.ctx, st, a, today), close }),
             sheet.t === "past" && React.createElement(Past, { sheet, st, close }),
+            sheet.t === "swap" && React.createElement(SwapExercise, { sheet, st, save, close }),
             sheet.t === "wrapup" && React.createElement(WrapUp, { sheet, st, save, close, setSheet }),
             sheet.t === "tips" && React.createElement(Tips, { st, save, a, close, setSheet, go }),
             sheet.t === "equip" && React.createElement(Equipment, { st, save, close, setSheet }),
@@ -9732,7 +9974,10 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
     const [live, setLive] = useState(false);
     useEffect(() => { if (!live)
         setRaw(value === null || value === undefined || value === "" ? "" : String(value)); }, [value, live]);
-    return React.createElement("input", { className: className || "il-in", type: "number", inputMode: "decimal", step: step, placeholder: placeholder, disabled: disabled, min: min, value: raw, onFocus: () => setLive(true), onBlur: () => { setLive(false); const x = parseFloat(raw); if (isNaN(x))
+    return React.createElement("input", { className: className || "il-in", type: "number", inputMode: "decimal", step: step, placeholder: placeholder, disabled: disabled, min: min, value: raw, onFocus: (e) => { setLive(true); setTimeout(() => { try {
+            e.target.select();
+        }
+        catch { } }, 0); }, onBlur: () => { setLive(false); const x = parseFloat(raw); if (isNaN(x))
             setRaw(String(value ?? ""));
         else
             onChange(x); }, onChange: (e) => { setRaw(e.target.value); const x = parseFloat(e.target.value); if (!isNaN(x) && !onBlurOnly)
