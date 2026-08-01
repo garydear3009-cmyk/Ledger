@@ -122,6 +122,9 @@ const CSS = `
 .il-tab.on::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
  width:20px;height:2px;border-radius:0 0 2px 2px;background:currentColor;}
 .il-tab{position:relative;}
+.il-done{position:sticky;bottom:0;padding:12px 12px calc(14px + env(safe-area-inset-bottom));
+ margin:18px -12px 0;background:linear-gradient(to top,var(--bg) 62%,transparent);z-index:5;}
+.il-done .il-btn{width:100%;}
 .il-ask{display:flex;align-items:center;gap:12px;width:calc(100% - 24px);margin:0 12px 14px;
  background:linear-gradient(135deg,color-mix(in srgb,var(--tint) 16%,var(--card)),var(--card));
  border:1px solid color-mix(in srgb,var(--tint) 30%,var(--line));border-radius:14px;padding:13px 14px;
@@ -4230,7 +4233,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v123 · 1 Aug";
+const APP_VERSION = "v127 · 1 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -11770,7 +11773,7 @@ function RecipeBook({ st, save, a, today, close, setSheet }) {
     const [temp, setTemp] = useState("");
     const [q, setQ] = useState("");
     const mine = st.myRecipes || [];
-    const all = [...COOK, ...mine];
+    const all = [...COOK, ...COOK2, ...COOK3, ...mine];
     const saved = st.savedRecipes || [];
     const list = all.filter((r) => {
         if (!ruleCheck(st, r).ok)
@@ -14694,6 +14697,180 @@ const SEED_KITCHEN = [
    Eleven spices at a teaspoon each, and the Worcestershire and
    malt vinegar that make it what it is.                        */
 const SEED_RECIPES = [{ "n": "Dad's beef curry", "meal": "dinner", "cui": "British Indian", "mins": 105, "serves": 2, "tags": ["hp"], "heat": 3, "temp": "hot", "family": "Dad's", "ing": [[400, "g", "diced stewing beef"], [1, null, "onion, sliced"], [3, null, "garlic cloves, crushed"], [1, "tsp", "ground cumin"], [1, "tsp", "ground turmeric"], [1, "tsp", "hot curry powder"], [1, "tsp", "fennel seeds"], [1, "tsp", "cayenne pepper"], [1, "tsp", "mustard seeds"], [1, "tsp", "garam masala"], [1, "tsp", "ground ginger"], [1, "tsp", "ground coriander"], [1, "tsp", "ground fenugreek"], [1, "tsp", "paprika"], [1, "tbsp", "Worcestershire sauce"], [1, "tbsp", "malt vinegar"], [1, "tbsp", "vegetable oil"], [300, "ml", "water"], [1, "tsp", "salt"], [150, "g", "rice"]], "method": ["Brown the beef hard in the oil, in two batches. Crowding the pan steams it and you lose the crust.", "Set the beef aside. Onion into the same pan, ten minutes until properly soft and starting to colour.", "Garlic and the mustard and fennel seeds in for a minute, until the seeds start to pop.", "All the ground spices in with a splash of water, thirty seconds. This is the bit people rush — the spices need to cook or the curry tastes raw.", "Beef back in, then the Worcestershire, the vinegar and the water. Salt.", "Lid on, lowest heat, ninety minutes. Check it now and again and add a splash of water if it's tightening.", "Rice on for the last twenty minutes.", "Taste for salt at the end, not the start."], "note": "Eleven spices at a teaspoon each is a lot of spice for 400g of beef, and that's what makes it. The Worcestershire and malt vinegar are the unusual part — they give it a sharpness most curries haven't got.", "m": [818, 50, 76, 36], "mine": true, "found": false }].map((x) => ({ ...x, at: Date.now() }));
+/* Read off thirteen photographs — four fridge shelves, four cupboards,
+   the shelf of decanted powders, and four supplement screenshots. */
+const SEED_KITCHEN2 = [
+    { "name": "Fage Total 0% with raspberry pomegranate", "cat": "dairy", "place": "fridge", "brand": "Fage", "size": "150g", "count": 2, "m100": { "kcal": 84, "p": 11.3, "c": 8.5, "f": 0 } },
+    { "name": "Arla Skyr natural fat free", "cat": "dairy", "place": "fridge", "brand": "Arla", "size": "450g", "m100": { "kcal": 63, "p": 11, "c": 4, "f": 0.2 } },
+    { "name": "Brooklea protein pot, salted caramel", "cat": "dairy", "place": "fridge", "brand": "Brooklea", "size": "200g", "m100": { "kcal": 84, "p": 11, "c": 8.5, "f": 0.2 } },
+    { "name": "Müller Light Greek style", "cat": "dairy", "place": "fridge", "brand": "Müller" },
+    { "name": "Lipton Ice Tea", "cat": "drink", "place": "fridge", "brand": "Lipton", "size": "330ml" },
+    { "name": "Arla fat free milk", "cat": "dairy", "place": "fridge", "brand": "Arla", "size": "4 pint", "exp": "2026-08-20", "expKind": "best-before" },
+    { "name": "Free range eggs", "cat": "dairy", "place": "fridge", "size": "6 pack" },
+    { "name": "Green grapes", "cat": "fruit", "place": "fridge", "size": "500g" },
+    { "name": "Salad leaves", "cat": "veg", "place": "fridge", "size": "bag", "count": 2 },
+    { "name": "Cucumber", "cat": "veg", "place": "fridge" },
+    { "name": "Cornish pasty", "cat": "bakery", "place": "fridge" },
+    { "name": "Philadelphia Light", "cat": "dairy", "place": "fridge", "brand": "Philadelphia", "size": "300g" },
+    { "name": "Sliced ham", "cat": "protein", "place": "fridge" },
+    { "name": "Cat food pouches", "cat": "other", "place": "fridge" },
+    { "name": "Grated mature cheddar", "cat": "dairy", "place": "fridge", "brand": "Co-op", "size": "250g", "m100": { "kcal": 416, "p": 25, "c": 0.1, "f": 35 } },
+    { "name": "Cathedral City mature cheddar", "cat": "dairy", "place": "fridge", "brand": "Cathedral City", "size": "350g", "count": 2 },
+    { "name": "Cathedral City lighter cheddar", "cat": "dairy", "place": "fridge", "brand": "Cathedral City", "size": "350g" },
+    { "name": "Grana Padano, grated", "cat": "dairy", "place": "fridge", "brand": "Emporium", "size": "150g", "m100": { "kcal": 403, "p": 32, "c": 0, "f": 29 } },
+    { "name": "Cottage cheese with onion and chive", "cat": "dairy", "place": "fridge", "brand": "Graham's", "size": "300g", "m100": { "kcal": 80, "p": 12, "c": 3.5, "f": 2 } },
+    { "name": "Halloumi", "cat": "dairy", "place": "fridge", "brand": "Cypriot", "size": "225g" },
+    { "name": "Eatlean protein cheese bars", "cat": "snack", "place": "fridge", "brand": "Eatlean", "size": "3 bars", "exp": "2026-09-11", "expKind": "best-before", "m100": { "kcal": 250, "p": 66, "c": 6, "f": 2 } },
+    { "name": "Eatlean protein cheese bites", "cat": "snack", "place": "cupboard", "brand": "Eatlean", "size": "20g", "count": 2, "exp": "2027-12-19", "expKind": "best-before", "m100": { "kcal": 428, "p": 62.8, "c": 7.8, "f": 16.7 } },
+    { "name": "Jalapeños", "cat": "tin", "place": "fridge", "brand": "Old El Paso", "size": "215g" },
+    { "name": "Sriracha", "cat": "sauce", "place": "fridge" },
+    { "name": "Tomato ketchup", "cat": "sauce", "place": "fridge", "size": "300ml" },
+    { "name": "Salad cream", "cat": "sauce", "place": "cupboard", "brand": "Heinz", "size": "425ml" },
+    { "name": "Bicarbonate of soda", "cat": "spice", "place": "cupboard", "brand": "Dr. Oetker", "size": "200g" },
+    { "name": "Baking powder", "cat": "spice", "place": "cupboard", "brand": "Dr. Oetker", "size": "170g" },
+    { "name": "Baking powder", "cat": "spice", "place": "cupboard", "brand": "Sainsbury's", "size": "170g" },
+    { "name": "Golden granulated sugar", "cat": "other", "place": "cupboard", "size": "500g" },
+    { "name": "Caster sugar", "cat": "other", "place": "cupboard", "size": "1kg" },
+    { "name": "Vanilla extract", "cat": "spice", "place": "cupboard", "size": "38ml" },
+    { "name": "Cocoa powder", "cat": "other", "place": "cupboard", "size": "210g" },
+    { "name": "Basmati rice", "cat": "carb", "place": "cupboard", "size": "1kg", "exp": "2026-08-31", "expKind": "best-before" },
+    { "name": "Salt and pepper crackers", "cat": "snack", "place": "cupboard", "brand": "Tesco", "size": "150g" },
+    { "name": "Jacob's Bites", "cat": "snack", "place": "cupboard", "brand": "Jacob's" },
+    { "name": "Sourdough crumpets", "cat": "bakery", "place": "cupboard", "brand": "Jason's", "size": "6 pack" },
+    { "name": "Bread rolls", "cat": "bakery", "place": "cupboard", "size": "4 pack" },
+    { "name": "Waffles", "cat": "bakery", "place": "cupboard", "size": "275g" },
+    { "name": "Crumpets", "cat": "bakery", "place": "cupboard", "size": "6 pack" },
+    { "name": "1 cal cooking spray", "cat": "fat", "place": "cupboard", "size": "190ml" },
+    { "name": "Sea salt grinder", "cat": "spice", "place": "cupboard" },
+    { "name": "Black peppercorn grinder", "cat": "spice", "place": "cupboard" },
+    { "name": "Spaghetti", "cat": "carb", "place": "cupboard", "brand": "Specially Selected", "size": "500g" },
+    { "name": "Farfalle", "cat": "carb", "place": "cupboard", "brand": "Asda", "size": "500g", "exp": "2028-05-05", "expKind": "best-before" },
+    { "name": "Linguine", "cat": "carb", "place": "cupboard", "brand": "Napolina", "size": "500g" },
+    { "name": "Canerock spiced rum", "cat": "drink", "place": "cupboard", "brand": "Canerock", "size": "70cl" },
+    { "name": "Pimm's", "cat": "drink", "place": "cupboard", "brand": "Pimm's", "size": "70cl" },
+    { "name": "Casillero del Diablo Merlot", "cat": "drink", "place": "cupboard", "brand": "Concha y Toro", "size": "75cl" },
+    { "name": "Gin", "cat": "drink", "place": "cupboard", "brand": "No. 1" },
+    { "name": "Soy sauce", "cat": "sauce", "place": "cupboard", "brand": "Kikkoman", "size": "1L" },
+    { "name": "Chicken gravy granules", "cat": "sauce", "place": "cupboard", "brand": "Tesco", "size": "300g", "exp": "2027-11-30", "expKind": "best-before" },
+    { "name": "Chopped tomatoes", "cat": "tin", "place": "cupboard", "brand": "Cirio", "size": "400g", "count": 3 },
+    { "name": "Passata", "cat": "tin", "place": "cupboard", "brand": "Sainsbury's", "size": "500g" },
+    { "name": "Heinz Beanz", "cat": "tin", "place": "cupboard", "brand": "Heinz", "size": "415g", "count": 5 },
+    { "name": "Korma sauce", "cat": "sauce", "place": "cupboard", "brand": "Specially Selected", "size": "350g", "count": 2 },
+    { "name": "Pineapple chunks in juice", "cat": "tin", "place": "cupboard", "brand": "Tesco", "size": "425g" },
+    { "name": "Tomato purée", "cat": "sauce", "place": "cupboard", "size": "200g", "count": 2 },
+    { "name": "Smooth peanut butter", "cat": "sauce", "place": "cupboard", "brand": "Knotty's", "size": "1kg", "m100": { "kcal": 600, "p": 26, "c": 12, "f": 50 } },
+    { "name": "Agave nectar", "cat": "sauce", "place": "cupboard", "brand": "The Groovy Food Company", "size": "250ml" },
+    { "name": "Fibre syrup, maple flavour", "cat": "sauce", "place": "cupboard", "brand": "Nick's", "size": "300ml" },
+    { "name": "Marmite", "cat": "sauce", "place": "cupboard", "brand": "Marmite", "size": "250g" },
+    { "name": "Coconut milk", "cat": "tin", "place": "cupboard", "size": "400ml" },
+    { "name": "Chicken spice rub", "cat": "spice", "place": "cupboard" },
+    { "name": "Oat flour", "cat": "carb", "place": "cupboard", "brand": "Chiquo", "size": "1kg", "m100": { "kcal": 375, "p": 13, "c": 60, "f": 7 } },
+    { "name": "Coconut flour", "cat": "carb", "place": "cupboard", "brand": "Biona Organic", "size": "500g", "m100": { "kcal": 390, "p": 18, "c": 22, "f": 13 } },
+    { "name": "Organic cacao powder", "cat": "other", "place": "cupboard", "brand": "The Healthy Tree", "size": "250g", "m100": { "kcal": 300, "p": 20, "c": 15, "f": 14 } },
+    { "name": "Dark chocolate mini baking chips, no added sugar", "cat": "snack", "place": "cupboard", "brand": "Groovy Keto", "size": "" },
+    { "name": "Xanthan gum", "cat": "other", "place": "cupboard", "brand": "", "size": "100g" },
+    { "name": "Gelatine", "cat": "other", "place": "cupboard", "brand": "Dr. Oetker", "size": "6 sachets" }
+].map((x) => ({ ...x, count: x.count || 1, at: Date.now() }));
+const SEED_SUPPS = [
+    { "name": "Casein (decanted)", "what": "Casein protein", "dose": "30g", "key": "103 kcal, 24g protein per 30g", "note": "Your own label" },
+    { "name": "Heavy Workout mix (decanted)", "what": "Pre-workout / intra-workout", "brand": "SciMX", "dose": "3 scoops", "note": "Your own label — 3 scoops on heavy days" },
+    { "name": "Creatine (decanted)", "what": "Creatine monohydrate", "dose": "3-5g", "note": "Your own label" },
+    { "name": "Clear Whey Protein, raspberry lemonade", "what": "Whey protein isolate", "brand": "MyProtein", "dose": "1 scoop", "key": "20g protein, low sugar" },
+    { "name": "Clear Collagen Protein, unflavoured", "what": "Collagen", "brand": "MyProtein", "dose": "1 scoop", "key": "15g protein, 0g sugar" },
+    { "name": "Citrulline Malate, unflavoured", "what": "Citrulline malate", "brand": "MyProtein", "dose": "2g" },
+    { "name": "Beta Alanine", "what": "Beta-alanine", "brand": "MyProtein", "dose": "3g" },
+    { "name": "Gold Standard 100% Whey, double rich chocolate", "what": "Whey protein", "brand": "Optimum Nutrition", "dose": "1 scoop", "key": "24g protein per serving, 899g tub, 29 servings" },
+    { "name": "Whey, banana", "what": "Whey protein", "brand": "Kinetica Sports", "dose": "1 scoop", "key": "23g protein and 5.5g BCAAs per serving, 2.27kg" },
+    { "name": "Whey Protein Isolate, unflavoured", "what": "Whey protein isolate", "brand": "Isopure", "dose": "1 scoop", "key": "25g protein, only 2 ingredients, 454g" },
+    { "name": "Pure Hydrolysed Collagen Peptides, Platinum Edition", "what": "Collagen", "brand": "Vitabright", "key": "100% bovine collagen, 500g, free from fat and sugar" },
+    { "name": "Collagen Protein Coffee, salted caramel latte", "what": "Collagen protein", "brand": "Titan's", "dose": "1 scoop", "key": "10g protein per scoop, 20 servings, no added sugar" }
+].map((x) => ({ ...x, at: Date.now() }));
+/* The things almost every kitchen has and nobody thinks to photograph. */
+const STAPLES_RAW = [
+    ["Onions", "veg", "cupboard", "The absolute basics", 1],
+    ["Red onions", "veg", "cupboard", "The absolute basics", 1],
+    ["Garlic", "veg", "cupboard", "The absolute basics", 1],
+    ["Salt", "spice", "cupboard", "The absolute basics", 1],
+    ["Black pepper", "spice", "cupboard", "The absolute basics", 1],
+    ["Chilli flakes", "spice", "cupboard", "The absolute basics", 1],
+    ["Dried mixed herbs", "spice", "cupboard", "The absolute basics", 1],
+    ["Olive oil", "fat", "cupboard", "The absolute basics", 1],
+    ["Vegetable oil", "fat", "cupboard", "The absolute basics", 0],
+    ["Butter", "dairy", "fridge", "The absolute basics", 0],
+    ["Plain flour", "carb", "cupboard", "The absolute basics", 0],
+    ["Caster sugar", "other", "cupboard", "The absolute basics", 0],
+    ["Eggs", "dairy", "fridge", "The absolute basics", 1],
+    ["Milk", "dairy", "fridge", "The absolute basics", 1],
+    ["Greek yoghurt 0% fat", "dairy", "fridge", "Fridge regulars", 1],
+    ["Country Life spreadable", "dairy", "fridge", "Fridge regulars", 1],
+    ["British honey roast ham, thin slice", "protein", "fridge", "Fridge regulars", 1],
+    ["Mature cheddar", "dairy", "fridge", "Fridge regulars", 0],
+    ["Cheese slices", "dairy", "fridge", "Fridge regulars", 0],
+    ["Chicken breast", "protein", "fridge", "Fridge regulars", 0],
+    ["Bacon", "protein", "fridge", "Fridge regulars", 0],
+    ["Sausages", "protein", "fridge", "Fridge regulars", 0],
+    ["Lemons", "fruit", "fridge", "Fridge regulars", 0],
+    ["Limes", "fruit", "fridge", "Fridge regulars", 0],
+    ["Fresh chillies", "veg", "fridge", "Fridge regulars", 0],
+    ["Spring onions", "veg", "fridge", "Fridge regulars", 0],
+    ["Fresh ginger", "spice", "fridge", "Fridge regulars", 0],
+    ["Salad leaves", "veg", "fridge", "Fridge regulars", 0],
+    ["Cucumber", "veg", "fridge", "Fridge regulars", 0],
+    ["Tomatoes", "veg", "fridge", "Fridge regulars", 0],
+    ["Carrots", "veg", "fridge", "Fridge regulars", 0],
+    ["Peppers", "veg", "fridge", "Fridge regulars", 0],
+    ["Broccoli", "veg", "fridge", "Fridge regulars", 0],
+    ["Tinned chopped tomatoes", "tin", "cupboard", "Cupboard staples", 1],
+    ["Passata", "tin", "cupboard", "Cupboard staples", 0],
+    ["Tomato purée", "sauce", "cupboard", "Cupboard staples", 1],
+    ["Tinned chickpeas", "tin", "cupboard", "Cupboard staples", 0],
+    ["Tinned kidney beans", "tin", "cupboard", "Cupboard staples", 0],
+    ["Baked beans", "tin", "cupboard", "Cupboard staples", 0],
+    ["Tinned tuna", "tin", "cupboard", "Cupboard staples", 0],
+    ["Tinned sweetcorn", "tin", "cupboard", "Cupboard staples", 1],
+    ["Coconut milk", "tin", "cupboard", "Cupboard staples", 0],
+    ["Basmati rice", "carb", "cupboard", "Cupboard staples", 1],
+    ["Pasta", "carb", "cupboard", "Cupboard staples", 1],
+    ["Oats", "carb", "cupboard", "Cupboard staples", 0],
+    ["Noodles", "carb", "cupboard", "Cupboard staples", 0],
+    ["Stock cubes", "sauce", "cupboard", "Cupboard staples", 1],
+    ["Peanut butter", "sauce", "cupboard", "Cupboard staples", 0],
+    ["Honey", "sauce", "cupboard", "Cupboard staples", 0],
+    ["Bread", "bakery", "cupboard", "Cupboard staples", 0],
+    ["Wraps", "bakery", "cupboard", "Cupboard staples", 0],
+    ["Soy sauce", "sauce", "cupboard", "Sauces and jars", 1],
+    ["Worcestershire sauce", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Balsamic vinegar", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Red wine vinegar", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Malt vinegar", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Dijon mustard", "sauce", "cupboard", "Sauces and jars", 0],
+    ["English mustard", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Mayonnaise", "sauce", "fridge", "Sauces and jars", 0],
+    ["Tomato ketchup", "sauce", "fridge", "Sauces and jars", 0],
+    ["Brown sauce", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Hot sauce", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Sriracha", "sauce", "fridge", "Sauces and jars", 0],
+    ["Mango chutney", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Oyster sauce", "sauce", "cupboard", "Sauces and jars", 0],
+    ["Sesame oil", "fat", "cupboard", "Sauces and jars", 0],
+    ["Frozen peas", "frozen", "freezer", "Freezer", 0],
+    ["Frozen sweetcorn", "frozen", "freezer", "Freezer", 0],
+    ["Frozen mixed vegetables", "frozen", "freezer", "Freezer", 0],
+    ["Frozen berries", "frozen", "freezer", "Freezer", 0],
+    ["Frozen spinach", "frozen", "freezer", "Freezer", 1],
+    ["Oven chips", "frozen", "freezer", "Freezer", 0],
+    ["Frozen chicken breast", "frozen", "freezer", "Freezer", 0],
+    ["Ice cubes", "frozen", "freezer", "Freezer", 0],
+    ["Baking powder", "spice", "cupboard", "Baking and the rest", 0],
+    ["Bicarbonate of soda", "spice", "cupboard", "Baking and the rest", 0],
+    ["Cornflour", "carb", "cupboard", "Baking and the rest", 0],
+    ["Vanilla extract", "spice", "cupboard", "Baking and the rest", 0],
+    ["Breadcrumbs", "carb", "cupboard", "Baking and the rest", 0],
+    ["Tea bags", "drink", "cupboard", "Baking and the rest", 0],
+    ["Coffee", "drink", "cupboard", "Baking and the rest", 0],
+    ["Squash or cordial", "drink", "cupboard", "Baking and the rest", 0]
+];
+const STAPLES = STAPLES_RAW.map(([n, cat, place, g, on]) => ({ n, cat, place, g, on: !!on }));
 /* Content seeded in a later version has to reach people who already have
    saved data, not just fresh installs. Each batch runs once and records
    that it ran, so nothing gets added twice.                          */
@@ -14707,6 +14884,22 @@ const SEEDS = [
         } },
     { id: "recipes1", apply: (st) => (st.myRecipes || []).some((r) => r.n === "Dad's beef curry") ? null
             : { myRecipes: [...(st.myRecipes || []), ...SEED_RECIPES] } },
+    { id: "kitchen3", apply: (st) => {
+            const have = new Set((st.cupboard || []).map((c) => String(c.name || "").toLowerCase()));
+            const add = SEED_KITCHEN2.filter((x) => !have.has(String(x.name).toLowerCase()));
+            return add.length ? { cupboard: [...(st.cupboard || []), ...add] } : null;
+        } },
+    { id: "staples1", apply: (st) => {
+            const have = new Set((st.cupboard || []).map((c) => String(c.name || "").toLowerCase()));
+            const add = STAPLES.filter((x) => x.on && !have.has(x.n.toLowerCase()))
+                .map((x) => ({ name: x.n, cat: x.cat, place: x.place, staple: true, at: Date.now() }));
+            return add.length ? { cupboard: [...(st.cupboard || []), ...add] } : null;
+        } },
+    { id: "supps1", apply: (st) => {
+            const have = new Set((st.supps || []).map((x) => String(x.name || "").toLowerCase()));
+            const add = SEED_SUPPS.filter((x) => !have.has(String(x.name).toLowerCase()));
+            return add.length ? { supps: [...(st.supps || []), ...add] } : null;
+        } },
     { id: "appliances1", apply: (st) => (st.appliances || []).length > 4 ? null
             : { appliances: [...new Set([...(st.appliances || []), "oven", "induction", "microwave", "grill",
                         "airfryer2", "toaster", "coffee", "icecream", "slush", "beer", "filter"])],
@@ -14858,6 +15051,7 @@ function Kitchen({ st, save, a, today, close, setSheet }) {
                     }))))));
         }),
         cup.length > 0 && (React.createElement("div", { style: { padding: "14px 12px 0", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "staples" }) }, "What I always have"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "mykit" }) },
                 "What I cook with",
                 (st.appliances || []).length ? ` · ${(st.appliances || []).length}` : ""),
@@ -17017,6 +17211,75 @@ function RecipePhoto({ st, save, rec, h = 150, close, setSheet }) {
                 border: "1px solid rgba(255,255,255,.14)", color: "#9AA1AE", borderRadius: 9,
                 padding: "6px 11px", fontSize: 12, fontFamily: "'Outfit'", cursor: "pointer" } }, "Remove"))));
 }
+/* ============ THE THINGS YOU ALWAYS HAVE ============
+   Nobody photographs an onion. Tick what's always in and the recipe
+   matching stops asking about it.                                  */
+const STAPLE_GROUPS = [...new Set(STAPLES.map((s) => s.g))];
+function Staples({ st, save, close, setSheet }) {
+    const cup = st.cupboard || [];
+    const has = (n) => cup.some((c) => (c.name || "").toLowerCase() === n.toLowerCase());
+    const onList = (st.shopAdded || []).map((x) => x.name.toLowerCase());
+    const [open, setOpen] = useState(STAPLE_GROUPS[0]);
+    const add = (s2) => save({ ...st, cupboard: [...cup,
+            { name: s2.n, cat: s2.cat, place: s2.place, staple: true, at: Date.now() }],
+        shopAdded: (st.shopAdded || []).filter((x) => x.name.toLowerCase() !== s2.n.toLowerCase()) });
+    const drop = (s2) => save({ ...st,
+        cupboard: cup.filter((c) => (c.name || "").toLowerCase() !== s2.n.toLowerCase()) });
+    const toList = (s2) => save({ ...st, shopAdded: [...(st.shopAdded || []),
+            { name: s2.n, at: Date.now() + Math.random() }] });
+    const offList = (s2) => save({ ...st,
+        shopAdded: (st.shopAdded || []).filter((x) => x.name.toLowerCase() !== s2.n.toLowerCase()) });
+    const tickAll = (g) => {
+        const want = STAPLES.filter((s2) => s2.g === g && !has(s2.n));
+        save({ ...st, cupboard: [...cup, ...want.map((s2) => ({ name: s2.n, cat: s2.cat, place: s2.place, staple: true, at: Date.now() }))] });
+    };
+    const ticked = STAPLES.filter((s2) => has(s2.n)).length;
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "What I always have", sub: `${ticked} of ${STAPLES.length} ticked`, close: close }),
+        React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))" } },
+            React.createElement("div", { className: "il-note", style: { color: "var(--txt)" } }, "Nobody photographs an onion. Tick what's always in the house and recipes stop asking about it. Everything here behaves like any other item afterwards \u2014 editable, and it can run out.")),
+        STAPLE_GROUPS.map((g) => {
+            const list = STAPLES.filter((s2) => s2.g === g);
+            const n = list.filter((s2) => has(s2.n)).length;
+            const isOpen = open === g;
+            return (React.createElement("div", { key: g },
+                React.createElement("div", { className: "il-row", style: { margin: "16px 14px 8px" }, onClick: () => setOpen(isOpen ? "" : g) },
+                    React.createElement("span", { className: "il-lbl" }, g),
+                    React.createElement("span", { style: { display: "flex", gap: 8, alignItems: "center" } },
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0, color: n ? "var(--grn)" : "var(--dim)" } },
+                            n,
+                            " of ",
+                            list.length),
+                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 15 } }, isOpen ? "−" : "+"))),
+                isOpen && React.createElement(React.Fragment, null,
+                    n < list.length && (React.createElement("div", { style: { padding: "0 12px 8px" } },
+                        React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => tickAll(g) },
+                            "Tick all ",
+                            list.length - n,
+                            " remaining"))),
+                    list.map((s2, i) => {
+                        const on = has(s2.n), queued = onList.includes(s2.n.toLowerCase());
+                        return (React.createElement("div", { key: i, className: "il-list", style: { margin: "0 12px 6px" } },
+                            React.createElement("div", { className: "il-li" },
+                                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 11, alignItems: "center", flex: 1 }, onClick: () => on ? drop(s2) : add(s2) },
+                                    React.createElement("span", { style: { width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                                            border: on ? 0 : "1.5px solid var(--line)", background: on ? "var(--grn)" : "transparent",
+                                            color: "#fff", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" } }, on ? "✓" : ""),
+                                    React.createElement("span", { style: { minWidth: 0 } },
+                                        React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, s2.n),
+                                        React.createElement("span", { className: "il-sub", style: { display: "block" } },
+                                            placeBy(s2.place).label,
+                                            queued ? " · on your list" : ""))),
+                                !on && (React.createElement("button", { className: "il-chip" + (queued ? " on" : ""), style: { flexShrink: 0 }, onClick: () => queued ? offList(s2) : toList(s2) }, queued ? "On list" : "Need it")))));
+                    }))));
+        }),
+        React.createElement("div", { className: "il-card", style: { marginTop: 16 } },
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, color: "var(--faint)" } },
+                React.createElement("strong", { style: { color: "var(--txt)" } }, "Need it"),
+                " puts it on your shopping list instead. Anything you tick goes into your kitchen properly \u2014 you can edit the amount, add a date, or mark it run out like anything else.")),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "kitchen" }), 50); } }, "See my kitchen")));
+}
 /* ---------------- CROSS-CHECK ---------------- */
 function CrossCheck({ st, save, a, today, close }) {
     const P = st.profile;
@@ -18351,6 +18614,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "mykit" && React.createElement(MyKit, { st, save, a, today, close, setSheet }),
             sheet.t === "cookit" && React.createElement(CookIt, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "dups" && React.createElement(Duplicates, { st, save, a, today, close, setSheet }),
+            sheet.t === "staples" && React.createElement(Staples, { st, save, close, setSheet }),
             sheet.t === "kitchen" && React.createElement(Kitchen, { st, save, a, today, close, setSheet }),
             sheet.t === "additem" && React.createElement(AddItem, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "expiry" && React.createElement(ExpiryBoard, { st, save, a, today, close, setSheet }),
@@ -18404,7 +18668,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close, setSheet }),
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
-            sheet.t === "health" && React.createElement(HealthSheet, { st, close }))));
+            sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
+            !NO_DONE.includes(sheet.t) && React.createElement(DoneBar, { close: close, label: DONE_LABEL[sheet.t] || "Done" }))));
 }
 /* plain number input that allows an empty box — a controlled Number() input
    snaps back to 0 the moment you clear it, which is where "044" came from */
@@ -18422,12 +18687,27 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
             onChange(x); }, onChange: (e) => { setRaw(e.target.value); const x = parseFloat(e.target.value); if (!isNaN(x) && !onBlurOnly)
             onChange(x); } });
 }
+/* Screens with their own closing action, or that aren't a task you finish. */
+const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose"];
+const DONE_LABEL = {
+    rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
+    additem: "Done adding", kitchen: "Done", list: "Done shopping", expiry: "Done",
+    meas: "Save measurements", impmeas: "Done", mykit: "Save my kit",
+    dups: "Done", stock: "Done", find: "Done",
+    inspo: "Done", family: "Done", lighter: "Done", healthier: "Done", mot: "Done",
+};
 function SH({ title, sub, close }) {
     return React.createElement("div", { className: "il-sh" },
         React.createElement("div", { style: { minWidth: 0, paddingRight: 10 } },
             React.createElement("div", { className: "il-d", style: { fontSize: 18, fontWeight: 600 } }, title),
             sub && React.createElement("div", { style: { fontSize: 12.5, color: "var(--dim)", marginTop: 3 } }, sub)),
         React.createElement("button", { className: "il-x", onClick: close }, "\u00D7"));
+}
+/* Everything saves as you go, so this is really "I'm finished" — but a
+   button you can reach with your thumb beats an × in the top corner.  */
+function DoneBar({ close, label = "Done" }) {
+    return (React.createElement("div", { className: "il-done" },
+        React.createElement("button", { className: "il-btn", onClick: close }, label)));
 }
 function ExProgress({ sheet, a, close, setSheet }) {
     const r = a.review.find((x) => x.id === sheet.id);
