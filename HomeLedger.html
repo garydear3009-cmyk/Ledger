@@ -4254,7 +4254,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v131 · 1 Aug";
+const APP_VERSION = "v134 · 2 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5200,7 +5200,7 @@ function ScanLabel({ st, save, today, close, setSheet }) {
     })();
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Scan a label", sub: stage === "check" ? "Check these against the pack" : "Point it at the nutrition table", close: close }),
-        React.createElement("input", { ref: file, type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: take }),
+        React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
         stage === "start" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Photograph the nutrition table"),
@@ -6679,7 +6679,7 @@ function ScalePhoto({ st, save, today, close }) {
     };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Photograph your food", sub: "On the scales if you can \u2014 it reads the display", close: close }),
-        React.createElement("input", { ref: file, type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: take }),
+        React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
         stage === "start" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Put it on the scales and take a photo"),
@@ -8899,7 +8899,7 @@ function Equipment({ st, save, close, setSheet }) {
                     React.createElement("div", { className: "il-sub" }, "Which kit list the app uses right now")),
                 React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } }, [["home", "Home"], ["gym", "Gym"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + ((st.where || "home") === k ? " on" : ""), onClick: () => save({ ...st, where: k, kit: oldKitFor(eq[k] || []) }) }, l)))))),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: file, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: file, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => file.current?.click() }, busy ? "Looking…" : "Photograph what's there"),
             React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search equipment\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", value: q, onChange: (e) => setQ(e.target.value) })),
         err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
@@ -10986,7 +10986,7 @@ function CupboardShot({ st, save, close }) {
         React.createElement("div", { className: "il-card", style: { background: "#132241" } },
             React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Photograph the cupboard, the fridge, the freezer, the spice rack \u2014 one at a time. She'll list what she can see and keep it, so when you ask what to cook she's working from what you've actually got.")),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Reading it…" : "Photograph a shelf")),
         err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
             React.createElement("div", { className: "il-note" }, err)),
@@ -13197,7 +13197,7 @@ function Pantry({ st, save, a, today, close, setSheet }) {
                 ? "Unpack the bags onto the counter and take one photo, or photograph the receipt. Everything goes into your stock so the recipe filters and the shopping list know what you've got."
                 : "One shelf at a time — cupboard, fridge, freezer, spice rack. She'll list what she can see and keep it.")),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Reading it…" : mode === "shop" ? "Photograph the shop" : "Photograph a shelf")),
         err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
             React.createElement("div", { className: "il-note" }, err)),
@@ -13731,7 +13731,7 @@ function SuppShot({ st, save, close }) {
         React.createElement("div", { className: "il-card", style: { background: "#2A1638" } },
             React.createElement("div", { className: "il-note", style: { color: "#D9BAFF" } }, "She'll read the labels and tell you what each one actually is \u2014 a tub called something aggressive that turns out to be creatine gets recorded as creatine.")),
         React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Reading the labels…" : "Take a photo")),
         err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
             React.createElement("div", { className: "il-note" }, err)),
@@ -15169,6 +15169,7 @@ function AddItem({ sheet, st, save, a, today, close, setSheet }) {
     const [onePlace, setOnePlace] = useState(pre ? guessPlace({ name: pre, cat: guessCat(pre) }) : "cupboard");
     const [oneExp, setOneExp] = useState("");
     const [busy, setBusy] = useState(false);
+    const [prog, setProg] = useState(null); // {done,total} while a batch is read
     const [found, setFound] = useState(null);
     const [err, setErr] = useState("");
     const [typed, setTyped] = useState("");
@@ -15176,29 +15177,61 @@ function AddItem({ sheet, st, save, a, today, close, setSheet }) {
     const [place, setPlace] = useState("cupboard");
     const fileRef = useRef(null);
     const shot = async (e) => {
-        const f = e.target.files?.[0];
-        if (!f)
+        const shots = Array.from(e.target.files || []);
+        if (!shots.length)
             return;
+        e.target.value = ""; // so the same photos can be chosen again after a retry
         setBusy(true);
         setErr("");
         setFound(null);
-        try {
-            const url = await readPhoto(f, 1400, .86);
-            const txt = await callClaude([
-                { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
-                { type: "text", text: `${SHOP_PROMPT}\n\n${where === "shop" ? "This is a shop that has just been bought or delivered." : where === "freezer" ? "This is a freezer drawer or shelf." : where === "spice" ? "This is a spice rack — read every label you can." : "This is a cupboard or fridge shelf."}` },
-            ], 2600, "cheap");
-            const j = looseJson(txt);
-            if (!j || !Array.isArray(j.items) || !j.items.length)
-                throw new Error("Couldn't make anything out. Try a clearer photo, or one shelf at a time.");
-            setFound({ ...j, items: j.items.map((i) => {
+        const seen = new Set(), items = [], notes = [];
+        let failed = 0;
+        for (let n = 0; n < shots.length; n++) {
+            setProg({ done: n, total: shots.length });
+            try {
+                const url = await readPhoto(shots[n], 1400, .86);
+                const txt = await callClaude([
+                    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] } },
+                    { type: "text", text: `${SHOP_PROMPT}\n\n${where === "shop" ? "This is a shop that has just been bought or delivered." : where === "freezer" ? "This is a freezer drawer or shelf." : where === "spice" ? "This is a spice rack — read every label you can." : "This is a cupboard or fridge shelf."}` },
+                ], 2600, "cheap");
+                const j = looseJson(txt);
+                if (!j || !Array.isArray(j.items) || !j.items.length) {
+                    failed++;
+                    continue;
+                }
+                // items with no readable name are the same as no items: the photo gave us nothing
+                const usable = j.items.filter((i) => String(i.name || "").trim());
+                if (!usable.length) {
+                    failed++;
+                    continue;
+                }
+                if (j.note)
+                    notes.push(j.note);
+                usable.forEach((i) => {
+                    const key = String(i.name || "").trim().toLowerCase();
+                    if (!key || seen.has(key))
+                        return; // the same jar in two photos is still one jar
+                    seen.add(key);
                     const cat = i.cat || guessCat(i.name);
                     // a shop gets sorted into wherever each thing belongs; a shelf is all one place
-                    return { ...i, on: true, cat, place: place === "shop" ? guessPlace({ name: i.name, cat }) : place };
-                }) });
+                    items.push({ ...i, on: true, cat, place: place === "shop" ? guessPlace({ name: i.name, cat }) : place });
+                });
+            }
+            catch (x) {
+                failed++;
+            }
         }
-        catch (x) {
-            setErr(x.message || "Couldn't read that photo.");
+        setProg(null);
+        if (!items.length) {
+            setErr(shots.length > 1
+                ? "Couldn't make anything out in those photos. Try clearer ones, or one shelf at a time."
+                : "Couldn't make anything out. Try a clearer photo, or one shelf at a time.");
+        }
+        else {
+            setFound({ items, note: notes.join(" ") || null });
+            // a photo that failed shouldn't silently vanish from the count
+            if (failed)
+                setErr(`${failed} of ${shots.length} photos couldn't be read. Everything else went through.`);
         }
         setBusy(false);
     };
@@ -15262,14 +15295,16 @@ function AddItem({ sheet, st, save, a, today, close, setSheet }) {
                     React.createElement("button", { className: "il-chip" + (place === "shop" ? " on" : ""), onClick: () => { setPlace("shop"); setWhere("shop"); } }, "A shop I've just bought")),
                 React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 11 } }, place === "shop" ? "Unpack onto the counter and take one photo, or photograph the receipt. I'll work out where each thing goes."
                     : place === "spicerack" ? "Get the labels facing the camera. She'll read each one separately."
-                        : `One shelf at a time. Everything found goes into your ${placeBy(place).label.toLowerCase()}.`)),
+                        : `Pick as many shelves as you like. Everything found goes into your ${placeBy(place).label.toLowerCase()}.`)),
             React.createElement("div", { style: { padding: "0 12px" } },
-                React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
-                React.createElement("button", { className: "il-btn", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Reading it…" : "Take the photo"),
+                React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: shot }),
+                React.createElement("button", { className: "il-btn", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? (prog && prog.total > 1 ? `Reading ${prog.done + 1} of ${prog.total}…` : "Reading it…") : "Take the photos"),
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } }, "About 1p")),
             err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
                 React.createElement("div", { className: "il-note" }, err))),
         mode === "photo" && found && React.createElement(React.Fragment, null,
+            err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-note" }, err)),
             React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } },
                     found.items.length,
@@ -15476,7 +15511,7 @@ function MyKit({ st, save, a, today, close, setSheet }) {
         React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))" } },
             React.createElement("div", { className: "il-note", style: { color: "var(--txt)" } }, "This changes what you're shown. A baked potato is ninety minutes in an oven, forty-five in an air fryer or eight in a microwave \u2014 and the method is different for each.")),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g", disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Looking…" : "Photograph the worktop")),
         err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
             React.createElement("div", { className: "il-note" }, err)),
@@ -16093,7 +16128,7 @@ function LogMeal({ rec, st, save, today, close, setSheet }) {
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Or photograph what's left"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 12 } }, "Shoot straight down into the pan and I'll work out what you had from what's still there."),
-            React.createElement("input", { type: "file", accept: "image/*", capture: "environment", ref: fileRef, style: { display: "none" }, onChange: shot }),
+            React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: shot }),
             React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, disabled: busy, onClick: () => fileRef.current?.click() }, busy ? "Judging it…" : "Photograph the leftovers"),
             left && (React.createElement("div", { style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
@@ -20143,7 +20178,7 @@ function Photos({ st, save, close }) {
                 React.createElement("div", { className: "il-sub", style: { textAlign: "center", marginTop: 5 } }, dtiny(p.date)),
                 React.createElement("button", { className: "il-x", style: { position: "absolute", top: 6, right: 6 }, onClick: () => del(p.id) }, "\u00D7"))))))),
         React.createElement("div", { style: { padding: "14px 12px 0" } },
-            React.createElement("input", { ref: file, type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: take }),
+            React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
             React.createElement("button", { className: "il-btn", disabled: busy, onClick: () => file.current?.click() }, busy ? "Saving…" : `Add a ${pose} photo`),
             perr && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginTop: 8 } }, perr)),
         React.createElement("div", { className: "il-card" },
