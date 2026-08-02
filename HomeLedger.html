@@ -4758,7 +4758,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v203 · 2 Aug";
+const APP_VERSION = "v206 · 2 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5479,6 +5479,7 @@ function trackerGuide(st, s) {
 }
 function Train({ st, save, a, today, setSheet }) {
     const [open, setOpen] = useState({});
+    const [built, setBuilt] = useState("");
     /* these rings were hardcoded at 0.62/0.45 — placeholder numbers that read
        as live progress. Show what has actually been logged today. */
     const goals = st.rings || { kcalGoal: 600, minGoal: 30 };
@@ -5498,7 +5499,8 @@ function Train({ st, save, a, today, setSheet }) {
                     React.createElement("div", { className: "il-h2", style: { marginTop: 2 } }, prog.program.name)),
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } },
                     "Week ",
-                    prog.week)),
+                    prog.week,
+                    prog.program.weeks ? ` of ${prog.program.weeks}` : "")),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } },
                 prog.doneCount,
                 " of ",
@@ -5515,6 +5517,13 @@ function Train({ st, save, a, today, setSheet }) {
                     React.createElement("span", { style: { fontSize: 14, textDecoration: prog.ticked[i] ? "line-through" : "none" } }, rt ? rt.name : "Deleted session")),
                 !prog.ticked[i] && prog.next && prog.next.i === i &&
                     React.createElement("span", { className: "il-tag s", style: { flexShrink: 0 } }, "NEXT")))),
+            prog.program.progression && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } },
+                React.createElement("b", null, "Week to week:"),
+                " ",
+                prog.program.progression)),
+            prog.program.weeks && prog.week > prog.program.weeks && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                "That block is finished. ",
+                prog.program.deload || "Take an easier week, then plan the next one.")),
             React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => setSheet({ t: "program" }) }, "Change or end it"))) : (st.routines || []).length > 0 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "No programme running"),
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "You've got sessions but nothing tying them into a week. A programme puts them in an order, counts the weeks, and ticks them off as you go."),
@@ -5534,14 +5543,35 @@ function Train({ st, save, a, today, setSheet }) {
                 React.createElement("div", { className: "il-note", style: { color: "#D9BAFF" } }, "Your logs show you're about 5% weaker before 10am. A pump session is the right call \u2014 lighter, higher reps, in and out. None of it counts against your strength numbers.")),
             React.createElement("div", { style: { padding: "0 12px 4px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach to build me a session"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "blockplan" }) }, "Have him plan a whole block"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pump" }) }, "Quick pump \u00B7 pick the muscles, ten minutes"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "progs" }) }, "Browse known programmes"),
                 React.createElement("button", { className: "il-btn g", onClick: () => {
-                        const gen = generateRoutines(st, a);
-                        if (!gen.length)
+                        /* it used to return quietly when it built nothing, which looks exactly
+                           like a dead button */
+                        let gen = [];
+                        try {
+                            gen = generateRoutines(st, a) || [];
+                        }
+                        catch (e) {
+                            setBuilt("That didn't work: " + (e.message || "something went wrong"));
                             return;
+                        }
+                        if (!gen.length) {
+                            setBuilt(!(st.kit || []).filter((k) => k !== "none").length
+                                ? "You haven't told me what kit you own yet, so there is nothing to build from. Set that up first."
+                                : "Nothing could be built from what you own and the days you train. Tell me about more kit, or ask the coach.");
+                            return;
+                        }
                         save({ ...st, routines: [...gen, ...(st.routines || []).filter((r) => !r.generated)] });
+                        setBuilt(`Built ${gen.length} sessions — ${gen.map((r) => r.name).join(", ")}. They are in Your sessions below.`);
                     } }, "Build sessions from the kit I've got"),
+                built && (React.createElement("div", { className: "il-card", style: { margin: 0, borderLeft: `3px solid ${/didn't|haven't|Nothing/.test(built) ? "var(--gold)" : "var(--grn)"}` } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                        React.createElement("div", { className: "il-lbl" }, /didn't|haven't|Nothing/.test(built) ? "Couldn't" : "Done"),
+                        React.createElement("button", { className: "il-x", onClick: () => setBuilt("") }, "\u00D7")),
+                    React.createElement("div", { className: "il-note" }, built),
+                    /haven't/.test(built) && (React.createElement("button", { className: "il-btn sm", style: { width: "100%", marginTop: 10 }, onClick: () => setSheet({ t: "kit" }) }, "Tell me what kit I have")))),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick", title: "Log cardio", onPick: (e) => {
                             const n = new Date();
                             const sessions = [...st.sessions];
@@ -20102,6 +20132,207 @@ function Staples({ st, save, close, setSheet }) {
             React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "kitchen" }), 50); } }, "See my kitchen")));
 }
 /* ---------------- CROSS-CHECK ---------------- */
+/* ============ TONIGHT'S NUMBERS ============
+   What each source gives us, how often it is worth doing, and where the
+   numbers land. Everything read off a screenshot is marked as read rather
+   than typed, so the review knows where it came from. */
+const SHOTS = [
+    { id: "rings", label: "Activity rings", app: "Apple Fitness", every: 1,
+        what: "Move, Exercise, Stand and steps",
+        hint: "The Summary screen with the three rings and the numbers under them." },
+    { id: "burn", label: "Energy burned", app: "Google Fit or Fitbit", every: 1,
+        what: "Total calories out for the day",
+        hint: "The day view with the total at the top." },
+    { id: "scale", label: "Weight and composition", app: "Withings", every: 7,
+        what: "Weight, muscle and fat percentages",
+        hint: "The home screen card, or the body composition detail." },
+    { id: "tape", label: "Tape measurements", app: "Renpho", every: 17,
+        what: "Neck, chest, waist, hips, arms, thighs, calves",
+        hint: "The measurements grid with all the numbers on it." },
+];
+function shotDue(st, id, today) {
+    const spec = SHOTS.find((x) => x.id === id);
+    const last = (st.shotLog || []).filter((x) => x.kind === id).sort((x, y) => y.date.localeCompare(x.date))[0];
+    if (!last)
+        return { due: true, days: null, spec };
+    const days = Math.round((new Date(today + "T12:00") - new Date(last.date + "T12:00")) / 864e5);
+    return { due: days >= spec.every, days, spec, last };
+}
+const SHOT_READ = `You are reading a screenshot from a health or fitness app. Pull the numbers off it.
+
+Return ONLY JSON, no fences:
+{
+  "kind": "rings|burn|scale|tape|unknown",
+  "date": "YYYY-MM-DD if the screen shows one, else empty",
+  "values": { "moveKcal": n, "moveGoal": n, "exerciseMin": n, "standHrs": n, "steps": n,
+              "totalKcal": n, "weightKg": n, "weightLb": n, "musclePct": n, "fatPct": n,
+              "neck": n, "shoulders": n, "chest": n, "waist": n, "hips": n,
+              "armL": n, "armR": n, "thighL": n, "thighR": n, "calf": n },
+  "unit": "cm|in for any tape measurements, else empty",
+  "unsure": ["anything you could not read clearly"],
+  "note": "one line if something needs saying, else empty"
+}
+
+Rules:
+- Only include keys you can actually SEE. Leave everything else out. Do not guess a number.
+- A measurement showing 0.0 has not been taken. Leave it out rather than recording a zero.
+- "kind" is what the screenshot IS, not what was asked for. Say unknown if it is neither.
+- Weight: give whichever unit is on screen. Stones and pounds go in weightLb as total pounds.
+- Do not convert anything else. Read what is there.`;
+/* where each reading lands */
+function applyShot(st, kind, v, unit, today, date) {
+    const on = date || today;
+    const num = (x) => (typeof x === "number" && isFinite(x) && x > 0 ? x : null);
+    let next = { ...st };
+    if (kind === "rings" || kind === "burn") {
+        const rec = { date: on, src: kind, at: Date.now(),
+            steps: num(v.steps), activeKcal: num(v.moveKcal), totalKcal: num(v.totalKcal),
+            exerMin: num(v.exerciseMin), standHrs: num(v.standHrs) };
+        next.tracker = [rec, ...(st.tracker || []).filter((x) => !(x.date === on && x.src === kind))].slice(0, 400);
+    }
+    if (kind === "scale") {
+        const kg = num(v.weightKg) || (num(v.weightLb) ? v.weightLb / LB : null);
+        if (kg) {
+            const w = { date: on, kg: Math.round(kg * 10) / 10, read: true };
+            if (num(v.fatPct))
+                w.fat = v.fatPct;
+            next.weights = [...(st.weights || []).filter((x) => x.date !== on), w].sort((x, y) => x.date.localeCompare(y.date));
+        }
+        if (num(v.musclePct) || num(v.fatPct)) {
+            next.bodyFat = [{ date: on, fat: num(v.fatPct), muscle: num(v.musclePct), src: "scale" },
+                ...(st.bodyFat || []).filter((x) => x.date !== on)].slice(0, 200);
+        }
+    }
+    if (kind === "tape") {
+        const clean = {};
+        SITES.forEach((site) => {
+            const raw = num(v[site.id]);
+            if (raw)
+                clean[site.id] = unit === "in" ? Math.round(raw / INCH * 10) / 10 : raw;
+        });
+        if (Object.keys(clean).length) {
+            next.meas = [...(st.meas || []).filter((x) => x.date !== on), { date: on, v: clean, read: true }]
+                .sort((x, y) => x.date.localeCompare(y.date));
+        }
+    }
+    next.shotLog = [{ kind, date: on, at: Date.now(), keys: Object.keys(v || {}).length },
+        ...(st.shotLog || [])].slice(0, 200);
+    return next;
+}
+/* One place, once a night. Photograph whichever screens are due, it reads them,
+   you check the numbers, and the full read-back is the button underneath. */
+function Nightly({ st, save, a, today, close, setSheet }) {
+    const [busy, setBusy] = useState("");
+    const [found, setFound] = useState(null);
+    const [err, setErr] = useState("");
+    const [edited, setEdited] = useState({});
+    const fileRef = useRef(null);
+    const wanted = useRef("rings");
+    const pick = (kind) => { wanted.current = kind; setErr(""); setFound(null); fileRef.current?.click(); };
+    const read = async (e) => {
+        const shots = Array.from(e.target.files || []);
+        if (!shots.length)
+            return;
+        e.target.value = "";
+        setBusy(wanted.current);
+        setErr("");
+        setFound(null);
+        setEdited({});
+        try {
+            const out = [];
+            for (const f of shots.slice(0, 4)) {
+                const url = await readPhoto(f, 1568, .9);
+                const txt = await callClaude([
+                    { type: "image", source: { type: "base64", media_type: mediaTypeOf(url), data: url.split(",")[1] } },
+                    { type: "text", text: SHOT_READ },
+                ], 1200, "cheap");
+                const j = looseJson(txt);
+                if (j && j.values)
+                    out.push(j);
+            }
+            if (!out.length)
+                throw new Error("Couldn't read anything off that.");
+            setFound(out);
+        }
+        catch (x) {
+            setErr(x.message || "Couldn't read that.");
+        }
+        setBusy("");
+    };
+    const LABELS = {
+        moveKcal: "Move", moveGoal: "Move goal", exerciseMin: "Exercise", standHrs: "Stand", steps: "Steps",
+        totalKcal: "Total burned", weightKg: "Weight", weightLb: "Weight", musclePct: "Muscle", fatPct: "Fat",
+        neck: "Neck", shoulders: "Shoulders", chest: "Chest", waist: "Waist", hips: "Hips",
+        armL: "Left arm", armR: "Right arm", thighL: "Left thigh", thighR: "Right thigh", calf: "Calf",
+    };
+    const UNITS = {
+        moveKcal: "cal", moveGoal: "cal", exerciseMin: "min", standHrs: "hrs", steps: "",
+        totalKcal: "cal", weightKg: "kg", weightLb: "lb", musclePct: "%", fatPct: "%",
+    };
+    const keep = () => {
+        let next = st;
+        found.forEach((j, n) => {
+            const v = { ...j.values, ...(edited[n] || {}) };
+            Object.keys(v).forEach((k) => { if (v[k] === "" || v[k] == null)
+                delete v[k]; });
+            if (!Object.keys(v).length || j.kind === "unknown")
+                return;
+            next = applyShot(next, j.kind, v, j.unit, today, j.date && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? j.date : today);
+        });
+        if (next !== st)
+            save(next);
+        setFound(null);
+        setEdited({});
+    };
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Tonight's numbers", sub: "Photograph whichever screens are due", close: close }),
+        React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: read }),
+        SHOTS.map((spec) => {
+            const d = shotDue(st, spec.id, today);
+            return (React.createElement("div", { key: spec.id, className: "il-card" + (d.due ? " lead" : "") },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } }, spec.label),
+                        React.createElement("div", { className: "il-sub" },
+                            spec.app,
+                            " \u00B7 ",
+                            spec.what)),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 12, flexShrink: 0,
+                            color: d.due ? "var(--gold)" : "var(--faint)" } }, d.days == null ? "never" : d.days === 0 ? "done today" : `${d.days}d ago`)),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 10 } }, spec.hint),
+                React.createElement("button", { className: "il-btn" + (d.due ? "" : " g"), style: { width: "100%" }, disabled: !!busy, onClick: () => pick(spec.id) }, busy === spec.id ? "Reading it…" : d.due ? `Photograph ${spec.label.toLowerCase()}` : "Do it again anyway")));
+        }),
+        err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+            React.createElement("div", { className: "il-note" }, err)),
+        found && found.map((j, n) => {
+            const v = { ...j.values, ...(edited[n] || {}) };
+            const keys = Object.keys(v).filter((k) => LABELS[k]);
+            const spec = SHOTS.find((x) => x.id === j.kind);
+            return (React.createElement("div", { key: n, className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                    React.createElement("div", { className: "il-lbl" }, spec ? spec.label : "Not one of yours"),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, j.date || today)),
+                !spec && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginBottom: 8 } }, "That doesn't look like any of the four. Nothing will be saved from it."),
+                keys.map((k) => (React.createElement("div", { key: k, className: "il-row", style: { padding: "6px 0" } },
+                    React.createElement("span", { style: { fontSize: 13.5 } }, LABELS[k]),
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 } },
+                        React.createElement("input", { className: "il-in il-n", style: { width: 82, padding: "5px 7px", fontSize: 14 }, value: v[k], inputMode: "decimal", onChange: (ev) => setEdited((x) => ({ ...x, [n]: { ...(x[n] || {}), [k]: ev.target.value } })) }),
+                        React.createElement("span", { className: "il-sub", style: { margin: 0 } }, UNITS[k] || (j.unit || "cm")))))),
+                (j.unsure || []).length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                    "Couldn't read: ",
+                    j.unsure.join(", "),
+                    ". Type them in above if you want them.")),
+                j.note && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6 } }, j.note)));
+        }),
+        found && (React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", onClick: keep }, "Save these"))),
+        React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 8px" } }, "Once it's all in"),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "review" }), 60); } }, "Read everything back to me"),
+            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "crosscheck" }), 60); } }, "Compare what the apps disagree on"),
+            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "catchup" }), 60); } }, "I haven't logged my food either")),
+        React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "10px 16px 14px" } }, "Anything read off a screenshot is marked as read rather than typed, so if two apps disagree the review knows which number came from where. Check the numbers before you save \u2014 it misreads a blurry one occasionally, and a wrong weight is worse than no weight."));
+}
 function CrossCheck({ st, save, a, today, close }) {
     const P = st.profile;
     const [rows, setRows] = useState([
@@ -21263,6 +21494,23 @@ function You({ st, save, a, today, setSheet, go }) {
                 React.createElement("div", { className: "il-note" }, lastR.headline),
                 days >= 7 && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "A week's worth of new data since then \u2014 worth running it again.")));
         })(),
+        (() => {
+            /* the ones that are due tonight, so it is a prompt rather than a chore
+               you have to remember */
+            const due = SHOTS.filter((x) => shotDue(st, x.id, today).due);
+            if (!due.length)
+                return null;
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "Tonight's numbers"),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                        due.length,
+                        " due")),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
+                    due.map((x) => x.label).join(", "),
+                    " \u2014 photograph the screens and it reads them off for you."),
+                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log tonight's screenshots")));
+        })(),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything"),
@@ -21780,6 +22028,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
                 React.createElement("i", null)),
             sheet.t === "guide" && React.createElement(Guide, { st, close, go }),
             sheet.t === "rings" && React.createElement(RingsSheet, { st, save, today, close }),
+            sheet.t === "nightly" && React.createElement(Nightly, { st, save, a, today, close, setSheet }),
             sheet.t === "crosscheck" && React.createElement(CrossCheck, { st, save, a, today, close }),
             sheet.t === "diary" && React.createElement(Diary, { st, save, a, close, setSheet }),
             sheet.t === "dayplan" && React.createElement(DayPlan, { st, save, a, today, close, setSheet }),
@@ -21874,6 +22123,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "equip" && React.createElement(Equipment, { st, save, close, setSheet }),
             sheet.t === "eqw" && React.createElement(EquipWeights, { sheet, st, save, close, setSheet }),
             sheet.t === "progs" && React.createElement(Programmes, { st, save, a, close, setSheet }),
+            sheet.t === "blockplan" && React.createElement(BlockPlan, { st, save, a, today, close, setSheet }),
             sheet.t === "program" && React.createElement(ProgramSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "startrt" && React.createElement(StartRoutine, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "editrt" && React.createElement(EditRoutine, { sheet, st, save, close, setSheet }),
@@ -22104,6 +22354,193 @@ function SuppNote({ st, a, close }) {
 /* Build one, extend it, swap something out, or end it. Everything here is a
    list of sessions you already have — nothing is copied, so editing a session
    changes the programme with it. */
+const BLOCK_PROMPT = `Somebody wants a block of training planned — several weeks, not one session.
+You are writing the whole thing: the sessions, the order, and how it moves week to week.
+
+Return ONLY JSON, no fences:
+{
+  "name": "what to call this block",
+  "weeks": number,
+  "why": "three or four sentences: what this block is for, why it is shaped this way for them",
+  "days": [ { "name": "session name, e.g. Upper A",
+              "why": "one line on what this session is doing in the block",
+              "exercises": [ { "name": "exact name from the list you are given",
+                               "sets": number, "lo": number, "hi": number,
+                               "note": "one line, only where it needs one" } ] } ],
+  "progression": "how the numbers move from week to week, in plain instructions they can follow",
+  "deload": "what to do in the last week or when it stops moving, or empty",
+  "watch": ["two or three things that would tell them it is not working"]
+}
+
+Rules:
+- Use ONLY exercise names from the list you are given, spelled exactly. They train at home.
+- Compounds first in every session. Nobody benches well after three sets of flyes.
+- Fit the days a week and the session length they have told you. Do not write a 90 minute session for
+  somebody with 45.
+- Respect their weekly set ranges per muscle. If the block deliberately runs one muscle high, say so
+  in "why" rather than leaving them to notice.
+- Progression must be something they can act on without you: "add a rep to the top set each week until
+  you hit the top of the range, then add the next weight up". Not "autoregulate".
+- If what they have asked for does not fit the time or the kit, build the honest version and say what
+  you changed in "why".`;
+/* A block, planned with him: several weeks, the sessions, and how the numbers
+   move between them. The session builder writes one workout; this writes the
+   shape of a month. */
+function BlockPlan({ st, save, a, today, close, setSheet }) {
+    const P = st.profile;
+    const [days, setDays] = useState(Number(P.daysWk) || 4);
+    const [weeks, setWeeks] = useState(5);
+    const [aim, setAim] = useState("");
+    const [note, setNote] = useState("");
+    const [stage, setStage] = useState("ask");
+    const [res, setRes] = useState(null);
+    const [err, setErr] = useState("");
+    const [secs, setSecs] = useState(0);
+    const [skip, setSkip] = useState([]);
+    useEffect(() => {
+        if (stage !== "thinking")
+            return;
+        const t = setInterval(() => setSecs((x) => x + 1), 1000);
+        return () => clearInterval(t);
+    }, [stage]);
+    const AIMS = [["size", "Size, everywhere"], ["arms", "Arms and shoulders"],
+        ["strength", "Get stronger on the big lifts"], ["lean", "Hold muscle while leaning down"],
+        ["back", "Back and posture"]];
+    const go = async () => {
+        setStage("thinking");
+        setErr("");
+        setSecs(0);
+        try {
+            const owned = EX.filter((e) => e.kit.every((k) => (st.kit || []).includes(k)) && !e.aerobic)
+                .map((e) => e.name).join(", ");
+            const want = [
+                `${days} days a week, about ${Number(P.minsSess) || 45} minutes a session.`,
+                `A block of ${weeks} weeks.`,
+                aim ? "What they want out of it: " + (AIMS.find((x) => x[0] === aim) || [])[1] : "",
+                note.trim() ? "In their words: " + note.trim() : "",
+            ].filter(Boolean).join("\n");
+            const txt = await callClaude(COACH_BRIEF + "\n\n" + BLOCK_PROMPT
+                + "\n\n=== WHAT THEY ASKED FOR ===\n" + want
+                + "\n\n=== EXERCISES THEY CAN DO ===\n" + owned
+                + "\n\n=== WHAT YOU KNOW ABOUT THEM ===\n"
+                + reviewDossier({ ...st, sessions: liveSessions(st) }, a), 5000, "deep");
+            const j = looseJson(txt);
+            if (!j || !Array.isArray(j.days) || !j.days.length)
+                throw new Error("Nothing usable came back. Try again.");
+            setRes(j);
+            setStage("out");
+            setSkip([]);
+        }
+        catch (e) {
+            setErr(e.message || String(e));
+            setStage("ask");
+        }
+    };
+    const match = (n) => EX.find((e) => e.name.toLowerCase() === String(n).toLowerCase())
+        || EX.find((e) => e.name.toLowerCase().includes(String(n).toLowerCase()));
+    const start = () => {
+        const rts = res.days.map((d, i) => {
+            if (skip.includes(i))
+                return null;
+            const exs = (d.exercises || []).map((x) => {
+                const hit = match(x.name);
+                return hit ? { exId: hit.id, sets: Math.max(1, Math.min(6, x.sets || 3)),
+                    lo: x.lo || hit.lo, hi: x.hi || hit.hi } : null;
+            }).filter(Boolean);
+            if (!exs.length)
+                return null;
+            const ordered = heavyFirst(exs);
+            return { id: "bk" + Date.now() + i, name: d.name || `Day ${i + 1}`, intent: "strength", generated: true,
+                minutes: routineMinutes(ordered), blurb: d.why || res.why || "From your block plan.", exercises: ordered };
+        }).filter(Boolean);
+        if (!rts.length) {
+            setErr("None of those matched exercises you have.");
+            return;
+        }
+        let next = { ...st, routines: [...rts, ...(st.routines || [])] };
+        next = startProgram(next, res.name || "Block", rts.map((r) => r.id), "coach", today);
+        next.program = { ...next.program, weeks: Math.max(1, Math.min(12, res.weeks || weeks)),
+            progression: res.progression || "", deload: res.deload || "", why: res.why || "" };
+        save(next);
+        close();
+    };
+    if (stage === "thinking")
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "Planning it", close: close }),
+            React.createElement("div", { className: "il-card", style: { textAlign: "center", padding: "44px 20px" } },
+                React.createElement("div", { className: "il-d", style: { fontSize: 28, fontWeight: 600, marginBottom: 10 } }, clock(secs)),
+                React.createElement("div", { className: "il-note" }, secs < 10 ? "Reading what you have been doing…" : secs < 22 ? "Working out the split…" : "Writing the weeks…")));
+    if (stage === "out" && res)
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: res.name || "Your block", sub: `${res.weeks || weeks} weeks · ${res.days.length} sessions a week`, close: close }),
+            React.createElement("div", { className: "il-card lead" },
+                React.createElement("div", { className: "il-note", style: { fontSize: 14, color: "var(--txt)" } }, res.why)),
+            res.days.map((d, i) => {
+                const out = skip.includes(i);
+                const rows = d.exercises || [];
+                const missing = rows.filter((x) => !match(x.name)).length;
+                return (React.createElement("div", { key: i, className: "il-card", style: { opacity: out ? .45 : 1 } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                        React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, textDecoration: out ? "line-through" : "none" } }, d.name || `Day ${i + 1}`),
+                        React.createElement("button", { className: "il-chip", style: { flexShrink: 0, color: out ? "var(--tint)" : "var(--red)" }, onClick: () => setSkip((k) => out ? k.filter((j) => j !== i) : [...k, i]) }, out ? "Put it back" : "Drop it")),
+                    d.why && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 8 } }, d.why),
+                    rows.map((x, j) => {
+                        const hit = match(x.name);
+                        return (React.createElement("div", { key: j, className: "il-row", style: { padding: "5px 0", borderTop: j ? "1px solid var(--line)" : 0 } },
+                            React.createElement("div", { style: { minWidth: 0 } },
+                                React.createElement("div", { style: { fontSize: 13.5, color: hit ? "var(--txt)" : "var(--gold)" } }, hit ? hit.name : x.name + " — not in your list"),
+                                x.note && React.createElement("div", { className: "il-sub" }, x.note)),
+                            React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--dim)", flexShrink: 0 } },
+                                x.sets,
+                                " \u00D7 ",
+                                x.lo,
+                                "\u2013",
+                                x.hi)));
+                    }),
+                    missing > 0 && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6, color: "var(--gold)" } },
+                        missing,
+                        " will be left out.")));
+            }),
+            res.progression && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How it moves week to week"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.progression))),
+            res.deload && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "When to back off"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.deload))),
+            (res.watch || []).length > 0 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Signs it isn't working"),
+                res.watch.map((w, i) => (React.createElement("div", { key: i, style: { fontSize: 13, color: "var(--dim)", padding: "5px 0 5px 16px", position: "relative" } },
+                    React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--gold)" } }, "\u2022"),
+                    w))))),
+            err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+                React.createElement("div", { className: "il-note" }, err)),
+            React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: start }, "Start this block"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setStage("ask"); setRes(null); } }, "Ask for a different one")),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "10px 16px 14px" } }, "Starting it replaces whatever programme is running. Your old sessions stay where they are."));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Plan a block with the coach", sub: "Four to six weeks, not one session", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-note" }, "He writes the whole block: the sessions, the order you do them in, and how the numbers move from week to week \u2014 using only the kit you own and the time you have.")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How many days a week"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 14 } }, [2, 3, 4, 5, 6].map((d) => (React.createElement("button", { key: d, className: "il-chip" + (days === d ? " on" : ""), onClick: () => setDays(d) }, d)))),
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How long a block"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, [4, 5, 6, 8].map((w) => (React.createElement("button", { key: w, className: "il-chip" + (weeks === w ? " on" : ""), onClick: () => setWeeks(w) },
+                w,
+                " weeks"))))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What do you want out of it"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 } }, AIMS.map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (aim === k ? " on" : ""), onClick: () => setAim(k) }, l)))),
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, value: note, placeholder: "Anything else? Shoulder's been grumbling, away for a week in the middle\u2026", onChange: (e) => setNote(e.target.value) })),
+        err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
+            React.createElement("div", { className: "il-note" }, err)),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", onClick: go },
+                "Plan me ",
+                weeks,
+                " weeks")));
+}
 function ProgramSheet({ st, save, a, today, close, setSheet }) {
     const routines = st.routines || [];
     const live = programState(st, today);
@@ -22202,6 +22639,10 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
                     } }, "Ask the coach what he makes of it"),
                 React.createElement("button", { className: "il-btn g", onClick: () => {
                         close();
+                        setTimeout(() => setSheet({ t: "blockplan" }), 50);
+                    } }, "Have the coach plan a whole block"),
+                React.createElement("button", { className: "il-btn g", onClick: () => {
+                        close();
                         setTimeout(() => setSheet({ t: "importplan" }), 50);
                     } }, "Import a plan from a picture"),
                 live && React.createElement("button", { className: "il-btn dz", onClick: () => {
@@ -22256,30 +22697,35 @@ function plannedSets(st, a, exId, sets) {
     if (easy && easyBefore && reps >= ex.hi) {
         load = nextLoad(top);
         move = "up";
-        why = "Two sessions finishing with three or more left in the tank at the top of the range. That is the weight asking to go up.";
+        why = "Two sessions with three or more left in the tank at the top of the range. It is asking to go up.";
     }
     else if (easy && reps >= ex.hi) {
         load = nextLoad(top);
         move = "up";
-        why = "Top of the range with plenty left. Take the next weight up and expect the reps to drop back for a session or two.";
+        why = "Top of the range with plenty left. Next weight up; the reps will drop back for a session or two.";
     }
     else if (ground) {
         load = top;
         move = "hold";
-        why = "Last time was a grind and you finished under the range. Same weight again and get the reps back before anything else changes.";
+        why = "Last time was a grind and finished under the range. Same weight again until it moves.";
     }
     else if (reps >= ex.hi) {
         load = nextLoad(top);
         move = "up";
-        why = "You are at the top of the rep range. Move up and start again at the bottom of it.";
+        why = "Top of the range last time. Next weight up, and expect to start at the bottom again.";
     }
     else {
         load = top;
         move = "hold";
-        why = "Same weight, one more rep than last time. That is the whole progression until the range runs out.";
+        why = "Same weight. Beat " + reps + " on your best set — the rest can sit where they land.";
     }
-    const lo = move === "up" ? ex.lo : Math.min(reps + 1, ex.hi);
-    return { sets: n, lo, hi: ex.hi, load, move, lastTop: top, lastReps: reps, lastRir: rir, why };
+    /* Do NOT move the bottom of the rep range. Doing that reads as "every set
+       goes up", which is a large jump in total volume off the back of one good
+       top set. The range stays as the exercise defines it; the thing that moves
+       is the number to beat on the top set. */
+    const beat = move === "up" ? ex.lo : Math.min(reps + 1, ex.hi);
+    return { sets: n, lo: ex.lo, hi: ex.hi, beat, load, move,
+        lastTop: top, lastReps: reps, lastRir: rir, why };
 }
 /* the whole session, written out before you start it */
 function plannedSession(st, a, routine) {
@@ -22352,14 +22798,26 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                     up > 0 && React.createElement("span", { className: "il-tag t1", style: { flexShrink: 0 } },
                         up,
                         " GOING UP")),
-                plan.map(({ ex, plan: p }, i) => (React.createElement("div", { key: i, style: { padding: "9px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
-                    React.createElement("div", { className: "il-row", style: { marginBottom: 2 } },
-                        React.createElement("div", { style: { fontSize: 14, minWidth: 0 } }, ex.name),
-                        React.createElement("span", { className: "il-n", style: { fontSize: 13, flexShrink: 0,
-                                color: p && p.move === "up" ? "var(--grn)" : "var(--dim)" } }, !p || p.first ? "—"
-                            : p.bodyweight ? `${p.sets} × ${p.lo}–${p.hi}`
-                                : `${p.sets} × ${p.lo}–${p.hi} @ ${wn(p.load)}${LU()}`)),
-                    p && React.createElement("div", { className: "il-note", style: { fontSize: 11.5 } }, p.why)))),
+                (() => {
+                    /* the same sentence six times is noise — say each reason once */
+                    const said = new Set();
+                    return plan.map(({ ex, plan: p }, i) => {
+                        const show = p && p.why && !said.has(p.why);
+                        if (show)
+                            said.add(p.why);
+                        return (React.createElement("div", { key: i, style: { padding: "9px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                            React.createElement("div", { className: "il-row", style: { marginBottom: 2 } },
+                                React.createElement("div", { style: { fontSize: 14, minWidth: 0 } }, ex.name),
+                                React.createElement("span", { className: "il-n", style: { fontSize: 13, flexShrink: 0,
+                                        color: p && p.move === "up" ? "var(--grn)" : "var(--dim)" } }, !p || p.first ? `${(p && p.sets) || 3} sets`
+                                    : p.bodyweight ? `${p.sets} sets · beat ${p.lastReps}`
+                                        : `${p.sets} sets @ ${wn(p.load)}${LU()}`)),
+                            React.createElement("div", { className: "il-sub il-n", style: { margin: 0 } }, !p || p.first ? `${ex.lo}–${ex.hi} reps · nothing logged yet`
+                                : p.move === "up" ? `${p.lo}–${p.hi} reps · up from ${wn(p.lastTop)}${LU()}`
+                                    : `${p.lo}–${p.hi} reps · beat ${p.lastReps} on your best set`),
+                            show && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 3 } }, p.why)));
+                    });
+                })(),
                 (() => {
                     const said = plan.map(({ ex }) => ({ ex, d: debriefFor(st, ex.id) })).find((x) => x.d && (x.d.note || (x.d.tags || []).length));
                     if (!said)
@@ -22371,7 +22829,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                         " you said: ",
                         [words, said.d.note].filter(Boolean).join(" — ")));
                 })(),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Worked out from your own last sessions and how much you said was left in the tank. Ignore any of it if the day says otherwise.")));
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Worked out from your own last sessions and how much you said was left in the tank. The sets are unchanged \u2014 the only thing being asked for is a better top set. Ignore any of it if the day says otherwise.")));
         })(),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-ring", style: { marginBottom: 12 } },
