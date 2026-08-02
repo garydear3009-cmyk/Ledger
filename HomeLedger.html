@@ -81,7 +81,10 @@ const CSS = `
 .il-shell[data-tab="coach"]{--tint:var(--t-coach);}
 .il-shell[data-tab="supps"]{--tint:var(--t-supps);}
 .il-shell[data-tab="progress"]{--tint:var(--t-progress);}
-.il-shell{max-width:460px;margin:0 auto;min-height:100vh;padding-bottom:calc(86px + env(safe-area-inset-bottom));background:var(--bg);scroll-padding-bottom:120px;}
+/* Seven tabs in a five-wide grid wrap onto a second row, so the bar is about
+   114px tall, not 57. Padding for one row buried the last card on every
+   screen. */
+.il-shell{max-width:460px;margin:0 auto;min-height:100vh;padding-bottom:calc(146px + env(safe-area-inset-bottom));background:var(--bg);scroll-padding-bottom:180px;}
 .il-d{font-family:'Outfit',sans-serif;letter-spacing:-.015em;}
 .il-n{font-variant-numeric:tabular-nums;}
 .il-top{position:sticky;top:0;z-index:20;background:rgba(11,11,13,.94);backdrop-filter:blur(12px);
@@ -110,11 +113,15 @@ const CSS = `
  border-radius:9px;padding:11px 8px;width:100%;text-align:center;background:var(--c2);color:var(--txt);}
 .il-in:focus{outline:2px solid var(--tint);outline-offset:-1px;}
 .il-stick{position:sticky;top:calc(57px + env(safe-area-inset-top));z-index:18;background:var(--bg);padding:10px 12px 8px;border-bottom:1px solid var(--line);}
-.il-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:460px;display:grid;
- grid-template-columns:repeat(5,1fr);background:rgba(11,11,13,.96);backdrop-filter:blur(14px);
+/* Five across, then the last two centred underneath. A grid left them stuck
+   to the left edge with three empty cells for company. */
+.il-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:460px;display:flex;
+ flex-wrap:wrap;justify-content:center;background:rgba(11,11,13,.96);backdrop-filter:blur(14px);
  border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom);}
-.il-tab{background:none;border:0;color:var(--faint);padding:11px 2px 13px;cursor:pointer;font-family:'Outfit';
+.il-tab{flex:0 0 20%;background:none;border:0;color:var(--faint);padding:9px 2px 10px;cursor:pointer;font-family:'Outfit';
  font-size:11px;font-weight:500;display:flex;flex-direction:column;align-items:center;gap:4px;}
+/* the second row is a shade quieter, so the eye still lands on the top five */
+.il-tabs > .il-tab:nth-child(n+6){padding-top:2px;padding-bottom:8px;}
 .il-tab.on{color:var(--txt);}
 .il-tab[data-k="you"].on{color:var(--t-you);}
 .il-tab[data-k="train"].on{color:var(--t-train);}
@@ -4425,7 +4432,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v183 · 2 Aug";
+const APP_VERSION = "v185 · 2 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -10774,7 +10781,7 @@ function CoachData({ st, save, a, close }) {
             React.createElement("button", { className: "il-chip", style: { flex: 1 }, onClick: () => toggle(id) }, isOut(id) ? "Count it again" : "Leave it out"),
             React.createElement("button", { className: "il-chip", style: { color: "var(--red)" }, onClick: () => wipe(kind, id, label) }, "Delete"))));
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "What he's working from", sub: exc.length ? `${exc.length} excluded` : "Everything you've logged", close: close }),
+        React.createElement(SH, { title: "Everything you've logged", sub: exc.length ? `${exc.length} left out · edit or delete any of it` : "Leave anything out, or delete it for good", close: close }),
         React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))" } },
             React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } },
                 "A session you logged wrong, a weigh-in after a big meal, a tape measurement taken at the wrong height \u2014 any of those quietly skews what he tells you. ",
@@ -13329,7 +13336,7 @@ function AskBar({ st, setSheet, tab }) {
     if (tab === "coach")
         return null; // he's already the whole screen
     const nUnread = 0;
-    return (React.createElement("div", { style: { position: "fixed", right: 14, bottom: "calc(84px + env(safe-area-inset-bottom))",
+    return (React.createElement("div", { style: { position: "fixed", right: 14, bottom: "calc(140px + env(safe-area-inset-bottom))",
             zIndex: 40, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 } },
         open && React.createElement(React.Fragment, null,
             React.createElement("button", { onClick: () => { setOpen(false); setSheet({ t: "search" }); }, style: { display: "flex", alignItems: "center", gap: 9, background: "var(--card)", border: "1px solid var(--line)",
@@ -19094,7 +19101,8 @@ function Body({ st, save, a, setSheet }) {
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "meas" }) }, "Add measurements"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "photos" }) },
                     "Progress photos",
-                    (st.photos || []).length ? ` · ${(st.photos || []).length}` : "")),
+                    (st.photos || []).length ? ` · ${(st.photos || []).length}` : ""),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "records" }) }, "Edit or delete a weigh-in or measurement")),
             last && React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } },
                     "Latest \u00B7 ",
@@ -19859,22 +19867,26 @@ function You({ st, save, a, setSheet, go }) {
                     React.createElement("span", { style: { fontSize: 14 } },
                         "Nothing outstanding",
                         (st.hiddenTips || []).length ? " \u2014 tap to bring back the dismissed ones" : ""))))),
+        (() => {
+            const lastR = (st.reviews || [])[0];
+            if (!lastR)
+                return null;
+            const days = Math.round((Date.now() - lastR.at) / 864e5);
+            /* Directly above the button it belongs to, and it opens the review it is
+               talking about rather than sitting there as a paragraph. */
+            return (React.createElement("div", { className: "il-card", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "pastrev" }) },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "Last review"),
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, days === 0 ? "today" : `${days} day${days > 1 ? "s" : ""} ago`),
+                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))),
+                React.createElement("div", { className: "il-note" }, lastR.headline),
+                days >= 7 && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "A week's worth of new data since then \u2014 worth running it again.")));
+        })(),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "guide" }) }, "How this works")),
-        (() => {
-            const lastR = (st.reviews || [])[0];
-            const days = lastR ? Math.round((Date.now() - lastR.at) / 864e5) : null;
-            if (!lastR)
-                return null;
-            return (React.createElement("div", { className: "il-card", style: { marginTop: 8 } },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                    React.createElement("div", { className: "il-lbl" }, "Last review"),
-                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, days === 0 ? "today" : `${days} day${days > 1 ? "s" : ""} ago`)),
-                React.createElement("div", { className: "il-note" }, lastR.headline),
-                days >= 7 && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "A week's worth of new data since then \u2014 worth running it again.")));
-        })(),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Your sessions"),
         React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } }, (() => {
             const gen = (st.routines || []).filter((r) => r.generated);
@@ -20280,8 +20292,16 @@ function Guide({ st, close, go }) {
         React.createElement(Part, { id: "prog", title: "I want to see how it's going", sub: "Graphs, records, and what you logged" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 4 } }, "Give it three or four weeks before you read much into any of this. Before that there is not enough to draw a line through."),
             React.createElement(Link, { tab: "progress", sh: { t: "diary" } }, "Everything I've logged, day by day"),
-            React.createElement(Link, { tab: "progress", sh: { t: "records" } }, "My best lifts"),
-            React.createElement(Link, { tab: "progress", sh: { t: "volume" } }, "How much work each muscle is getting")),
+            React.createElement(Link, { tab: "body", sh: { t: "volume" } }, "How much work each muscle is getting")),
+        React.createElement(Part, { id: "wrong2", title: "I logged something wrong", sub: "Leaving it out, or deleting it" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 4 } },
+                "A session you logged twice, a weigh-in straight after a big meal, a tape measurement taken at the wrong height \u2014 any of those quietly skews everything you are told. Two ways to deal with it:",
+                React.createElement("b", null, " leave it out"),
+                " keeps the record but hides it from every calculation, and ",
+                React.createElement("b", null, "delete"),
+                " removes it for good."),
+            React.createElement(Link, { tab: "body", sh: { t: "records" } }, "Edit or delete a session, weigh-in or measurement"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "You can also swipe left on a day in the diary, on a session in the list, or on a single set while you are logging, and a bin appears.")),
         React.createElement(Part, { id: "find", title: "I can't find something", sub: "One search covers the lot" },
             React.createElement("div", { className: "il-note" }, "Search looks through exercises, foods, recipes, your kitchen and everything you have logged, all at once. If you half remember a word, that is enough."),
             React.createElement(Link, { tab: "you", sh: { t: "search" } }, "Search everything")),
@@ -20432,7 +20452,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
-            !NO_DONE.includes(sheet.t) && React.createElement(DoneBar, { close: close, label: DONE_LABEL[sheet.t] || "Done" }))));
+            !NO_DONE.includes(sheet.t) && !(vp && vp.open) &&
+                React.createElement(DoneBar, { close: close, label: DONE_LABEL[sheet.t] || "Done" }))));
 }
 /* plain number input that allows an empty box — a controlled Number() input
    snaps back to 0 the moment you clear it, which is where "044" came from */
