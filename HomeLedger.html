@@ -4877,7 +4877,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v230 · 3 Aug";
+const APP_VERSION = "v231 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14810,9 +14810,12 @@ const READ_RECIPE = `You are reading photographs of a recipe. They might be a pr
 a book, a meal-kit card, a screenshot, or a handwritten note.
 
 WHEN THERE IS MORE THAN ONE PHOTO
-They may not all be the same page. Work out what each one is before you read anything:
+They may not all be the same page, and they may not all be the same recipe. Work out what each one
+is before you read anything:
 - A recipe card, with ingredients and method.
 - A continuation of that card.
+- A DIFFERENT recipe altogether. Two cards photographed together are two recipes, not one to
+  reconcile. Return one entry per recipe.
 - A NUTRITION TABLE covering a whole book, with a row per recipe number. Meal-kit books
   (Slimming World, HelloFresh, Gousto and the like) print these on a separate page.
 If one photo is a table like that, find the recipe's number on the card — usually printed small in a
@@ -14825,9 +14828,11 @@ nutrition table is split the same way. Read the 2-portion column and set "serves
 photo makes clear they want otherwise. Take the nutrition from the matching panel. Do not mix a
 2-portion ingredient list with 4-portion nutrition — say in "unsure" which column you used.
 
-Return ONLY JSON, no fences:
+Return ONLY JSON, no fences. "recipes" is a list — one entry per distinct recipe in the photos, in
+the order they appear. Most of the time it has one entry.
 {
   "found": true or false,
+  "recipes": [ {
   "n": "the recipe name as written",
   "num": the recipe number if the card shows one, otherwise null,
   "meal": "breakfast" | "lunch" | "dinner" | "snack",
@@ -14841,6 +14846,7 @@ Return ONLY JSON, no fences:
   "alt": null, or if the card also lists another portion size:
          { "serves": number, "ing": [...same shape...], "m": [cal,p,c,f] },
   "unsure": "which column and which table row you used, plus anything you couldn't read"
+  } ]
 }
 
 Rules on the numbers:
@@ -14863,6 +14869,9 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
     const [res, setRes] = useState(null);
     const [err, setErr] = useState("");
     const [source, setSource] = useState("");
+    const [all, setAll] = useState([]); // every recipe found in the photos
+    const [which, setWhich] = useState(0); // the one being checked
+    const [filed, setFiled] = useState([]); // the ones already in the book
     const fileRef = useRef(null);
     const add = async (e) => {
         const fs = [...(e.target.files || [])].slice(0, 4 - imgs.length);
@@ -14893,7 +14902,12 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             const j = looseJson(txt);
             if (!j || !j.found)
                 throw new Error("That doesn't look like a recipe. Try a clearer photo of the whole card.");
-            setRes(j);
+            /* one card or five, it comes back as a list; an older flat answer still works */
+            const list = Array.isArray(j.recipes) && j.recipes.length ? j.recipes : [j];
+            setAll(list);
+            setWhich(0);
+            setFiled([]);
+            setRes(list[0]);
             setStage("out");
         }
         catch (e) {
@@ -14910,6 +14924,16 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             source: source.trim() || null, num: res.num ?? null, at: Date.now() };
         save({ ...st, myRecipes: [...(st.myRecipes || []), rec],
             recipePhotos: { ...(st.recipePhotos || {}), [rec.n]: imgs.slice(0, 2) } });
+        const done = [...filed, which];
+        setFiled(done);
+        /* more than one card in the photos? go straight to the next one rather
+           than making them start again */
+        const next = all.findIndex((_, n) => !done.includes(n));
+        if (next >= 0) {
+            setWhich(next);
+            setRes(all[next]);
+            return;
+        }
         close();
         setTimeout(() => setSheet({ t: "recipe", name: rec.n }), 60);
     };
@@ -14951,6 +14975,18 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             React.createElement("div", { className: "il-note" }, "Reading it\u2026")),
         stage === "out" && res && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+                all.length > 1 && (React.createElement("div", { style: { marginBottom: 12 } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                        React.createElement("div", { className: "il-lbl" },
+                            all.length,
+                            " recipes in those photos"),
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                            filed.length,
+                            " filed")),
+                    React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, all.map((r, i) => (React.createElement("button", { key: i, className: "il-chip" + (which === i ? " on" : ""), style: { opacity: filed.includes(i) ? .5 : 1 }, onClick: () => { setAll(all.map((x, n) => (n === which ? res : x))); setWhich(i); setRes(all[i]); } },
+                        filed.includes(i) ? "\u2713 " : "",
+                        r.n || `Recipe ${i + 1}`)))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, "Check and file them one at a time \u2014 what you have changed on each is kept while you move between them."))),
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "What it is called"),
                 React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 12 }, value: res.n || "", onChange: (e) => setRes({ ...res, n: e.target.value }) }),
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9 } },
@@ -14990,12 +15026,13 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                 (res.ing || []).length,
                 " ingredients"),
             React.createElement("div", { className: "il-card" },
-                (res.ing || []).map((i, n) => (React.createElement("div", { key: n, style: { display: "flex", gap: 6, alignItems: "center",
-                        padding: "6px 0", borderTop: n ? "1px solid var(--line)" : 0 } },
-                    React.createElement(NumIn, { style: { width: 62 }, value: i[0] ?? 0, step: i[1] === "g" || i[1] === "ml" ? 10 : 1, onChange: (v) => setIng(n, [v, i[1], i[2]]) }),
-                    React.createElement("input", { className: "il-in", style: { width: 54, padding: "8px 6px", textAlign: "center" }, value: i[1] || "", placeholder: "g", onChange: (e) => setIng(n, [i[0], e.target.value || null, i[2]]) }),
-                    React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1, minWidth: 0 }, value: i[2] || "", onChange: (e) => setIng(n, [i[0], i[1], e.target.value]) }),
-                    React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setRes({ ...res, ing: res.ing.filter((_, x) => x !== n) }) }, "\u00D7")))),
+                (res.ing || []).map((i, n) => (React.createElement("div", { key: n, style: { padding: "8px 0", borderTop: n ? "1px solid var(--line)" : 0 } },
+                    React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 6 } },
+                        React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1, minWidth: 0 }, placeholder: "what it is", value: i[2] || "", onChange: (e) => setIng(n, [i[0], i[1], e.target.value]) }),
+                        React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setRes({ ...res, ing: res.ing.filter((_, x) => x !== n) }) }, "\u00D7")),
+                    React.createElement("div", { style: { display: "flex", gap: 6 } },
+                        React.createElement(NumIn, { style: { width: 96, flexShrink: 0 }, value: i[0] ?? 0, step: i[1] === "g" || i[1] === "ml" ? 10 : 1, onChange: (v) => setIng(n, [v, i[1], i[2]]) }),
+                        React.createElement("input", { className: "il-in", style: { width: 84, flexShrink: 0, textAlign: "center" }, value: i[1] || "", placeholder: "g / ml / tsp", onChange: (e) => setIng(n, [i[0], e.target.value || null, i[2]]) }))))),
                 React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setRes({ ...res, ing: [...(res.ing || []), [1, null, ""]] }) }, "+ Another ingredient")),
             React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } },
                 (res.method || []).length,
@@ -22471,12 +22508,12 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
 }
 /* plain number input that allows an empty box — a controlled Number() input
    snaps back to 0 the moment you clear it, which is where "044" came from */
-function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOnly, className }) {
+function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOnly, className, style }) {
     const [raw, setRaw] = useState(value === null || value === undefined || value === "" ? "" : String(value));
     const [live, setLive] = useState(false);
     useEffect(() => { if (!live)
         setRaw(value === null || value === undefined || value === "" ? "" : String(value)); }, [value, live]);
-    return React.createElement("input", { className: className || "il-in", type: "number", inputMode: "decimal", step: step, placeholder: placeholder, disabled: disabled, min: min, value: raw, onFocus: (e) => { setLive(true); setTimeout(() => { try {
+    return React.createElement("input", { className: className || "il-in", style: style, type: "number", inputMode: "decimal", step: step, placeholder: placeholder, disabled: disabled, min: min, value: raw, onFocus: (e) => { setLive(true); setTimeout(() => { try {
             e.target.select();
         }
         catch { } }, 0); }, onBlur: () => { setLive(false); const x = parseFloat(raw); if (isNaN(x))
@@ -22489,7 +22526,8 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
 /* Screens where a Done bar would either close something mid-job or look like
    it moves you on when it does not. */
 const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
-    "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood"];
+    "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood",
+    "addrec", "scan", "saveit"];
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
