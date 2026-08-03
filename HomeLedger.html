@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v256 · 3 Aug";
+const APP_VERSION = "v257 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -17272,7 +17272,7 @@ function suppSuggestions(st, a) {
    left the morning list exactly as long as it was. Somebody has to say which
    handful they actually take, and doing that thirty times one row at a time is
    not a thing anybody would do. One screen, tick the ones you take. */
-function SuppPick({ st, save, close }) {
+function SuppPick({ st, save, today, close }) {
     const all = st.supps || [];
     const [on, setOn] = useState(() => new Set(all.filter((x) => isTaking(st, x.name)).map((x) => x.name)));
     const flip = (n) => setOn((p) => { const q = new Set(p); if (q.has(n))
@@ -17306,7 +17306,10 @@ function SuppPick({ st, save, close }) {
         })),
         React.createElement("div", { style: { padding: "0 12px" } },
             React.createElement("button", { className: "il-btn", onClick: () => {
-                    save({ ...st, suppOff: all.filter((x) => !on.has(x.name)).map((x) => x.name) });
+                    /* an empty list still counts as answered — st.suppOff being absent is
+                       what "never asked" means, so it must not stay absent after this */
+                    const off = all.filter((x) => !on.has(x.name)).map((x) => x.name);
+                    save({ ...st, suppOff: off, suppPicked: today });
                     close();
                 } },
                 "Save \u2014 ",
@@ -17325,6 +17328,18 @@ function Supplements({ st, save, a, today, setSheet }) {
     const left = mine.length - done.length;
     const rec = suppSuggestions(st, a);
     return (React.createElement(React.Fragment, null,
+        !st.suppOff && (st.supps || []).length > 8 && (React.createElement("div", { className: "il-card lead", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 12 } },
+                React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: "var(--gold)" } }, (st.supps || []).length),
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "in the cupboard"),
+                    React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } }, "none picked as daily yet"))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 12 } },
+                "Owning a tub and taking it every morning are different things, and a list of",
+                " ",
+                (st.supps || []).length,
+                " is one nobody finishes. Pick the handful you actually take \u2014 the rest stay yours, stay explained, and come off the morning list."),
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "supppick" }) }, "Pick what I actually take"))),
         React.createElement("div", { className: "il-card lead" },
             mine.length > 0 ? (React.createElement(React.Fragment, null,
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 12 } },
@@ -17334,7 +17349,9 @@ function Supplements({ st, save, a, today, setSheet }) {
                             "/",
                             mine.length)),
                     React.createElement("div", { className: "il-hatch" + (left === 0 ? " grn" : "") }, mine.map((x, i) => (React.createElement("i", { key: i, className: i < done.length ? "on" : "" }))))),
-                React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, left === 0 ? "all taken today" : `${left} still to take`),
+                React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, !st.suppOff && mine.length > 8
+                    ? "everything you own, until you pick"
+                    : left === 0 ? "all taken today" : `${left} still to take`),
                 React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 4 } }, "Tap any of them for what the evidence actually says."),
                 mine.length > 8 && (React.createElement("div", { style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
                     React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } },
@@ -23944,7 +23961,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
             sheet.t === "askme" && React.createElement(AskHistory, { st, save, a, today, close, setSheet }),
             sheet.t === "week" && React.createElement(WeekPicture, { st, a, today, close, setSheet }),
-            sheet.t === "supppick" && React.createElement(SuppPick, { st, save, close }),
+            sheet.t === "supppick" && React.createElement(SuppPick, { st, save, today, close }),
             sheet.t === "morning" && React.createElement(MorningSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "cookmode" && React.createElement(CookMode, { st, save, sheet, close, setSheet }),
             sheet.t === "entry" && React.createElement(EntrySheet, { st, save, today, sheet, close }),
