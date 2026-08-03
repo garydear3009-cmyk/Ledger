@@ -2358,7 +2358,11 @@ const dur = (s) => `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60
 const clock = (s) => s >= 3600
     ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
     : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-const setVol = (ex, s) => (s.warm || !ex.loaded || ex.aerobic ? 0 : s.w * s.reps * (ex.perSide ? 2 : 1));
+/* On a one-sided lift the honest rep count is the weaker side. Averaging the
+   two lets a strong right arm hide a weak left one in every number the app
+   produces. */
+const sideReps = (s) => (s && s.repsL != null && s.repsR != null ? Math.min(s.repsL, s.repsR) : s ? s.reps : 0);
+const setVol = (ex, s) => (s.warm || !ex.loaded || ex.aerobic ? 0 : s.w * sideReps(s) * (ex.perSide ? 2 : 1));
 const exVol = (ex, sets) => sets.reduce((a, s) => a + setVol(ex, s), 0);
 const sessVol = (s) => s.exercises.reduce((a, e) => { const x = exOf(e.exId); return a + (x ? exVol(x, e.sets) : 0); }, 0);
 const STEP = 2.5;
@@ -3653,11 +3657,14 @@ function buildSeed() {
         const carbs = Math.round((slot ? 300 : 215) + (r() - 0.5) * 110);
         const prot = Math.round(152 + (r() - 0.5) * 46);
         const fat = Math.round(74 + (r() - 0.5) * 30);
-        foods.push({ date, entries: [{ id: "sd" + d, name: "Day total", meal: "Dinner", kcal: carbs * 4 + prot * 4 + fat * 9, p: prot, c: carbs, f: fat }] });
-        weights.push({ date, kg: Math.round((81.4 + d * 0.011 + (r() - 0.5) * 0.9) * 10) / 10 });
+        /* demo: true on every seeded record. Without it there is no way to tell
+           made-up history from something you actually did, and no way to remove
+           one without removing the other. */
+        foods.push({ date, demo: true, entries: [{ id: "sd" + d, name: "Day total", meal: "Dinner", kcal: carbs * 4 + prot * 4 + fat * 9, p: prot, c: carbs, f: fat, demo: true }] });
+        weights.push({ date, demo: true, kg: Math.round((81.4 + d * 0.011 + (r() - 0.5) * 0.9) * 10) / 10 });
         if (d % 14 === 0) {
             const g = d / 14;
-            meas.push({ date, v: { neck: 39.5 + g * 0.1, shoulders: 121 + g * 0.7, chest: 104 + g * 0.6, waist: 84 - g * 0.35, hips: 99, armL: 35.4 + g * 0.32, armR: 35.8 + g * 0.3, thighL: 58.2 + g * 0.4, thighR: 58.4 + g * 0.4, calf: 38.6 + g * 0.15 } });
+            meas.push({ date, demo: true, v: { neck: 39.5 + g * 0.1, shoulders: 121 + g * 0.7, chest: 104 + g * 0.6, waist: 84 - g * 0.35, hips: 99, armL: 35.4 + g * 0.32, armR: 35.8 + g * 0.3, thighL: 58.2 + g * 0.4, thighR: 58.4 + g * 0.4, calf: 38.6 + g * 0.15 } });
         }
         if (!slot)
             continue;
@@ -3686,7 +3693,7 @@ function buildSeed() {
         });
         const dsec = intent === "pump" ? 1350 + Math.floor(r() * 400) : 3300 + Math.floor(r() * 1800);
         const min0 = intent === "pump" ? 5 : [4, 18, 34, 47][Math.floor(r() * 4)];
-        sessions.push({
+        sessions.push({ demo: true,
             id: "s" + d, date, intent, hour, minute: min0, durationSec: dsec, routineName: rname,
             finished: true, // history, not something in progress
             startedAt: new Date(`${date}T${hhmm(hour, min0)}:00`).getTime(),
@@ -3694,6 +3701,81 @@ function buildSeed() {
         });
     }
     return { sessions, foods, meas, weights };
+}
+/* How much of what is in here was never yours. */
+function demoCount(st) {
+    const n = (a) => (a || []).filter((x) => x && x.demo).length;
+    return { sessions: n(st.sessions), weights: n(st.weights), foods: n(st.foods), meas: n(st.meas),
+        total: n(st.sessions) + n(st.weights) + n(st.foods) + n(st.meas) };
+}
+/* Remove only the stamped records. Anything you logged yourself stays, which
+   the old "clear the demo data" button could not promise — it emptied the lot. */
+function clearDemo(st) {
+    const keep = (a) => (a || []).filter((x) => !(x && x.demo));
+    return { ...st, sessions: keep(st.sessions), weights: keep(st.weights),
+        foods: keep(st.foods), meas: keep(st.meas), demoCleared: Date.now() };
+}
+const STORE_SNAP = "homeledger:v7:snap";
+/* iOS clears storage for a site you have not opened in a week unless it has
+   been marked persistent. Asking costs nothing and is the difference between
+   "still there" and "was there". */
+async function askToKeep() {
+    try {
+        if (!navigator.storage || !navigator.storage.persist)
+            return { asked: false, granted: null };
+        const already = navigator.storage.persisted ? await navigator.storage.persisted() : false;
+        if (already)
+            return { asked: false, granted: true };
+        const granted = await navigator.storage.persist();
+        return { asked: true, granted };
+    }
+    catch {
+        return { asked: false, granted: null };
+    }
+}
+/* Dated copies kept inside the app, so a bad day is recoverable without
+   going to a file. Small enough to keep a handful. */
+async function takeSnapshot(st, why) {
+    const body = JSON.stringify(st);
+    let list = [];
+    try {
+        list = JSON.parse(await Store.get(STORE_SNAP)) || [];
+    }
+    catch {
+        list = [];
+    }
+    const snap = { at: Date.now(), date: iso(new Date()), why: why || "saved",
+        kb: Math.round(body.length / 1024), body };
+    /* one a day is plenty — a snapshot every save would fill the drawer with
+       copies of the same afternoon */
+    const sameDay = list.findIndex((x) => x.date === snap.date);
+    if (sameDay >= 0)
+        list[sameDay] = snap;
+    else
+        list.unshift(snap);
+    list = list.slice(0, 6);
+    await Store.set(STORE_SNAP, JSON.stringify(list));
+    return list.map(({ body: b, ...rest }) => rest);
+}
+async function listSnapshots() {
+    try {
+        const list = JSON.parse(await Store.get(STORE_SNAP)) || [];
+        return list.map(({ body, ...rest }) => rest);
+    }
+    catch {
+        return [];
+    }
+}
+async function readSnapshot(at) {
+    const list = JSON.parse(await Store.get(STORE_SNAP)) || [];
+    const hit = list.find((x) => x.at === at);
+    return hit ? JSON.parse(hit.body) : null;
+}
+/* Anything claiming to be a saved state has to look like one before it is
+   allowed to replace what is there. */
+function looksLikeState(o) {
+    return !!o && typeof o === "object" && !!o.profile && Array.isArray(o.sessions)
+        && Array.isArray(o.weights) && Array.isArray(o.meas);
 }
 const DEFAULT_STATE = () => {
     const s = buildSeed();
@@ -4769,7 +4851,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v213 · 3 Aug";
+const APP_VERSION = "v217 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -4783,6 +4865,9 @@ function HomeLedgerInner() {
     const setSheet = (x) => setStack((s) => (x == null ? [] : [...s, x]));
     const [ready, setReady] = useState(false);
     const [bootNote, setBootNote] = useState("");
+    const [keep, setKeep] = useState(null); // whether iOS agreed to keep the storage
+    const [coldStart, setColdStart] = useState(false); // nothing was found on this phone
+    const [locked, setLocked] = useState(null); // the last time you pressed Save
     const canWrite = useRef(false); // never write until we know what's already stored
     const dirty = useRef(false); // has the user changed anything yet
     const pending = useRef(null);
@@ -4856,6 +4941,35 @@ function HomeLedgerInner() {
             setHealth((h) => ({ ...h, err: `Last save failed: ${e?.message || e}` }));
         }
     };
+    /* Ask once, on the first launch that gets far enough to have data worth
+       keeping. Safari clears storage for a site untouched for a week otherwise. */
+    useEffect(() => {
+        if (!ready)
+            return;
+        let gone = false;
+        askToKeep().then((r) => { if (!gone)
+            setKeep(r); });
+        return () => { gone = true; };
+    }, [ready]);
+    /* The first time a new build opens with real data, keep a copy of what was
+       there. If an update ever does go wrong, the copy is from before it. */
+    useEffect(() => {
+        if (!ready || !st || !st.profile)
+            return;
+        if (st.builtOn === APP_VERSION)
+            return;
+        let gone = false;
+        (async () => {
+            try {
+                if ((st.sessions || []).length || (st.weights || []).length)
+                    await takeSnapshot(st, `before ${APP_VERSION}`);
+            }
+            catch { }
+            if (!gone)
+                save({ ...st, builtOn: APP_VERSION });
+        })();
+        return () => { gone = true; };
+    }, [ready, st && st.builtOn]);
     useEffect(() => {
         let settled = false, provisional = false;
         const finish = (state, note) => {
@@ -4889,6 +5003,10 @@ function HomeLedgerInner() {
             kitchen: [], hiddenTips: [], reviews: [],
         });
         const fresh = (why) => {
+            /* Nothing was found. That is either a genuinely new phone or — far more
+               likely here — the home screen app was re-added and given an empty
+               container. Either way it should say so rather than pretending. */
+            setColdStart(true);
             try {
                 finish(DEFAULT_STATE(), why);
             }
@@ -5051,6 +5169,12 @@ function HomeLedgerInner() {
                     React.createElement("div", { className: "il-lbl" }, "Heads up"),
                     React.createElement("button", { className: "il-x", onClick: () => setBootNote("") }, "\u00D7")),
                 React.createElement("div", { className: "il-note" }, bootNote)),
+            coldStart && (React.createElement("div", { className: "il-card lead", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "Nothing was found on this phone"),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "This has started as a new install \u2014 the profile and history you can see are the examples that ship with it, not yours. If you have used HomeLedger before, bring your data back before you change anything, or you will be building on top of somebody who does not exist."),
+                React.createElement("div", { style: { display: "grid", gap: 8 } },
+                    React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "saveit" }) }, "Bring my data back"),
+                    React.createElement("button", { className: "il-btn g", onClick: () => setColdStart(false) }, "This is a new start, carry on")))),
             React.createElement(AskStrip, { tab: view, setSheet }),
             tab === "train" && (React.createElement(React.Fragment, null,
                 React.createElement("div", { style: { padding: "10px 12px 2px", display: "flex", gap: 7 } },
@@ -5279,12 +5403,26 @@ function LiveSession({ st, save, s, setSheet }) {
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.loaded ? (ex.perSide ? LU() + " ea" : LU()) : "—"),
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.timed || ex.cardio ? "secs" : "reps"),
                         React.createElement("span", null)),
+                    oneSided(ex) && (() => {
+                        const g = liftGaps(st).find((x) => x.ex.id === ex.id);
+                        const tape = ex.group === "legs" ? tapeGaps(st).find((x) => x.plain === "thigh")
+                            : tapeGaps(st).find((x) => x.plain === "arm");
+                        const weak = g && g.pct >= 5 ? g.weak : (tape && tape.has && tape.abs >= 0.5 ? (tape.bigger === "right" ? "left" : "right") : null);
+                        if (!weak)
+                            return null;
+                        return (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 8, color: "var(--gold)" } },
+                            "Start on the ",
+                            weak,
+                            ", then match it on the other side and stop there \u2014 that is how a gap closes rather than holds."));
+                    })(),
                     !ex.aerobic && !e.sets.some((q) => q.warm) && (React.createElement("button", { className: "il-chip", style: { marginBottom: 8 }, onClick: () => addWarm(e.exId) }, "+ Warm-up sets")),
                     !ex.aerobic && e.sets.map((x, j) => (React.createElement(SwipeDelete, { key: j, inCard: true, onDelete: () => dropSet(e.exId, j) },
                         React.createElement("div", { className: "il-lrow" + (x.done ? " il-done" : ""), style: { background: "var(--card)" } },
                             React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
                             React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
-                            React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) }),
+                            oneSided(ex) ? (React.createElement("span", { style: { display: "flex", gap: 5, minWidth: 0 } },
+                                React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, placeholder: "L", value: x.repsL != null ? x.repsL : x.reps, onChange: (v) => setField(e.exId, j, "repsL", v) }),
+                                React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, placeholder: "R", value: x.repsR != null ? x.repsR : x.reps, onChange: (v) => setField(e.exId, j, "repsR", v) }))) : (React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) })),
                             React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713"))))),
                     (() => {
                         if (ex.aerobic || st.rirOff)
@@ -7651,6 +7789,124 @@ class Boundary extends React.Component {
     }
 }
 const short = (t) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+/* What he asked for: one button that says "this is safe now", and proof.
+   The app already writes on every change — this forces one, reads it back,
+   keeps a dated copy, and tells you where it went. */
+function SaveIt({ st, save, a, today, close, setSheet, health }) {
+    const [stage, setStage] = useState("idle");
+    const [msg, setMsg] = useState("");
+    const [snaps, setSnaps] = useState([]);
+    const [keepState, setKeepState] = useState(null);
+    const fileRef = useRef(null);
+    useEffect(() => { listSnapshots().then(setSnaps); askToKeep().then(setKeepState); }, []);
+    const lock = async () => {
+        setStage("saving");
+        setMsg("");
+        try {
+            const body = JSON.stringify(st);
+            await Store.set(STORE_KEY, body);
+            const back = await Store.get(STORE_KEY);
+            if (back !== body)
+                throw new Error("what came back was not what went in");
+            await Store.set(STORE_BAK, body);
+            const list = await takeSnapshot(st, "you pressed save");
+            setSnaps(list);
+            save({ ...st, lockedAt: Date.now() });
+            setStage("done");
+            setMsg(`Written, read back and checked. ${Math.round(body.length / 1024)}KB, and a copy kept for today.`);
+        }
+        catch (e) {
+            setStage("failed");
+            setMsg(e.message || String(e));
+        }
+    };
+    const fromFile = async (e) => {
+        const f = e.target.files?.[0];
+        if (!f)
+            return;
+        e.target.value = "";
+        try {
+            const text = await f.text();
+            const o = JSON.parse(text);
+            if (!looksLikeState(o))
+                throw new Error("That file isn't a HomeLedger backup.");
+            const when = (o.sessions || []).length + " sessions, " + (o.weights || []).length + " weigh-ins";
+            if (!window.confirm(`Replace everything with that file? It has ${when}. What is on this phone now will be gone.`))
+                return;
+            await takeSnapshot(st, "before restoring a file");
+            save(o);
+            setStage("done");
+            setMsg("Restored from the file. A copy of what was here was kept first.");
+        }
+        catch (x) {
+            setStage("failed");
+            setMsg(x.message || String(x));
+        }
+    };
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Save and lock it in", sub: "Where your data is, and how to get it back", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "The app writes every change as you make it \u2014 you do not have to press anything. This forces a write, reads it straight back to check it arrived, and keeps a dated copy you can return to."),
+            React.createElement("button", { className: "il-btn", disabled: stage === "saving", onClick: lock }, stage === "saving" ? "Writing…" : "Save and check it"),
+            msg && (React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 10,
+                    color: stage === "failed" ? "var(--red)" : "var(--grn)" } }, msg)),
+            st.lockedAt && stage !== "done" && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } },
+                "Last checked ",
+                dtiny(iso(new Date(st.lockedAt))),
+                " at ",
+                hhmm(new Date(st.lockedAt).getHours(), new Date(st.lockedAt).getMinutes()),
+                "."))),
+        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Updating without losing anything"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 13, lineHeight: 1.55 } },
+                "Your data lives in this phone's browser storage for the address the app is served from \u2014 not in the file. So: ",
+                React.createElement("b", null, "replace the file on GitHub and open the icon you already have."),
+                " The new version loads with everything intact."),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 10 } },
+                "What costs you the data is ",
+                React.createElement("b", null, "deleting the home screen icon and adding it again"),
+                ". iOS treats that as a new install and can hand it an empty container \u2014 which is why it comes back looking part finished with the example data in it. If you do need to re-add it, send yourself a copy first and bring it back from the file on the new one.")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                React.createElement("div", { className: "il-lbl" }, "Will iOS keep it?"),
+                React.createElement("span", { className: "il-n", style: { fontSize: 12.5, flexShrink: 0,
+                        color: keepState && keepState.granted ? "var(--grn)" : "var(--gold)" } }, keepState == null ? "checking" : keepState.granted ? "yes" : keepState.granted === false ? "not promised" : "can't tell")),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, keepState && keepState.granted
+                ? "Marked as permanent. Safari will not clear it to make room, and it survives an update."
+                : "Safari clears storage for a site you have not opened in a week. Adding the app to your home screen and opening it regularly is what convinces it to keep yours — and a copy off the phone is the real answer either way.")),
+        React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 8px" } }, "Copies kept on this phone"),
+        snaps.length === 0 && React.createElement("div", { className: "il-empty" }, "None yet. Press save above and one is made."),
+        snaps.map((x) => (React.createElement("div", { key: x.at, className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14 } }, dtiny(x.date)),
+                    React.createElement("div", { className: "il-sub il-n" },
+                        x.kb,
+                        "KB \u00B7 ",
+                        x.why)),
+                React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: async () => {
+                        const o = await readSnapshot(x.at);
+                        if (!looksLikeState(o)) {
+                            setStage("failed");
+                            setMsg("That copy won't open.");
+                            return;
+                        }
+                        if (!window.confirm(`Go back to the copy from ${dtiny(x.date)}? Anything logged since will be gone.`))
+                            return;
+                        await takeSnapshot(st, "before going back");
+                        save(o);
+                        setStage("done");
+                        setMsg(`Back to ${dtiny(x.date)}.`);
+                    } }, "Go back to this"))))),
+        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "A copy off the phone"),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Copies on the phone go with the phone. Send one to yourself once a month and a lost handset costs you nothing but the time since."),
+            React.createElement("div", { style: { display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "diag" }), 50); } }, "Send a copy somewhere"),
+                React.createElement("input", { type: "file", accept: "application/json,.json,.txt", ref: fileRef, style: { display: "none" }, onChange: fromFile }),
+                React.createElement("button", { className: "il-btn g", onClick: () => fileRef.current?.click() }, "Bring one back from a file")),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Bringing one back replaces everything on this phone, and keeps a copy of what was here first.")));
+}
 function Diagnostics({ st, save, a, close, health }) {
     const [note, setNote] = useState("");
     const [where, setWhere] = useState("");
@@ -20732,6 +20988,26 @@ function Body({ st, save, a, today, setSheet }) {
     const last = st.meas[st.meas.length - 1], prev = st.meas[st.meas.length - 2];
     const jump = weightJump(st, a, today || iso(new Date()));
     return (React.createElement(React.Fragment, null,
+        (() => {
+            const r = sideRead(st);
+            if (!r.worst || !r.worst.has || r.worst.pct < 3)
+                return null;
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)", cursor: "pointer" }, onClick: () => setSheet({ t: "sides" }) },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("div", { className: "il-lbl" }, "Left and right"),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: "var(--gold)", flexShrink: 0 } },
+                        r.worst.abs,
+                        "cm \u203A")),
+                React.createElement("div", { className: "il-note" },
+                    "Your ",
+                    r.worst.bigger,
+                    " ",
+                    r.worst.plain,
+                    " is ",
+                    r.worst.abs,
+                    "cm bigger than the other.",
+                    r.worst.move > 0.3 ? " And widening." : "")));
+        })(),
         jump && (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
                 React.createElement("div", { className: "il-lbl" }, "The scales moved"),
@@ -20779,6 +21055,7 @@ function Body({ st, save, a, today, setSheet }) {
             React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log a screenshot from Withings, Renpho, Apple or Google"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "meas" }) }, "Add measurements by hand"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "sides" }) }, "Left and right"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "photos" }) },
                     "Progress photos",
                     (st.photos || []).length ? ` · ${(st.photos || []).length}` : ""),
@@ -21587,6 +21864,33 @@ function You({ st, save, a, today, setSheet, go }) {
                         "Nothing outstanding",
                         (st.hiddenTips || []).length ? " \u2014 tap to bring back the dismissed ones" : ""))))),
         (() => {
+            /* Eight weeks of invented history ships with the app so the screens are
+               not empty on day one. Nothing ever said so, and it sits in the weight
+               trend, the review and everything the coach reads. */
+            const d = demoCount(st);
+            if (!d.total)
+                return null;
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "Some of this isn't yours"),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
+                    "The app shipped with ",
+                    d.total,
+                    " example records so nothing looked empty on day one \u2014",
+                    d.weights ? ` ${d.weights} daily weigh-ins,` : "",
+                    d.sessions ? ` ${d.sessions} sessions,` : "",
+                    d.foods ? ` ${d.foods} days of food,` : "",
+                    d.meas ? ` ${d.meas} sets of tape measurements,` : "",
+                    " none of it real. It is in your weight trend and in everything the coach reads. Clear it before you trust any of the numbers."),
+                React.createElement("button", { className: "il-btn", onClick: () => {
+                        if (!window.confirm(`Remove ${d.total} example records? Anything you logged yourself stays.`))
+                            return;
+                        save(clearDemo(st));
+                    } },
+                    "Clear the ",
+                    d.total,
+                    " example records")));
+        })(),
+        (() => {
             const due = reviewDue(st, today);
             if (!due)
                 return null;
@@ -21649,6 +21953,7 @@ function You({ st, save, a, today, setSheet, go }) {
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "saveit" }) }, "Save and lock it in"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "nightly" }) }, "Log tonight's screenshots"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "guide" }) }, "How this works")),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Your sessions"),
@@ -21856,11 +22161,25 @@ function You({ st, save, a, today, setSheet, go }) {
         React.createElement("div", { style: { padding: "6px 12px 4px" } },
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "This is general information built from your own logs and published research. It isn't medical or dietetic advice, and it can't diagnose anything. For pain, medication or a health condition, see a professional.")),
         React.createElement("div", { style: { padding: 12, display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn g", onClick: () => {
-                    if (!window.confirm("Clear the demo history and start from nothing? Your profile and kit stay."))
-                        return;
-                    save({ ...st, sessions: [], foods: [], weights: [], meas: [], daily: {}, photos: [], recent: [], foodCount: {} });
-                } }, "Clear the demo data, keep my settings"),
+            (() => {
+                const d = demoCount(st);
+                return (React.createElement(React.Fragment, null,
+                    React.createElement("button", { className: "il-btn g", disabled: !d.total, onClick: () => {
+                            if (!window.confirm(`Remove ${d.total} example records? Anything you logged yourself stays.`))
+                                return;
+                            save(clearDemo(st));
+                        } }, d.total ? `Clear the ${d.total} example records` : "No example data left"),
+                    d.total > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 12 } },
+                        [d.weights && `${d.weights} weigh-ins`, d.sessions && `${d.sessions} sessions`,
+                            d.foods && `${d.foods} days of food`, d.meas && `${d.meas} tape sets`]
+                            .filter(Boolean).join(", "),
+                        " \u2014 none of it yours.")),
+                    React.createElement("button", { className: "il-btn g", onClick: () => {
+                            if (!window.confirm("Empty everything you have logged? Profile and kit stay. This cannot be undone."))
+                                return;
+                            save({ ...st, sessions: [], foods: [], weights: [], meas: [], daily: {}, photos: [], recent: [], foodCount: {} });
+                        } }, "Empty the whole log, mine included")));
+            })(),
             React.createElement("button", { className: "il-btn dz", onClick: () => { if (window.confirm("Wipe everything and start again?"))
                     save(DEFAULT_STATE()); } }, "Reset to demo data"))));
 }
@@ -22176,6 +22495,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "eatwindow" && React.createElement(EatWindow, { st, save, close }),
             sheet.t === "catchup" && React.createElement(CatchUp, { st, save, a, today, close, setSheet }),
             sheet.t === "search" && React.createElement(SearchAll, { st, close, setSheet }),
+            sheet.t === "saveit" && React.createElement(SaveIt, { st, save, a, today, close, setSheet, health }),
             sheet.t === "diag" && React.createElement(Diagnostics, { st, save, a, close, health }),
             sheet.t === "review" && React.createElement(DeepReview, { st, save, a, today, close, setSheet }),
             sheet.t === "pastrev" && React.createElement(PastReviews, { st, save, close }),
@@ -22268,6 +22588,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "program" && React.createElement(ProgramSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "startrt" && React.createElement(StartRoutine, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "editrt" && React.createElement(EditRoutine, { sheet, st, save, close, setSheet }),
+            sheet.t === "sides" && React.createElement(SidesSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close, setSheet }),
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
@@ -24313,6 +24634,147 @@ function Photos({ st, save, close }) {
                 x)))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Photos are shrunk to thumbnail size and kept on this device only. Nothing is uploaded anywhere.")));
+}
+/* ============ LEFT AND RIGHT ============ */
+/* Which exercises are actually done one limb at a time. perSide on the
+   exercise means the weight is per dumbbell, which is a different thing. */
+const ONE_SIDED = /single-arm|one-arm|single arm|concentration|bulgarian|split squat|\blunge|step-?up|step-over|suitcase|windmill|half-kneeling|side plank|single-leg|one-leg|pigeon|lizard|warrior|thread the needle|kickback|side bend|archer|renegade|turkish|sandbag shoulder|skater/i;
+const oneSided = (ex) => !!ex && ONE_SIDED.test(ex.name);
+const SIDE_PAIRS = [
+    { l: "armL", r: "armR", label: "Arms", plain: "arm" },
+    { l: "thighL", r: "thighR", label: "Thighs", plain: "thigh" },
+];
+/* The gap on each pair, now and against the first set on record. */
+function tapeGaps(st) {
+    const sets = (st.meas || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    return SIDE_PAIRS.map((p) => {
+        const withBoth = sets.filter((m) => m.v && m.v[p.l] != null && m.v[p.r] != null);
+        if (!withBoth.length)
+            return { ...p, has: false };
+        const now = withBoth[withBoth.length - 1], first = withBoth[0];
+        const gapOf = (m) => Math.round((m.v[p.r] - m.v[p.l]) * 10) / 10;
+        const gap = gapOf(now), was = gapOf(first);
+        const bigger = gap === 0 ? null : gap > 0 ? "right" : "left";
+        const move = withBoth.length < 2 ? null : Math.round((Math.abs(gap) - Math.abs(was)) * 10) / 10;
+        return { ...p, has: true, gap, abs: Math.abs(gap), bigger, was, move,
+            date: now.date, sets: withBoth.length,
+            pct: Math.round((Math.abs(gap) / Math.max(now.v[p.l], now.v[p.r])) * 1000) / 10 };
+    });
+}
+/* Reps left against reps right, on the lifts done one side at a time. */
+function liftGaps(st) {
+    const out = {};
+    (st.sessions || []).filter((x) => x.finished).slice(-16).forEach((sx) => {
+        (sx.exercises || []).forEach((e) => {
+            const ex = exOf(e.exId);
+            if (!ex || !oneSided(ex))
+                return;
+            (e.sets || []).forEach((q) => {
+                var _a;
+                if (q.warm || q.repsL == null || q.repsR == null)
+                    return;
+                const o = (out[_a = ex.id] || (out[_a] = { ex, l: 0, r: 0, sets: 0, dates: new Set() }));
+                o.l += q.repsL;
+                o.r += q.repsR;
+                o.sets++;
+                o.dates.add(sx.date);
+            });
+        });
+    });
+    return Object.values(out).map((o) => {
+        const gap = o.r - o.l;
+        const pct = o.l + o.r ? Math.round((Math.abs(gap) / ((o.l + o.r) / 2)) * 1000) / 10 : 0;
+        return { ...o, gap, pct, weak: gap === 0 ? null : gap > 0 ? "left" : "right", days: o.dates.size };
+    }).sort((a, b) => b.pct - a.pct);
+}
+/* One read on the whole thing, in plain words. */
+function sideRead(st) {
+    const tape = tapeGaps(st).filter((x) => x.has);
+    const lifts = liftGaps(st);
+    const lines = [];
+    tape.forEach((t) => {
+        if (t.abs < 0.5) {
+            lines.push(`${t.label}: level, within half a centimetre.`);
+            return;
+        }
+        const dir = t.move == null ? ""
+            : t.move > 0.3 ? ` It has widened by ${t.move}cm since you started measuring.`
+                : t.move < -0.3 ? ` It has closed by ${Math.abs(t.move)}cm since you started measuring.`
+                    : " It has held steady.";
+        lines.push(`${t.label}: your ${t.bigger} is ${t.abs}cm bigger — about ${t.pct}%.${dir}`);
+    });
+    lifts.filter((x) => x.pct >= 8).forEach((x) => {
+        lines.push(`${x.ex.name}: your ${x.weak} side is doing ${x.pct}% fewer reps across ${x.sets} sets.`);
+    });
+    return { tape, lifts, lines, worst: tape.concat().sort((a, b) => b.abs - a.abs)[0] || null };
+}
+/* One screen for the whole left-and-right question. */
+function SidesSheet({ st, save, a, today, close, setSheet }) {
+    const read = sideRead(st);
+    const anyTape = read.tape.length > 0;
+    const band = (pct) => (pct < 2 ? ["var(--grn)", "level"] : pct < 5 ? ["var(--gold)", "worth watching"] : ["var(--red)", "worth doing something about"]);
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Left and right", sub: "Where the two sides differ, and what to do about it", close: close }),
+        !anyTape && !read.lifts.length && (React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Nothing to compare yet. Measure both arms and both thighs, and log a one-sided lift with the reps for each side, and this fills itself in."),
+            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "meas" }), 50); } }, "Take both sides"))),
+        read.lines.length > 0 && (React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Where you are"),
+            read.lines.map((l, i) => (React.createElement("div", { key: i, style: { fontSize: 13.5, color: "var(--txt)", lineHeight: 1.5,
+                    padding: "5px 0 5px 16px", position: "relative" } },
+                React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--tint)" } }, "\u2022"),
+                l))))),
+        read.tape.map((t) => {
+            const [colour, word] = band(t.pct);
+            return (React.createElement("div", { key: t.l, className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } }, t.label),
+                        React.createElement("div", { className: "il-sub" },
+                            "Measured ",
+                            t.sets,
+                            " time",
+                            t.sets === 1 ? "" : "s",
+                            " \u00B7 last ",
+                            dtiny(t.date))),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 13.5, color: colour, flexShrink: 0 } }, t.abs === 0 ? "level" : `${t.abs}cm · ${t.pct}%`)),
+                React.createElement("div", { className: "il-bar" },
+                    React.createElement("i", { style: { width: Math.min(100, t.pct * 12) + "%", background: colour } })),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } },
+                    t.abs === 0 ? "Nothing in it." : `Your ${t.bigger} is bigger — ${word}.`,
+                    t.move != null && t.abs >= 0.5 && (t.move > 0.3
+                        ? ` Widening: it was ${Math.abs(t.was)}cm when you started.`
+                        : t.move < -0.3 ? ` Closing: it was ${Math.abs(t.was)}cm when you started.` : " Holding steady."))));
+        }),
+        read.lifts.length > 0 && (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 8px" } }, "What the lifts say"),
+            read.lifts.map((x) => {
+                const [colour] = band(x.pct);
+                return (React.createElement("div", { key: x.ex.id, className: "il-card", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "info", exId: x.ex.id }) },
+                    React.createElement("div", { className: "il-row" },
+                        React.createElement("div", { style: { minWidth: 0 } },
+                            React.createElement("div", { style: { fontSize: 14 } }, x.ex.name),
+                            React.createElement("div", { className: "il-sub il-n" },
+                                x.l,
+                                " reps left \u00B7 ",
+                                x.r,
+                                " right \u00B7 ",
+                                x.sets,
+                                " sets over ",
+                                x.days,
+                                " session",
+                                x.days === 1 ? "" : "s")),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 13, color: colour, flexShrink: 0 } }, x.pct === 0 ? "even" : `${x.pct}%`))));
+            }))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What to do about it"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 13, lineHeight: 1.55 } },
+                React.createElement("b", null, "Start every one-sided set on the weaker side."),
+                " Whatever it manages, match it on the strong side and stop there \u2014 even if the strong side had more in it. That is the only thing that closes a gap; doing the same reps both ways holds it exactly where it is."),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 10 } }, "Two things worth saying plainly. A small difference is normal \u2014 everybody has one, and under about two percent is not worth chasing. And a tape difference is not always muscle: how you hold the tape, which arm you measure first, and which side you write with all show up in it. The lifts are the better signal of the two.")),
+        read.lifts.length === 0 && anyTape && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "The tape says one thing; the lifts would say more. On any exercise done one arm or one leg at a time, the session now logs reps for each side separately."),
+            React.createElement("button", { className: "il-btn g", onClick: close }, "Right you are"))));
 }
 function MeasSheet({ st, save, close, setSheet }) {
     const [tu, setTu] = useState(UNIT.tape);
