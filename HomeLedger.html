@@ -4877,7 +4877,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v231 · 3 Aug";
+const APP_VERSION = "v232 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14806,6 +14806,96 @@ function AskBar({ st, setSheet, tab }) {
 /* ============ ADD A RECIPE FROM A PHOTO ============
    Recipe cards, a page from a book, a screenshot, a Slimming World card
    through the door. Photograph it and she reads it into the book.    */
+/* ============ WHAT AN INGREDIENT LINE IS WORTH ============
+   Match the line to the food table and scale it. Grams and millilitres are
+   straightforward; spoons and whole items are estimates and are marked as
+   such rather than presented as measurements. */
+const SPOON_G = { tsp: 5, tbsp: 15, dsp: 10 };
+function foodForLine(name, pool) {
+    const raw = String(name || "").toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!raw)
+        return null;
+    /* "chicken breast, diced" should find chicken breast, not diced anything */
+    const words = raw.split(" ").filter((w) => w.length > 2 &&
+        !/^(the|and|of|for|into|then|with|fresh|large|small|medium|chopped|diced|sliced|finely|roughly|cooked|raw|tinned|canned|frozen)$/.test(w));
+    if (!words.length)
+        return null;
+    let best = null, bestScore = 0;
+    pool.forEach((f) => {
+        const n = f.name.toLowerCase();
+        let score = 0, missed = 0;
+        words.forEach((w) => { if (n.includes(w))
+            score += w.length;
+        else
+            missed += w.length; });
+        if (!score)
+            return;
+        /* A word in the line that the food does not have counts against it, or
+           "unicorn steak" matches rump steak on the word steak alone. */
+        score -= missed;
+        /* prefer a short, plain entry over a long branded one */
+        score += Math.max(0, 30 - n.length) / 10;
+        if (n === raw)
+            score += 20;
+        if (score > bestScore) {
+            bestScore = score;
+            best = f;
+        }
+    });
+    return bestScore >= 4 ? best : null;
+}
+/* grams for a line, and how sure we are of them */
+function gramsForLine(amount, unit, food) {
+    const a = Number(amount) || 0;
+    if (!a)
+        return { g: 0, sure: false };
+    const u = String(unit || "").toLowerCase();
+    if (u === "g")
+        return { g: a, sure: true };
+    if (u === "ml")
+        return { g: a, sure: true }; // near enough for anything watery
+    if (SPOON_G[u])
+        return { g: a * SPOON_G[u], sure: false };
+    /* no unit: a whole one of something. The food table knows what one is. */
+    if (!u && food && food.serv)
+        return { g: a * food.serv, sure: false };
+    return { g: 0, sure: false };
+}
+function lineMacros(line, pool) {
+    const [amount, unit, name] = line || [];
+    const food = foodForLine(name, pool);
+    if (!food)
+        return { food: null, g: 0, sure: false, m: null };
+    const { g, sure } = gramsForLine(amount, unit, food);
+    if (!g)
+        return { food, g: 0, sure: false, m: null };
+    return { food, g, sure, m: { kcal: (food.kcal * g) / 100, p: (food.p * g) / 100, c: (food.c * g) / 100, f: (food.f * g) / 100 } };
+}
+/* the whole card, from its ingredients, per serving */
+function recipeFromIngredients(rec, pool) {
+    const lines = (rec.ing || []).map((l) => lineMacros(l, pool));
+    const priced = lines.filter((x) => x.m);
+    if (!priced.length)
+        return null;
+    const whole = priced.reduce((a, x) => ({ kcal: a.kcal + x.m.kcal, p: a.p + x.m.p, c: a.c + x.m.c, f: a.f + x.m.f }), { kcal: 0, p: 0, c: 0, f: 0 });
+    const n = Math.max(1, Number(rec.serves) || 1);
+    return {
+        lines, priced: priced.length, missed: lines.length - priced.length,
+        rough: priced.some((x) => !x.sure),
+        per: [Math.round(whole.kcal / n), Math.round(whole.p / n), Math.round(whole.c / n), Math.round(whole.f / n)],
+    };
+}
+/* is this one finished enough to file? */
+function recipeReady(r) {
+    const missing = [];
+    if (!String(r?.n || "").trim())
+        missing.push("a name");
+    if (!(r?.ing || []).length)
+        missing.push("ingredients");
+    if (!(r?.method || []).length)
+        missing.push("a method");
+    return { ok: missing.length === 0, missing };
+}
 const READ_RECIPE = `You are reading photographs of a recipe. They might be a printed card, a page from
 a book, a meal-kit card, a screenshot, or a handwritten note.
 
@@ -14864,6 +14954,7 @@ Keep the method steps close to as written. Don't rewrite somebody else's recipe 
 Where the card writes a step as a fragment, make it a full instruction — the wording stays theirs,
 but "chicken flattened" becomes "Flatten the chicken". Never merge two of the card's steps into one.`;
 function AddRecipe({ st, save, a, today, close, setSheet }) {
+    const pool = [...FOODS, ...(st.myFoods || [])];
     const [imgs, setImgs] = useState([]);
     const [stage, setStage] = useState("in");
     const [res, setRes] = useState(null);
@@ -14914,6 +15005,37 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             setErr(e.message || String(e));
             setStage("in");
         }
+    };
+    const [asking, setAsking] = useState(false);
+    const [herRead, setHerRead] = useState("");
+    /* Her opinion on the card before it goes in the book, so it can be improved
+       on the way in rather than filed and forgotten. */
+    const askHer = async () => {
+        setAsking(true);
+        setHerRead("");
+        try {
+            const sum = recipeFromIngredients(res, pool);
+            const txt = await callClaude(`${NUT_BRIEF}
+
+They have just photographed a recipe and are about to put it in their book. Give them your read on it
+before they do: what it is good for, what it is short of, and the one or two changes that would earn
+their approval. Name the swap and the amount. If it is fine as it is, say so plainly rather than
+inventing a change.
+
+Four or five sentences. No JSON, no headings, just the answer.
+
+=== THE RECIPE ===
+${res.n} — serves ${res.serves}, ${res.mins} minutes
+Per serving as written: ${(res.m || []).join(", ") || "not given"}
+${sum ? `Per serving from the ingredients: ${sum.per.join(", ")}` : ""}
+Ingredients: ${(res.ing || []).map((i) => `${i[0]}${i[1] || ""} ${i[2]}`).join(", ")}
+Method: ${(res.method || []).join(" ")}`, 900, "mid");
+            setHerRead(String(txt || "").trim());
+        }
+        catch (e) {
+            setHerRead("Couldn't reach her — " + (e.message || e));
+        }
+        setAsking(false);
     };
     /* one ingredient line, kept as [amount, unit, what] */
     const setIng = (n, line) => setRes({ ...res, ing: res.ing.map((x, i) => (i === n ? line : x)) });
@@ -14984,9 +15106,21 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                             filed.length,
                             " filed")),
                     React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, all.map((r, i) => (React.createElement("button", { key: i, className: "il-chip" + (which === i ? " on" : ""), style: { opacity: filed.includes(i) ? .5 : 1 }, onClick: () => { setAll(all.map((x, n) => (n === which ? res : x))); setWhich(i); setRes(all[i]); } },
-                        filed.includes(i) ? "\u2713 " : "",
+                        filed.includes(i) ? "\u2713 " : recipeReady(i === which ? res : r).ok ? "" : "! ",
                         r.n || `Recipe ${i + 1}`)))),
-                    React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, "Check and file them one at a time \u2014 what you have changed on each is kept while you move between them."))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } },
+                        "Check and file them one at a time \u2014 what you change on each is kept while you move between them. A ",
+                        React.createElement("b", null, "!"),
+                        " means that one still needs something before it can go in."),
+                    (() => {
+                        const bad = all.map((r, i) => ({ r: i === which ? res : r, i }))
+                            .filter(({ r, i }) => !filed.includes(i) && !recipeReady(r).ok);
+                        if (!bad.length)
+                            return null;
+                        return (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6, color: "var(--gold)" } },
+                            bad.length,
+                            " of them came back short \u2014 usually a card that was cut off in the photo. File the good ones now and photograph the rest again; nothing is lost either way."));
+                    })())),
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "What it is called"),
                 React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 12 }, value: res.n || "", onChange: (e) => setRes({ ...res, n: e.target.value }) }),
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9 } },
@@ -15030,10 +15164,55 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                     React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 6 } },
                         React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1, minWidth: 0 }, placeholder: "what it is", value: i[2] || "", onChange: (e) => setIng(n, [i[0], i[1], e.target.value]) }),
                         React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setRes({ ...res, ing: res.ing.filter((_, x) => x !== n) }) }, "\u00D7")),
-                    React.createElement("div", { style: { display: "flex", gap: 6 } },
+                    React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center" } },
                         React.createElement(NumIn, { style: { width: 96, flexShrink: 0 }, value: i[0] ?? 0, step: i[1] === "g" || i[1] === "ml" ? 10 : 1, onChange: (v) => setIng(n, [v, i[1], i[2]]) }),
-                        React.createElement("input", { className: "il-in", style: { width: 84, flexShrink: 0, textAlign: "center" }, value: i[1] || "", placeholder: "g / ml / tsp", onChange: (e) => setIng(n, [i[0], e.target.value || null, i[2]]) }))))),
+                        React.createElement("input", { className: "il-in", style: { width: 84, flexShrink: 0, textAlign: "center" }, value: i[1] || "", placeholder: "g / ml / tsp", onChange: (e) => setIng(n, [i[0], e.target.value || null, i[2]]) }),
+                        (() => {
+                            /* what this line contributes, from the food table */
+                            const lm = lineMacros(i, pool);
+                            if (!lm.m)
+                                return (React.createElement("span", { className: "il-sub", style: { margin: 0, flex: 1, textAlign: "right" } }, lm.food ? "no amount" : "not in the table"));
+                            return (React.createElement("span", { className: "il-n", style: { flex: 1, textAlign: "right", fontSize: 12,
+                                    color: lm.sure ? "var(--dim)" : "var(--faint)" } },
+                                Math.round(lm.m.kcal),
+                                " cal \u00B7 P",
+                                Math.round(lm.m.p),
+                                lm.sure ? "" : " ~"));
+                        })())))),
                 React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setRes({ ...res, ing: [...(res.ing || []), [1, null, ""]] }) }, "+ Another ingredient")),
+            (() => {
+                const sum = recipeFromIngredients(res, pool);
+                if (!sum)
+                    return null;
+                const card = res.m || [0, 0, 0, 0];
+                const off = card[0] ? Math.abs(sum.per[0] - card[0]) / card[0] : 0;
+                return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${off > 0.25 && card[0] ? "var(--gold)" : "var(--tint)"}` } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                        React.createElement("div", { className: "il-lbl" }, "Adding the ingredients up"),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 13, color: "var(--dim)", flexShrink: 0 } },
+                            sum.per[0],
+                            " cal \u00B7 P",
+                            sum.per[1],
+                            " C",
+                            sum.per[2],
+                            " F",
+                            sum.per[3])),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12 } },
+                        "Per serving, from ",
+                        sum.priced,
+                        " of ",
+                        sum.priced + sum.missed,
+                        " lines",
+                        sum.missed ? ` — ${sum.missed} not in the food table` : "",
+                        sum.rough ? ". Spoons and whole items are estimates." : ""),
+                    card[0] > 0 && off > 0.25 && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                        "The card says ",
+                        card[0],
+                        ". That is ",
+                        Math.round(off * 100),
+                        "% apart, which usually means a portion column was misread or a big ingredient is missing. The printed figure is usually the right one.")),
+                    card[0] === 0 && (React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setRes({ ...res, m: sum.per }) }, "Use these numbers"))));
+            })(),
             React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } },
                 (res.method || []).length,
                 " steps"),
@@ -15048,9 +15227,15 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                 React.createElement("button", { className: "il-x", style: { flexShrink: 0, marginTop: 4 }, onClick: () => setRes({ ...res, method: res.method.filter((_, x) => x !== i) }) }, "\u00D7")))),
             React.createElement("div", { style: { padding: "0 12px 4px" } },
                 React.createElement("button", { className: "il-chip", onClick: () => setRes({ ...res, method: [...(res.method || []), ""] }) }, "+ Another step")),
+            herRead && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What she makes of it"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 13.5, color: "var(--txt)", whiteSpace: "pre-wrap" } }, herRead),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Change anything above before you file it, or file it as it is and change it later."))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "Check it against the card before you file it \u2014 handwriting especially. Everything above can be changed, and what you save is what you see."),
-                React.createElement("button", { className: "il-btn", disabled: !String(res.n || "").trim() || !(res.ing || []).length, onClick: keep }, "Add it to my book"),
+                React.createElement("button", { className: "il-btn g", disabled: asking || !(res.ing || []).length, onClick: askHer }, asking ? "She's reading it…" : "What would she change?"),
+                React.createElement("button", { className: "il-btn", disabled: !recipeReady(res).ok, onClick: keep }, recipeReady(res).ok ? "Add it to my book"
+                    : `Needs ${recipeReady(res).missing.join(" and ")}`),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setStage("in"); } }, "Photograph it again"))));
 }
 /* work out the macro tags from the numbers rather than trusting a label */
