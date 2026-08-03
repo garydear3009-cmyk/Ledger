@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v257 · 3 Aug";
+const APP_VERSION = "v260 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5481,8 +5481,8 @@ function HomeLedgerInner() {
             React.createElement(AskStrip, { tab: view, setSheet }),
             tab === "train" && (React.createElement(React.Fragment, null,
                 React.createElement("div", { style: { padding: "10px 12px 2px", display: "flex", gap: 7 } },
-                    React.createElement("button", { className: "il-chip" + (sub === "train" ? " on" : ""), onClick: () => setSub("train") }, "Training"),
-                    React.createElement("button", { className: "il-chip" + (sub === "body" ? " on" : ""), onClick: () => setSub("body") }, "Body")),
+                    React.createElement("button", { className: "il-chip" + (sub === "body" ? " on" : ""), onClick: () => setSub("body") }, "Body"),
+                    React.createElement("button", { className: "il-chip" + (sub === "train" ? " on" : ""), onClick: () => setSub("train") }, "Training")),
                 sub === "body"
                     ? React.createElement(Body, { st, save, a, today, setSheet })
                     : React.createElement(Train, { st, save, a, today, setSheet }))),
@@ -6510,6 +6510,44 @@ function offFood(p) {
         servLabel: /bar/i.test(p.product_name || "") ? "bar" : m ? "serving" : "portion",
         from: "the food database",
     };
+}
+/* Search by name. Asks for UK products first, because "crisps" worldwide is
+   a different shop to "crisps" here. */
+const OFF_SEARCH = "https://world.openfoodfacts.org/cgi/search.pl";
+async function searchFoodDB(term, fetcher) {
+    const q = String(term || "").trim();
+    if (q.length < 2)
+        throw new Error("Type a bit more than that.");
+    const url = OFF_SEARCH + "?search_terms=" + encodeURIComponent(q) +
+        "&search_simple=1&action=process&json=1&page_size=24" +
+        "&tagtype_0=countries&tag_contains_0=contains&tag_0=united-kingdom" +
+        "&fields=code,product_name,brands,quantity,serving_size,nutriments";
+    const get = fetcher || ((u) => fetch(u));
+    const r = await get(url);
+    if (!r || !r.ok)
+        throw new Error("Couldn't reach the food database.");
+    const j = await r.json();
+    const found = (j && j.products) || [];
+    /* offFood returns null for anything with no usable nutrition, which is a
+       good chunk of a crowd-sourced database — drop those rather than showing
+       a row that logs as nothing. */
+    const out = [];
+    const seen = new Set();
+    found.forEach((p) => {
+        const f = offFood(p);
+        if (!f)
+            return;
+        const key = f.name.toLowerCase();
+        if (seen.has(key))
+            return; // the same product listed twice
+        seen.add(key);
+        out.push({ ...f, barcode: p.code || null });
+    });
+    if (!out.length)
+        throw new Error(found.length
+            ? "Found some, but none of them had nutrition on. Try the barcode."
+            : "Nothing in the database matches that.");
+    return out;
 }
 async function lookupBarcode(code, fetcher) {
     const c = cleanBarcode(code);
@@ -11666,7 +11704,8 @@ ${text}`, 2000, "deep");
                 React.createElement("button", { className: "il-btn g", onClick: go }, "Get fresh feedback")))));
 }
 function MeasureGuide({ sheet, st, close }) {
-    const g = MSITE(sheet.site);
+    const [site, setSite] = useState(sheet.site || null);
+    const g = MSITE(site);
     const host = useRef(null);
     const [ready, setReady] = useState(THREE_STATE);
     useEffect(() => { loadThree().then(setReady); }, []);
@@ -11760,10 +11799,14 @@ function MeasureGuide({ sheet, st, close }) {
             el.innerHTML = "";
         };
     }, [ready, sheet.site]);
+    /* Opened from the measurement screen with no site named, so offer them all
+       rather than reporting a guide that was never asked for. */
     if (!g)
         return React.createElement(React.Fragment, null,
-            React.createElement(SH, { title: "Where to measure", close: close }),
-            React.createElement("div", { className: "il-empty" }, "No guide for that one."));
+            React.createElement(SH, { title: "Where to measure", sub: "Pick a site and I'll show you exactly", close: close }),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 12 } }, "The number matters less than taking it the same way every time. Pick one to see where the tape goes."),
+                React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, SITES.filter((x) => MSITE(x.id)).map((x) => (React.createElement("button", { key: x.id, className: "il-chip", onClick: () => setSite(x.id) }, x.label))))));
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: g.name, sub: "Exactly where the tape goes", close: close }),
         ready === true
@@ -17794,15 +17837,51 @@ ${SUPPS.map((s) => `${s.name} (${s.strength}): ${s.evidence}`).join("\n")}`, 300
                 React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "Worth considering"),
                 res.add.map((x, i) => {
                     const [bg, fg] = SB[x.strength] || SB.moderate;
+                    /* The dose is sometimes two words and sometimes a sentence. Beside
+                       the name when it is short, underneath when it is not — in a flex
+                       row a long one squeezed the name to one word per line. */
+                    const brief = String(x.dose || "").length <= 16;
+                    const cost = costLine(x.n);
                     return (React.createElement("div", { key: i, className: "il-card", style: { borderLeft: `3px solid ${fg}` } },
-                        React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                            React.createElement("div", { style: { fontSize: 14.5, minWidth: 0 } }, x.n),
-                            React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } }, x.dose)),
-                        React.createElement("div", { className: "il-note", style: { fontSize: 13 } }, x.why)));
+                        React.createElement("div", { className: "il-row", style: { marginBottom: 6, alignItems: "flex-start" } },
+                            React.createElement("div", { style: { fontSize: 14.5, flex: 1, minWidth: 0 } }, x.n),
+                            brief && React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0, marginLeft: 10 } }, x.dose)),
+                        !brief && x.dose && (React.createElement("div", { className: "il-sub il-n", style: { margin: "0 0 8px" } }, x.dose)),
+                        React.createElement("div", { className: "il-note", style: { fontSize: 13 } }, x.why),
+                        cost && (React.createElement("div", { className: "il-sub il-n", style: { margin: "10px 0 0", color: "var(--gold)" } }, cost)),
+                        React.createElement("div", { style: { display: "flex", gap: 7, marginTop: 12, flexWrap: "wrap" } },
+                            React.createElement("button", { className: "il-chip", onClick: () => {
+                                    /* onto the daily list, where suppSlot puts it in the right
+                                       place on its own */
+                                    const already = (st.supps || []).some((y) => (y.name || "").toLowerCase() === x.n.toLowerCase());
+                                    if (already)
+                                        return;
+                                    save({ ...st, supps: [...(st.supps || []), { name: x.n, what: x.n, dose: x.dose || "" }],
+                                        suppOff: (st.suppOff || []).filter((y) => y !== x.n) });
+                                } }, (st.supps || []).some((y) => (y.name || "").toLowerCase() === x.n.toLowerCase())
+                                ? "\u2713 on your list" : "Take this one"),
+                            React.createElement("button", { className: "il-chip", onClick: () => save({ ...st,
+                                    shopExtra: [...(st.shopExtra || []), { name: x.n, cat: "supplement", at: Date.now() + i }] }) }, "Add to the shopping list"))));
                 })),
-            res.spend && (React.createElement("div", { className: "il-card" },
+            (res.spend || (res.add || []).length > 0) && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What it'd cost"),
-                React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.spend))),
+                (() => {
+                    const b = basketCost((res.add || []).map((x) => x.n));
+                    if (!b)
+                        return null;
+                    return (React.createElement("div", { style: { marginBottom: res.spend ? 10 : 0 } },
+                        React.createElement("div", { className: "il-hero sm", style: { color: "var(--gold)" } },
+                            "\u00A3",
+                            b.lo,
+                            "\u2013\u00A3",
+                            b.hi),
+                        React.createElement("div", { className: "il-sub", style: { margin: "2px 0 0" } },
+                            "a month if you took everything suggested",
+                            b.priced < (res.add || []).length
+                                ? ` (${b.priced} of ${res.add.length} priced)` : "")));
+                })(),
+                res.spend && React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.spend),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Typical UK prices for a month at the dose suggested, own-brand or mid-market. Rough on purpose \u2014 enough to tell a few pounds a year from a few hundred."))),
             (res.asks || []).length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "She'd like to know"),
                 res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { setSheet({ t: "ntalk", seed: `About supplements — ${q}` }); } }, q))))),
@@ -17815,7 +17894,9 @@ const SECTION_ASK = {
     you: { label: "Where am I at?", sub: "Weight, training, food and sleep, read together", to: { t: "mot" } },
     train: { label: "What should I train today?", sub: "A few questions and he'll write it", to: { t: "pump" } },
     fuel: { label: "What shall I cook?", sub: "Seven questions, three answers", to: { t: "inspo" } },
-    body: { label: "Where do I measure?", sub: "Show me exactly", to: { t: "meas" } },
+    /* "Where do I measure?" moved inside the measurement screen, where you are
+       when the question actually occurs to you. Body asks a better question. */
+    body: { label: "How am I changing?", sub: "The tape, the scales and the training, read together", to: { t: "sides" } },
     coach: { label: "Analyse everything", sub: "Twelve weeks, read properly", to: { t: "review" } },
     supps: { label: "Health questionnaire", sub: "Ten questions, then honest advice", to: { t: "healthq" } },
     progress: { label: "What's actually working?", sub: "From your own logs", to: { t: "ask", ctx: "progress" } },
@@ -22971,6 +23052,51 @@ function foodIcon(food) {
     const c = food && typeof food.cat === "number" ? food.cat : -1;
     return CAT_ICON[c] || "\uD83C\uDF7D\uFE0F";
 }
+/* ============ WHAT IT COSTS ============
+   Typical UK price for a month at the dose the app suggests, own-brand or
+   mid-market rather than the cheapest thing on a marketplace or the dearest
+   in a health shop. Rough on purpose: the point is telling twelve pounds a
+   year from a hundred and twenty, not pricing a specific tub. */
+const SUPP_COST = {
+    "creatine monohydrate": [2, 4], "whey protein": [18, 30], "casein protein": [20, 32],
+    "vitamin d3": [1, 3], "omega-3 / fish oil": [6, 14], caffeine: [2, 5],
+    "beta-alanine": [4, 8], "citrulline malate": [8, 15], magnesium: [3, 7],
+    zinc: [2, 5], multivitamin: [4, 12], electrolytes: [6, 14],
+    ashwagandha: [6, 12], collagen: [12, 25], "beetroot / nitrate": [10, 20],
+    hmb: [12, 25], bcaas: [10, 20], glutamine: [8, 15],
+    "testosterone boosters": [15, 40], "fat burners": [15, 40],
+};
+/* match a suggestion to a price by whichever known name it contains */
+function suppCost(name) {
+    const n = String(name || "").toLowerCase();
+    const keys = Object.keys(SUPP_COST)
+        .sort((a, b) => b.length - a.length); // longest first, so "whey protein" beats "protein"
+    for (const k of keys) {
+        const head = k.split(" / ")[0];
+        if (n.includes(k) || n.includes(head))
+            return SUPP_COST[k];
+    }
+    /* a few names the coach uses that are not the table's */
+    if (/fish oil|epa|dha|algal/.test(n))
+        return SUPP_COST["omega-3 / fish oil"];
+    if (/protein powder|isolate/.test(n))
+        return SUPP_COST["whey protein"];
+    if (/vitamin d\b|\bd3\b/.test(n))
+        return SUPP_COST["vitamin d3"];
+    return null;
+}
+const costLine = (name) => {
+    const c = suppCost(name);
+    return c ? `about \u00a3${c[0]}\u2013\u00a3${c[1]} a month` : null;
+};
+/* the whole basket, for the ones he picks */
+function basketCost(names) {
+    const found = names.map(suppCost).filter(Boolean);
+    if (!found.length)
+        return null;
+    const lo = found.reduce((a, c) => a + c[0], 0), hi = found.reduce((a, c) => a + c[1], 0);
+    return { lo, hi, priced: found.length, text: `about \u00a3${lo}\u2013\u00a3${hi} a month for the lot` };
+}
 function morningFacts(st, a, today) {
     const P = st.profile || {};
     const d = (n) => iso(new Date(new Date(today + "T12:00:00").getTime() - n * 864e5));
@@ -25784,6 +25910,9 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
     const [dish, setDish] = useState(null);
     const [newDish, setNewDish] = useState(false);
     const [scan, setScan] = useState(false);
+    const [dbHits, setDbHits] = useState(null); // what the food database came back with
+    const [dbBusy, setDbBusy] = useState(false);
+    const [dbErr, setDbErr] = useState("");
     useEffect(() => { if (scan) {
         setSheet({ t: "scan" });
         setScan(false);
@@ -26028,6 +26157,57 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
             React.createElement("div", { style: { textAlign: "right", flexShrink: 0 } },
                 React.createElement("div", { className: "il-n", style: { fontSize: 13.5 } }, Math.round(f.kcal * f.serv / 100)),
                 React.createElement("div", { className: "il-sub", style: { fontSize: 10.5 } }, f.servLabel)))))),
+        q.trim().length >= 2 && (React.createElement("div", { style: { padding: "0 12px 8px" } },
+            React.createElement("button", { className: "il-btn", disabled: dbBusy, onClick: async () => {
+                    setDbBusy(true);
+                    setDbErr("");
+                    setDbHits(null);
+                    try {
+                        setDbHits(await searchFoodDB(q));
+                    }
+                    catch (e) {
+                        setDbErr(e.message || String(e));
+                    }
+                    setDbBusy(false);
+                } }, dbBusy ? "Looking…" : `Search the food database for "${q.trim()}"`),
+            dbErr && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 8, color: "var(--gold)" } }, dbErr))),
+        dbHits && dbHits.length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
+                React.createElement("div", { className: "il-lbl" }, "From the food database"),
+                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, dbHits.length)),
+            dbHits.map((h, i) => (React.createElement("div", { key: i, style: { padding: "10px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                React.createElement("div", { className: "il-row", style: { alignItems: "flex-start" } },
+                    React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10 } },
+                        React.createElement("span", { style: { fontSize: 20, flexShrink: 0 } }, foodIcon(h.name)),
+                        React.createElement("span", { style: { minWidth: 0 } },
+                            React.createElement("span", { style: { display: "block", fontSize: 14 } }, h.name),
+                            React.createElement("span", { className: "il-sub il-n", style: { display: "block", margin: "2px 0 0" } },
+                                h.kcal,
+                                " cal \u00B7 P",
+                                h.p,
+                                " C",
+                                h.c,
+                                " F",
+                                h.f,
+                                " per 100",
+                                h.unit))),
+                    React.createElement("span", { className: "il-n", style: { flexShrink: 0, textAlign: "right", fontSize: 13.5 } },
+                        Math.round((h.kcal * h.serv) / 100),
+                        React.createElement("span", { className: "il-sub", style: { display: "block", fontSize: 10.5 } }, h.servLabel))),
+                React.createElement("div", { style: { display: "flex", gap: 7, marginTop: 9, flexWrap: "wrap" } },
+                    React.createElement("button", { className: "il-chip", onClick: () => {
+                            /* keep it, so next time it is in the app's own list */
+                            const f = { id: "u" + Date.now() + i, name: h.name, cat: 8, kcal: h.kcal, p: h.p,
+                                c: h.c, f: h.f, serv: h.serv, servLabel: h.servLabel, unit: h.unit, mine: true };
+                            save({ ...st, myFoods: [...(st.myFoods || []), f],
+                                recent: [f.name, ...(st.recent || []).filter((x) => x !== f.name)].slice(0, 40) });
+                            setSel(f);
+                            setGrams(f.serv);
+                            setDbHits(null);
+                        } }, "Use it"),
+                    React.createElement("button", { className: "il-chip", onClick: () => save({ ...st,
+                            shopExtra: [...(st.shopExtra || []), { name: h.name, cat: "other", at: Date.now() + i }] }) }, "Add to the shopping list"))))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Open Food Facts \u2014 crowd-sourced, so a figure can be out of date or entered wrong. The barcode on the packet is the one to trust."))),
         React.createElement("div", { style: { padding: "0 12px" } },
             React.createElement("button", { className: "il-btn", style: { marginBottom: 8 }, onClick: () => setScan(true) }, "Scan the barcode or the label"),
             React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed"),
@@ -26247,6 +26427,10 @@ function MeasSheet({ st, save, close, setSheet }) {
     const [note, setNote] = useState("");
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add measurements", sub: last ? `Last done ${dtiny(last.date)}` : "First set — this becomes your baseline", close: close }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "Where do I measure?"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } }, "Same spot, same time of day, same tension on the tape \u2014 a centimetre of difference in where you put it is bigger than a month of training. Tap any name below for that site, or take the tour."),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "mguide" }) }, "Show me every site")),
         React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
             React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "impmeas" }), style: { borderLeft: "3px solid var(--tint)" } },
                 React.createElement("div", { style: { minWidth: 0 } },
