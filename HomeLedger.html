@@ -4894,7 +4894,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v245 · 3 Aug";
+const APP_VERSION = "v246 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6218,9 +6218,9 @@ function readPhoto(file, maxW = 1100, quality = 0.85) {
     });
 }
 /* ============ LABEL SCANNER ============
-   Photographs the nutrition panel and reads it. No barcode lookup —
-   there's no product database behind this — but reading the panel
-   works on anything, including own-brand and foreign packaging.      */
+   Two ways in. A barcode goes to the food database below, which is steadier
+   and gets the product's real name. Reading the panel works on anything —
+   own-brand, foreign packaging, a pack with the barcode torn off.     */
 /* ============ LOOKING A BARCODE UP ============
    Open Food Facts is a public database with no key and no sign-up. It knows
    most branded food sold in the UK and Europe. If it is offline, or the
@@ -6433,11 +6433,12 @@ function ScanLabel({ st, save, today, close, setSheet }) {
         return { calc: Math.round(calc), off: Math.abs(calc - k) / k, ok: Math.abs(calc - k) / k <= 0.12, under: calc < k };
     })();
     return React.createElement(React.Fragment, null,
+        React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
         React.createElement(SH, { title: "Scan a label", sub: stage === "check" ? "Check these against the pack" : "Point it at the nutrition table", close: close }),
         stage === "start" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Photograph the nutrition table"),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, "The grid on the back with Energy, Fat, Carbohydrate and Protein down the side. Not the barcode \u2014 there's no product database behind this, so a barcode number tells me nothing on its own."),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, "Either works: the grid on the back with Energy, Fat, Carbohydrate and Protein down the side, or the barcode. If the barcode is legible it goes to a free public food database, which is steadier than reading a creased wrapper."),
                 note && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginBottom: 12 } }, note),
                 React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Open the camera"),
                 React.createElement("div", { className: "il-fld", style: { marginTop: 10 } },
@@ -6463,7 +6464,6 @@ function ScanLabel({ st, save, today, close, setSheet }) {
                 "Numbers from ",
                 found,
                 ". Worth a glance against the pack \u2014 a database entry can be out of date.")),
-            React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
             shot && React.createElement("div", { style: { padding: "12px 12px 0" } },
                 React.createElement("img", { src: shot, alt: "", onClick: () => setBig(!big), style: { width: "100%", borderRadius: 12, display: "block", maxHeight: big ? "none" : 240, objectFit: big ? "contain" : "cover" } }),
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 6 } },
