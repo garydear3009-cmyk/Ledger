@@ -275,7 +275,11 @@ const SWORD = { green: "Right amount", amber: "Short", red: "Needs work" };
    weights you own, and one kettlebell is a different exercise list to a
    pair of them.                                                       */
 const WEIGHTED = ["db", "db_adj", "kb", "plates", "bar_olympic", "bar_ez", "bar_trap",
-    "medball", "slamball", "sandbag", "vest", "ankle_w"];
+    "medball", "slamball", "sandbag", "vest", "ankle_w",
+    /* A band set is not a yes/no. A loop set runs 5 to 50kg in 5kg steps and a
+       mini band is a few kilos — without that the app can suggest a band
+       exercise but never a band load. */
+    "band_loop", "band_tube", "band_mini", "cable", "functional"];
 const DEFAULT_CFG = {
     db_adj: { mode: "range", min: 2.5, max: 40, step: 2.5, qty: 2, incBar: true },
     db: { mode: "fixed", weights: [10, 15, 20], qty: 2 },
@@ -289,6 +293,14 @@ const DEFAULT_CFG = {
     sandbag: { mode: "range", min: 10, max: 40, step: 5, qty: 1 },
     vest: { mode: "range", min: 2, max: 20, step: 2, qty: 1 },
     ankle_w: { mode: "fixed", weights: [2], qty: 2 },
+    /* Printed resistance on a band is the manufacturer's figure at a stated
+       stretch, so treat it as a guide rather than a measurement — which is why
+       the screen says so. */
+    band_loop: { mode: "range", min: 5, max: 50, step: 5, qty: 1 },
+    band_tube: { mode: "range", min: 5, max: 35, step: 5, qty: 1 },
+    band_mini: { mode: "range", min: 2, max: 15, step: 2, qty: 1 },
+    cable: { mode: "range", min: 2.5, max: 90, step: 2.5, qty: 1 },
+    functional: { mode: "range", min: 2.5, max: 80, step: 2.5, qty: 2 },
 };
 const cfgFor = (st, id) => ({ ...(DEFAULT_CFG[id] || { mode: "fixed", weights: [], qty: 1 }), ...((st.equipCfg || {})[id] || {}) });
 /* every per-hand load you could actually make right now, sorted */
@@ -391,7 +403,14 @@ function EquipWeights({ sheet, st, save, close, setSheet }) {
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: back }, "Done")),
         React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Everything here saves as you change it, so nothing is lost either way.")));
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "Everything here saves as you change it, so nothing is lost either way.")),
+        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What this changes"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 13, lineHeight: 1.55 } },
+                "Only what gets suggested from now on \u2014 the loads offered in a new session, and anything built or planned after this. ",
+                React.createElement("b", null, "Sessions you have already done are untouched"),
+                ", and so are the numbers, the trends and the reviews built on them."),
+            /^band/.test(id) && (React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 10 } }, "The kilos printed on a band are the maker's figure at a stated stretch, so treat them as a guide. What matters is that they are consistent \u2014 the app is tracking the jumps between them, not claiming a 20kg band is 20 kilos."))));
 }
 /* ============ EQUIPMENT ============
    Everything you might train with, at home or in a gym. "maps" points at
@@ -4768,7 +4787,7 @@ const TITLE = {
     supps: "Supplements",
     coach: "Coach", train: "Train", body: "Body", progress: "Progress", fuel: "Food", you: "You"
 };
-const HEADBTN = { train: ["My kit", "kit"], body: ["My goal", "goal"], progress: ["Diary", "diary"],
+const HEADBTN = { train: ["My kit", "equip"], body: ["My goal", "goal"], progress: ["Diary", "diary"],
     fuel: ["Macro coach", "coach"], you: ["Edit", "profile"] };
 /* ================= APP ================= */
 /* The documented signature takes a third "shared" argument and the docs say
@@ -4854,7 +4873,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v220 · 3 Aug";
+const APP_VERSION = "v221 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
