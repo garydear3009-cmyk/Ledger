@@ -4873,7 +4873,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v221 · 3 Aug";
+const APP_VERSION = "v222 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -21804,7 +21804,10 @@ function You({ st, save, a, today, setSheet, go }) {
 /* Everything that is a setting, a tool or a one-off job. It was the bottom
    third of the You tab, below the things you open the app to do. */
 function Settings({ st, save, today, setSheet, health }) {
-    const done = ALLQ.filter((q) => answered(st, q)).length;
+    /* v218 split this out of the You tab and got this wrong: answered() takes a
+       profile and returns a count, so filtering ALLQ with it gave 0 every time.
+       That is why a fully answered questionnaire read "0 of 23". */
+    const done = answered(st.profile);
     return (React.createElement(React.Fragment, null,
         React.createElement("div", { className: "il-menu", style: { marginBottom: 10 } },
             React.createElement("button", { className: "il-mrow", onClick: () => setSheet({ t: "rules" }) },
@@ -21822,7 +21825,10 @@ function Settings({ st, save, today, setSheet, health }) {
                 done,
                 " of ",
                 ALLQ.length,
-                " answered. Change any of them and everything above recalculates.")),
+                " answered.",
+                done < ALLQ.length ? " The more he has, the less he has to assume." : "",
+                " ",
+                "Changing an answer recalculates your targets, what the coach reads and what he suggests next.")),
         React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "Settings & tools"),
         React.createElement("div", { className: "il-menu" }, [
             ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }, null],
@@ -21890,7 +21896,17 @@ function Intake({ st, save, close }) {
     const [just, setJust] = useState(null);
     const q = ALLQ[i];
     const chapterIdx = CHAPTERS.findIndex((c) => c.id === q.chapter);
-    const set = (v) => { setP({ ...p, [q.k]: v }); setJust(v); };
+    /* It used to hold every answer in local state and only write them when you
+       pressed the × or finished the last question. Swipe the sheet away — which
+       is how most people leave a sheet — and the lot was lost, which is why a
+       questionnaire you had answered still read as unanswered. Save each one as
+       it is given. */
+    const set = (v) => {
+        const np = { ...p, [q.k]: v };
+        setP(np);
+        setJust(v);
+        save({ ...st, profile: np });
+    };
     const next = () => { setJust(null); if (i < ALLQ.length - 1)
         setI(i + 1);
     else {
