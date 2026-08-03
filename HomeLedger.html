@@ -87,6 +87,33 @@ const CSS = `
    screen. */
 .il-shell{max-width:460px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:calc(146px + env(safe-area-inset-bottom));background:var(--bg);scroll-padding-bottom:180px;}
 .il-d{font-family:'Outfit',sans-serif;letter-spacing:-.015em;}
+/* ---- v236: a display voice for headings and hero numbers ---- */
+.il-dh{font-family:'Outfit',sans-serif;font-weight:700;font-style:italic;letter-spacing:-.02em;}
+/* The one number a screen is actually about. Everything else sits around it. */
+.il-hero{font-family:'Outfit',sans-serif;font-weight:700;font-style:italic;letter-spacing:-.03em;
+ font-size:44px;line-height:1;font-variant-numeric:tabular-nums;}
+.il-hero.sm{font-size:30px;}
+/* A bar made of slanted blocks reads as effort in a way a thin line does not. */
+.il-hatch{display:flex;gap:4px;flex:1;min-width:0;height:30px;align-items:stretch;}
+.il-hatch i{flex:1;border-radius:3px;transform:skewX(-14deg);background:var(--c2);transition:background .25s;}
+.il-hatch i.on{background:var(--tint);}
+.il-hatch.gold i.on{background:var(--gold);}
+.il-hatch.grn i.on{background:var(--grn);}
+/* which way it is going, without reading anything */
+.il-trend{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;
+ padding:3px 7px;border-radius:7px;background:var(--c2);color:var(--dim);flex-shrink:0;}
+.il-trend.up{background:color-mix(in srgb,var(--grn) 22%,var(--card));color:var(--grn);}
+.il-trend.dn{background:color-mix(in srgb,var(--red) 20%,var(--card));color:var(--red);}
+/* a name, a big number, a little chart, a chevron */
+.il-metric{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);cursor:pointer;}
+.il-metric:first-of-type{border-top:0;}
+.il-metric .nm{flex:0 0 92px;min-width:0;}
+.il-metric .nm b{display:block;font-size:12px;font-weight:500;color:var(--dim);margin-bottom:2px;}
+.il-spark{flex:1;min-width:0;height:34px;}
+/* a floating label on a field, so two boxes side by side are not a guess */
+.il-lab{position:relative;flex:1;min-width:0;}
+.il-lab > span{position:absolute;top:-7px;left:9px;padding:0 4px;background:var(--card);
+ font-size:9.5px;font-weight:600;color:var(--faint);letter-spacing:.02em;z-index:1;}
 .il-n{font-variant-numeric:tabular-nums;}
 .il-top{position:sticky;top:0;z-index:20;background:rgba(11,11,13,.94);backdrop-filter:blur(12px);
  border-bottom:1px solid var(--line);padding:calc(15px + env(safe-area-inset-top)) 18px 12px;
@@ -2778,7 +2805,7 @@ function MealFinder({ st, save, a, today, close }) {
             i = foods.length - 1;
         }
         const label = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snacks" }[meal];
-        foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(), name: x.r.name, meal: label, kcal: x.kcal, p: x.p, c: x.c, f: x.f }] };
+        foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(), name: x.r.name, meal: label, at: nowHM(), kcal: x.kcal, p: x.p, c: x.c, f: x.f }] };
         save({ ...st, foods });
         close();
     };
@@ -3405,7 +3432,7 @@ function Takeaway({ st, save, today, close }) {
             foods.push({ date: today, entries: [] });
             i = foods.length - 1;
         }
-        const entries = list.map((x) => ({ id: "u" + Date.now() + Math.random(), name: `${x.name} (takeaway)`, meal: "Dinner", kcal: x.kcal, p: x.p, c: x.c2, f: x.f }));
+        const entries = list.map((x) => ({ id: "u" + Date.now() + Math.random(), name: `${x.name} (takeaway)`, meal: "Dinner", at: nowHM(), kcal: x.kcal, p: x.p, c: x.c2, f: x.f }));
         foods[i] = { ...foods[i], entries: [...foods[i].entries, ...entries] };
         save({ ...st, foods });
         close();
@@ -4751,16 +4778,6 @@ function FormDemo({ ex, h = 150, weight = true, controls = false }) {
                 React.createElement("button", { className: "il-chip", onClick: () => setScrub(scrub === null ? prog : null) }, scrub === null ? "Scrub" : "Play")),
             React.createElement("input", { type: "range", min: "0", max: "1", step: "0.005", value: prog, onChange: (e) => setScrub(Number(e.target.value)), style: { width: "100%", accentColor: "#2F7BFF", height: 3 } }))));
 }
-function Spark({ vals, w = 62, h = 22 }) {
-    if (!vals || vals.length < 2)
-        return React.createElement("div", { style: { width: w, height: h } });
-    const mn = Math.min(...vals), mx = Math.max(...vals), r = mx - mn || 1;
-    const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - mn) / r) * (h - 4) - 2}`).join(" ");
-    const up = vals[vals.length - 1] >= vals[0];
-    return React.createElement("svg", { width: w, height: h, style: { display: "block" } },
-        React.createElement("polyline", { points: pts, fill: "none", stroke: up ? "#35C26B" : "#FF5A4E", strokeWidth: "1.8", strokeLinejoin: "round", strokeLinecap: "round" }));
-}
-/* ring arcs */
 function Rings({ move, exercise, size = 92 }) {
     const r1 = size / 2 - 7, r2 = r1 - 11;
     const arc = (r, pct, col) => {
@@ -4877,7 +4894,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v232 · 3 Aug";
+const APP_VERSION = "v237 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5432,6 +5449,20 @@ function LiveSession({ st, save, s, setSheet }) {
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.loaded ? (ex.perSide ? LU() + " ea" : LU()) : "—"),
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.timed || ex.cardio ? "secs" : "reps"),
                         React.createElement("span", null)),
+                    React.createElement("div", { className: "il-scroll", style: { paddingBottom: 8 } },
+                        React.createElement("button", { className: "il-chip", onClick: () => setRest(ex.isCompound ? 150 : 90) },
+                            "\u23F1 ",
+                            ex.isCompound ? "2:30" : "1:30",
+                            " rest"),
+                        React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "exprog", id: ex.id }) },
+                            "\u2197 ",
+                            "History"),
+                        React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "swap", exId: ex.id, sessionId: s.id }) },
+                            "\u21C4 ",
+                            "Swap"),
+                        React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "info", exId: ex.id }) },
+                            "\u24D8 ",
+                            "How to")),
                     oneSided(ex) && (() => {
                         const g = liftGaps(st).find((x) => x.ex.id === ex.id);
                         const tape = ex.group === "legs" ? tapeGaps(st).find((x) => x.plain === "thigh")
@@ -5686,6 +5717,11 @@ function trackerGuide(st, s) {
     return g ? { ...g, label: t.label } : null;
 }
 function Train({ st, save, a, today, setSheet }) {
+    /* moved off the You tab: these are mostly about training, and this is where
+       you are when you can act on them */
+    const readAll = coachRead(st, a);
+    const read = readAll.filter((r) => !(st.hiddenTips || []).includes(r.id));
+    const top = read[0] || null;
     const [open, setOpen] = useState({});
     const [built, setBuilt] = useState("");
     /* these rings were hardcoded at 0.62/0.45 — placeholder numbers that read
@@ -5700,21 +5736,41 @@ function Train({ st, save, a, today, setSheet }) {
     const dl = deloadCheck(st, a);
     const prog = programState(st, today);
     return (React.createElement(React.Fragment, null,
+        top ? (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
+            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "tips" }) },
+                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "flex-start" } },
+                    React.createElement("span", { style: { width: 7, height: 7, borderRadius: 4, marginTop: 6, flexShrink: 0,
+                            background: top.sev >= 5 ? "var(--red)" : top.sev >= 4 ? "var(--gold)" : "var(--grn)" } }),
+                    React.createElement("span", { style: { minWidth: 0 } },
+                        React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } },
+                            "Suggestions",
+                            read.length > 1 ? ` · ${read.length}` : ""),
+                        React.createElement("span", { style: { display: "block", fontSize: 14.5, lineHeight: 1.35 } }, top.title))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))) : (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
+            React.createElement("div", { className: "il-li", onClick: () => (st.hiddenTips || []).length && save({ ...st, hiddenTips: [] }) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } }, "Suggestions"),
+                    React.createElement("span", { style: { fontSize: 14 } },
+                        "Nothing outstanding",
+                        (st.hiddenTips || []).length ? " \u2014 tap to bring back the dismissed ones" : ""))))),
         prog ? (React.createElement("div", { className: "il-card lead" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 12 } },
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { className: "il-lbl" }, "Active programme"),
-                    React.createElement("div", { className: "il-h2", style: { marginTop: 2 } }, prog.program.name)),
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 17, marginTop: 3 } }, prog.program.name)),
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } },
                     "Week ",
                     prog.week,
                     prog.program.weeks ? ` of ${prog.program.weeks}` : "")),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } },
-                prog.doneCount,
-                " of ",
-                prog.slots.length,
-                " done this week",
-                prog.next ? ` · next up is ${prog.next.routine ? prog.next.routine.name : "a session that has been deleted"}` : " · that's the week"),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 10 } },
+                React.createElement("div", { className: "il-hero", style: { flexShrink: 0,
+                        color: prog.doneCount >= prog.slots.length ? "var(--grn)" : "var(--txt)" } },
+                    prog.doneCount,
+                    React.createElement("span", { style: { fontSize: 20, color: "var(--faint)" } },
+                        "/",
+                        prog.slots.length)),
+                React.createElement("div", { className: "il-hatch" + (prog.doneCount >= prog.slots.length ? " grn" : "") }, prog.slots.map((_, i) => (React.createElement("i", { key: i, className: prog.ticked[i] ? "on" : "" }))))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } }, prog.next ? `Next up is ${prog.next.routine ? prog.next.routine.name : "a session that has been deleted"}` : "That's the week."),
             prog.slots.map((rt, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0,
                     opacity: prog.ticked[i] ? .5 : 1 }, onClick: () => rt && setSheet({ t: "startrt", id: rt.id }) },
                 React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
@@ -5862,6 +5918,14 @@ function Train({ st, save, a, today, setSheet }) {
 /* ============ DISHES ============
    A saved combination of ingredients that logs as one line, scaled by
    portion. Macros come from the food database, so they stay consistent. */
+/* Every entry needs the time it was eaten: the day list sorts by it and shows
+   it, so one logged without falls to the top of the meal with a blank where
+   the time should be. */
+const nowHM = () => { const d = new Date(); return hhmm(d.getHours(), d.getMinutes()); };
+const mealNow = () => {
+    const h = new Date().getHours();
+    return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
+};
 const dishMacros = (d, pool, portions = 1) => {
     const per = d.items.reduce((a, it) => {
         const f = pool.find((x) => x.id === it.fid);
@@ -6012,7 +6076,7 @@ function LogDish({ st, save, today, close, dishId }) {
             i = foods.length - 1;
         }
         foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(),
-                    name: `${d.name}${n !== 1 ? ` (${n} portions)` : ""}`, meal, kcal: m.kcal, p: m.p, c: m.c, f: m.f, dish: d.id }] };
+                    name: `${d.name}${n !== 1 ? ` (${n} portions)` : ""}`, meal, at: nowHM(), kcal: m.kcal, p: m.p, c: m.c, f: m.f, dish: d.id }] };
         save({ ...st, foods });
         close();
     };
@@ -7383,7 +7447,7 @@ function CatchUp({ st, save, a, today, close, setSheet }) {
                     Math.round(tot.f)),
                 heard.note && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6, color: "var(--gold)" } }, heard.note),
                 React.createElement("button", { className: "il-btn sm", style: { width: "100%", marginTop: 12 }, disabled: !rows.length, onClick: () => writeDay(rows.map((x) => ({ id: "d" + Date.now() + Math.random(),
-                        name: x.name, meal: x.meal || "Snacks", at: x.at || "", ts: Date.now(), guessed: true,
+                        name: x.name, meal: x.meal || "Snacks", at: x.at || mealTime(x.meal), ts: Date.now(), guessed: true,
                         kcal: Math.round(x.kcal || 0), p: Math.round(x.p || 0), c: Math.round(x.c || 0), f: Math.round(x.f || 0) })), true) },
                     "Log ",
                     rows.length,
@@ -13343,7 +13407,7 @@ function QuickDay({ st, save, a, today, close, setSheet }) {
         const day = st.foods.find((f) => f.date === today) || { date: today, entries: [] };
         const rest = st.foods.filter((f) => f.date !== today);
         const entries = res.meals.map((m, i) => ({
-            id: "q" + Date.now() + i, name: m.what, meal: mealFromWhen(m.when), at: m.when,
+            id: "q" + Date.now() + i, name: m.what, meal: mealFromWhen(m.when), at: clockish(m.when),
             kcal: Math.round(m.kcal || 0), p: Math.round(m.p || 0), c: Math.round(m.c || 0), f: Math.round(m.f || 0),
             rough: m.sure !== "good",
         }));
@@ -13428,6 +13492,19 @@ function QuickDay({ st, save, a, today, close, setSheet }) {
 }
 /* "4ish" almost never means four in the morning. Without am/pm, a bare
    number reads as the hour a person is most likely to have meant.    */
+/* "about 8" and "after the gym" are not clock times. Take one if it is there,
+   otherwise leave it blank rather than printing prose where a time goes. */
+const clockish = (when) => {
+    const m = String(when || "").match(/\b(\d{1,2})[:.](\d{2})\b/);
+    if (m)
+        return hhmm(Math.min(23, +m[1]), Math.min(59, +m[2]));
+    const h = String(when || "").match(/\b(\d{1,2})\s*(am|pm)\b/i);
+    if (h)
+        return hhmm((+h[1] % 12) + (/pm/i.test(h[2]) ? 12 : 0), 0);
+    return "";
+};
+/* a sensible hour for a meal, when all we know is which meal it was */
+const mealTime = (meal) => ({ Breakfast: "08:00", Lunch: "13:00", Dinner: "19:00", Snacks: "16:00" }[meal] || "");
 const mealFromWhen = (when) => {
     const s = String(when || "").toLowerCase();
     const words = /break|morning|early/.test(s) ? 8
@@ -14520,7 +14597,13 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 "Put back to \u201C",
                 base.wasCalled,
                 "\u201D")))) : (React.createElement("div", { style: { padding: "0 12px", marginBottom: 4 } },
-            React.createElement("button", { className: "il-btn g", onClick: () => setNaming(base.n) }, "Rename this recipe"))),
+            React.createElement("button", { className: "il-btn g", onClick: () => setNaming(base.n) }, "Rename this recipe"),
+            base.mine && (React.createElement("button", { className: "il-btn dz", onClick: () => {
+                    if (!window.confirm(`Delete ${base.n}? Your rating, photo and any place it has in the week's plan go with it. This can't be undone.`))
+                        return;
+                    save(deleteRecipe(st, base.n));
+                    close();
+                } }, "Delete this recipe")))),
         React.createElement(RecipePhoto, { st, save, rec: base, h: 160, close, setSheet }),
         ratingOf(st, base.n) && (() => {
             const r = ratingOf(st, base.n), [, , word, col] = rateWord(r.score);
@@ -19359,17 +19442,18 @@ function RecipeTweaks({ rec, st, save, a, close, setSheet }) {
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
     const KIND = { protein: ["#3ECF8E", "Protein"], calories: ["#FFB443", "Calories"],
-        const: [ask, setAsk] = useState(""),
-        const: [chat, setChat] = useState([]),
-        const: askHer = async (preset) => {
-            const text = (preset || ask).trim();
-            if (!text || busy)
-                return;
-            setAsk("");
-            setBusy(true);
-            setChat((c) => [...c, { role: "user", text }]);
-            try {
-                const txt = await callClaude(`${NUT_BRIEF}
+        carbs: ["#7FA8F0", "Carbs"], flavour: ["#FF6B4A", "Flavour"], ease: ["#B47CFF", "Easier"] };
+    const [ask, setAsk] = useState("");
+    const [chat, setChat] = useState([]);
+    const askHer = async (preset) => {
+        const text = (preset || ask).trim();
+        if (!text || busy)
+            return;
+        setAsk("");
+        setBusy(true);
+        setChat((c) => [...c, { role: "user", text }]);
+        try {
+            const txt = await callClaude(`${NUT_BRIEF}
 
 They are looking at this recipe and have a question about it. Answer it directly, three or four
 sentences. If they want it higher in protein, lower in carbs, dairy-free or whatever else, give them
@@ -19395,15 +19479,14 @@ ${st.dislikes ? `Won't eat: ${st.dislikes}` : ""}
 
 === THEIR QUESTION ===
 ${text}`, 1600, "mid");
-                const j = looseJson(txt) || { reply: txt.trim() };
-                setChat((c) => [...c, { role: "nut", text: j.reply || txt.trim() }]);
-            }
-            catch (e) {
-                setChat((c) => [...c, { role: "nut", text: `Couldn't answer — ${e.message || e}` }]);
-            }
-            setBusy(false);
-        },
-        carbs: ["#7FA8F0", "Carbs"], flavour: ["#FF6B4A", "Flavour"], ease: ["#B47CFF", "Easier"] };
+            const j = looseJson(txt) || { reply: txt.trim() };
+            setChat((c) => [...c, { role: "nut", text: j.reply || txt.trim() }]);
+        }
+        catch (e) {
+            setChat((c) => [...c, { role: "nut", text: `Couldn't answer — ${e.message || e}` }]);
+        }
+        setBusy(false);
+    };
     const go = async () => {
         setBusy(true);
         setErr("");
@@ -19554,6 +19637,32 @@ function nameTaken(st, to, from) {
         return false;
     return renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])])
         .some((r) => r.n !== from && r.n.toLowerCase() === want);
+}
+/* Everything keyed by a recipe name has to go with it, or the app keeps a
+   rating, a photo and a place in next week's plan for something that no longer
+   exists. The mirror image of renameRecipe. */
+function deleteRecipe(st, name) {
+    const drop = (o) => { const n = { ...(o || {}) }; delete n[name]; return n; };
+    const next = {
+        ...st,
+        myRecipes: (st.myRecipes || []).filter((r) => r.n !== name),
+        savedRecipes: (st.savedRecipes || []).filter((x) => x !== name),
+        ratings: drop(st.ratings),
+        recipePhotos: drop(st.recipePhotos),
+        recipeTweaks: drop(st.recipeTweaks),
+        cookLog: (st.cookLog || []).filter((x) => x.name !== name),
+        renames: drop(st.renames),
+    };
+    /* and out of any week it was planned into */
+    const plan = { ...(st.mealPlan || {}) };
+    Object.keys(plan).forEach((wk) => {
+        const week = { ...plan[wk] };
+        Object.keys(week).forEach((slot) => { if (week[slot] === name)
+            delete week[slot]; });
+        plan[wk] = week;
+    });
+    next.mealPlan = plan;
+    return next;
 }
 function renameRecipe(st, from, to) {
     const clean = String(to || "").trim();
@@ -21246,16 +21355,16 @@ function Progress({ a, setSheet }) {
             React.createElement("div", { className: "il-card", style: { padding: "12px 16px" } },
                 React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Change is your best set over the last 30 days against the 30 before. Pump and ring sessions are left out.")),
             list.length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing matches."),
-            React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((r) => (React.createElement("div", { key: r.id, className: "il-li", onClick: () => setSheet({ t: "exprog", id: r.id }) },
-                React.createElement("div", { style: { minWidth: 0, flex: 1 } },
-                    React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } }, r.name),
-                    React.createElement("div", { className: "il-sub il-n" }, r.latest ? `${W(r.latest.top, 0)} best set · ${r.sessions} sessions` : "No data yet")),
-                React.createElement(Spark, { vals: r.spark }),
-                React.createElement("div", { style: { width: 54, textAlign: "right", flexShrink: 0 } }, r.change == null ? React.createElement("span", { className: "il-sub", style: { margin: 0 } }, "\u2014")
-                    : React.createElement("span", { className: "il-n il-d", style: { fontSize: 15, fontWeight: 600, color: r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--gold)" } },
-                        r.change > 0 ? "+" : "",
-                        r.change.toFixed(1),
-                        "%")))))))),
+            React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((r) => (React.createElement("div", { key: r.id, className: "il-li", style: { padding: "4px 14px" }, onClick: () => setSheet({ t: "exprog", id: r.id }) },
+                React.createElement("div", { className: "il-metric", style: { flex: 1, minWidth: 0, borderTop: 0 } },
+                    React.createElement("span", { className: "nm" },
+                        React.createElement("b", null, r.name),
+                        React.createElement("span", { className: "il-hero sm", style: { fontSize: 22, display: "block",
+                                color: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" } }, r.latest ? W(r.latest.top, 0) : "\u2014")),
+                    React.createElement(BigSpark, { points: r.spark, colour: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" }),
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                        React.createElement(Trend, { points: r.spark }),
+                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))))))),
         view === "when" && (React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Time of day"),
@@ -21371,21 +21480,33 @@ function Fuel({ st, save, a, today, setSheet }) {
                 ["Carbs", Math.round(t.c), P.carbTarget, "var(--gold)"],
                 ["Fat", Math.round(t.f), P.fatTarget, "var(--pmp)"],
             ];
-            return (React.createElement("div", { className: "il-card lead" }, bars.map(([label, got, target, colour], i) => {
-                const pct = target ? Math.min(100, Math.round((got / target) * 100)) : 0;
-                const over = target && got > target;
-                return (React.createElement("div", { key: label, style: { marginTop: i ? 12 : 0 } },
-                    React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
-                        React.createElement("span", { className: "il-lbl" }, label),
-                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0, color: over ? "var(--gold)" : "var(--dim)" } },
-                            got,
-                            " / ",
-                            target,
-                            label === "Calories" ? "" : "g",
-                            target ? ` · ${Math.max(0, target - got)} left` : "")),
-                    React.createElement("div", { className: "il-bar" },
-                        React.createElement("i", { style: { width: pct + "%", background: over ? "var(--gold)" : colour } }))));
-            })));
+            const left = Math.max(0, Math.round(baseK) - Math.round(t.k));
+            return (React.createElement("div", { className: "il-card lead" },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16 } },
+                    React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: left ? "var(--txt)" : "var(--grn)" } }, left),
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, left ? "calories left" : "target met"),
+                        React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } },
+                            Math.round(t.k),
+                            " of ",
+                            Math.round(baseK),
+                            " logged",
+                            bonus ? ` · +${bonus.extra} earned today` : ""))),
+                bars.map(([label, got, target, colour], i) => {
+                    const pct = target ? Math.min(100, Math.round((got / target) * 100)) : 0;
+                    const over = target && got > target;
+                    return (React.createElement("div", { key: label, style: { marginTop: i ? 12 : 0 } },
+                        React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
+                            React.createElement("span", { className: "il-lbl" }, label),
+                            React.createElement("span", { className: "il-sub il-n", style: { margin: 0, color: over ? "var(--gold)" : "var(--dim)" } },
+                                got,
+                                " / ",
+                                target,
+                                label === "Calories" ? "" : "g",
+                                target ? ` · ${Math.max(0, target - got)} left` : "")),
+                        React.createElement("div", { className: "il-bar" },
+                            React.createElement("i", { style: { width: pct + "%", background: over ? "var(--gold)" : colour } }))));
+                })));
         })(),
         React.createElement("div", { style: { padding: "0 12px", marginTop: 16 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "addfood" }) }, "Add something I've eaten")),
@@ -21888,10 +22009,6 @@ function coachRead(st, a) {
 function You({ st, save, a, today, setSheet, go }) {
     const P = st.profile;
     const done = answered(P), pct = Math.round((done / ALLQ.length) * 100);
-    const readAll = coachRead(st, a);
-    const read = readAll.filter((r) => !(st.hiddenTips || []).includes(r.id));
-    const top = read[0] || null;
-    const rest = read.slice(1);
     const acts = st.actions || [];
     const T = targets(P, a.maint || estMaint(P));
     const markDone = (id, status) => {
@@ -21934,23 +22051,6 @@ function You({ st, save, a, today, setSheet, go }) {
                     ? "Nothing logged today. Tick off what you had, or let me estimate it."
                     : `Only ${cu.pct}% of your food is logged. Tick off what you had, or let me estimate the rest.`)));
         })(),
-        top ? (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "tips" }) },
-                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "flex-start" } },
-                    React.createElement("span", { style: { width: 7, height: 7, borderRadius: 4, marginTop: 6, flexShrink: 0,
-                            background: top.sev >= 5 ? "var(--red)" : top.sev >= 4 ? "var(--gold)" : "var(--grn)" } }),
-                    React.createElement("span", { style: { minWidth: 0 } },
-                        React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } },
-                            "Suggestions",
-                            read.length > 1 ? ` · ${read.length}` : ""),
-                        React.createElement("span", { style: { display: "block", fontSize: 14.5, lineHeight: 1.35 } }, top.title))),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))) : (React.createElement("div", { className: "il-list", style: { margin: "18px 12px 0" } },
-            React.createElement("div", { className: "il-li", onClick: () => (st.hiddenTips || []).length && save({ ...st, hiddenTips: [] }) },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("span", { className: "il-lbl", style: { display: "block", marginBottom: 3 } }, "Suggestions"),
-                    React.createElement("span", { style: { fontSize: 14 } },
-                        "Nothing outstanding",
-                        (st.hiddenTips || []).length ? " \u2014 tap to bring back the dismissed ones" : ""))))),
         (() => {
             /* Eight weeks of invented history ships with the app so the screens are
                not empty on day one. Nothing ever said so, and it sits in the weight
@@ -22693,6 +22793,40 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
 }
 /* plain number input that allows an empty box — a controlled Number() input
    snaps back to 0 the moment you clear it, which is where "044" came from */
+/* A line chart small enough to live inside a row. Drawn by hand rather than
+   through the chart library — this has to render forty times on a screen. */
+function BigSpark({ points, colour = "var(--txt)", h = 34 }) {
+    const v = (points || []).filter((x) => typeof x === "number" && !isNaN(x));
+    if (v.length < 2)
+        return React.createElement("div", { className: "il-spark" });
+    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    const W = 100, pad = 4;
+    const xy = v.map((n, i) => [
+        (i / (v.length - 1)) * W,
+        h - pad - ((n - lo) / span) * (h - pad * 2),
+    ]);
+    const d = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    return (React.createElement("svg", { className: "il-spark", viewBox: `0 0 ${W} ${h}`, preserveAspectRatio: "none" },
+        React.createElement("line", { x1: "0", y1: h / 2, x2: W, y2: h / 2, stroke: "var(--line)", strokeWidth: "1", strokeDasharray: "2 3" }),
+        React.createElement("polyline", { points: d, fill: "none", stroke: colour, strokeWidth: "1.8", strokeLinejoin: "round", strokeLinecap: "round", vectorEffect: "non-scaling-stroke" }),
+        xy.map(([x, y], i) => (React.createElement("circle", { key: i, cx: x, cy: y, r: i === xy.length - 1 ? 2.6 : 1.6, fill: colour })))));
+}
+/* Up, flat or down, as a pill. Threshold is a percentage of the range so a
+   wobble in the last decimal does not read as progress. */
+function Trend({ points, invert }) {
+    const v = (points || []).filter((x) => typeof x === "number" && !isNaN(x));
+    if (v.length < 3)
+        return null;
+    const half = Math.floor(v.length / 2);
+    const before = v.slice(0, half).reduce((a, b) => a + b, 0) / half;
+    const after = v.slice(-half).reduce((a, b) => a + b, 0) / half;
+    const pc = before ? (after - before) / Math.abs(before) : 0;
+    const dir = Math.abs(pc) < 0.02 ? "flat" : pc > 0 ? "up" : "dn";
+    const good = invert ? (dir === "dn" ? "up" : dir === "up" ? "dn" : "flat") : dir;
+    return (React.createElement("span", { className: "il-trend" + (good === "up" ? " up" : good === "dn" ? " dn" : "") },
+        dir === "up" ? "\u2197" : dir === "dn" ? "\u2198" : "\u2192",
+        dir === "flat" ? "" : ` ${Math.abs(Math.round(pc * 100))}%`));
+}
 function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOnly, className, style }) {
     const [raw, setRaw] = useState(value === null || value === undefined || value === "" ? "" : String(value));
     const [live, setLive] = useState(false);
@@ -24603,6 +24737,41 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
                 " food",
                 list.length === 1 ? "" : "s"),
             q && React.createElement("button", { className: "il-chip", onClick: () => setQ("") }, "Clear")),
+        (() => {
+            /* A recipe you have added is a thing you eat. Searching the food log for
+               it used to find nothing, because this only ever looked at the food
+               table and your own products. */
+            if (!q || q.trim().length < 2)
+                return null;
+            const hits = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])])
+                .filter((r) => r.n.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+            if (!hits.length)
+                return null;
+            return (React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "il-row", style: { margin: "8px 14px 8px" } },
+                    React.createElement("span", { className: "il-lbl" },
+                        hits.length,
+                        " recipe",
+                        hits.length === 1 ? "" : "s")),
+                React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, hits.map((r) => (React.createElement("div", { key: r.n, className: "il-li", onClick: () => setSheet({ t: "rlog", name: r.n }) },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14 } },
+                            r.n,
+                            r.mine && React.createElement("span", { className: "il-chip", style: { marginLeft: 7, padding: "2px 6px", fontSize: 10 } }, "mine")),
+                        React.createElement("div", { className: "il-sub il-n" },
+                            "Serves ",
+                            r.serves,
+                            " \u00B7 ",
+                            r.m[0],
+                            " cal \u00B7 P",
+                            r.m[1],
+                            " C",
+                            r.m[2],
+                            " F",
+                            r.m[3],
+                            " a portion")),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))));
+        })(),
         React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, list.slice(0, 120).map((f) => (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(f.serv); } },
             React.createElement("div", { style: { minWidth: 0 } },
                 React.createElement("div", { style: { fontSize: 14 } },
