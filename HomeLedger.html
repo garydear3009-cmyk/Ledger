@@ -4199,7 +4199,49 @@ const BULGE = {
     ham_bf: .028, ham_st: .026,
     gastroc_med: .026, gastroc_lat: .024, soleus: .014, tib_ant: .012,
 };
-function Body3D({ weekly, onPick, height = 460 }) {
+/* ============ SHAPED BY YOUR OWN TAPE ============
+   The reference is a plain build at this height. Everything the model draws
+   is scaled against it, so the numbers on the tape are the numbers on the
+   screen. Girth is a circumference and the model is a radius, so a ratio of
+   circumferences is a ratio of radii — no conversion needed. */
+const BODY_REF = { shoulders: 118, chest: 100, waist: 85, hips: 96, arm: 34, thigh: 56, calf: 38 };
+/* A tape can be read wrong. Clamp so a stray digit bends the model a little
+   rather than producing something inhuman. */
+const bodyClamp = (x) => Math.max(0.78, Math.min(1.3, x));
+function bodyShape(st, upTo) {
+    const sets = (st.meas || []).filter((m) => m && m.v).slice()
+        .sort((a, b) => a.date.localeCompare(b.date));
+    const use = upTo ? sets.filter((m) => m.date <= upTo) : sets;
+    const m = use[use.length - 1] || null;
+    const v = (m && m.v) || {};
+    const one = (val, ref) => (typeof val === "number" && val > 0 ? bodyClamp(val / ref) : 1);
+    /* each side on its own — that is the whole point */
+    const armL = one(v.armL, BODY_REF.arm), armR = one(v.armR, BODY_REF.arm);
+    const thighL = one(v.thighL, BODY_REF.thigh), thighR = one(v.thighR, BODY_REF.thigh);
+    return {
+        date: m ? m.date : null,
+        from: m ? "your tape" : "a plain build — nothing measured yet",
+        shoulders: one(v.shoulders, BODY_REF.shoulders),
+        chest: one(v.chest, BODY_REF.chest),
+        waist: one(v.waist ?? v.abdomen, BODY_REF.waist),
+        hips: one(v.hips, BODY_REF.hips),
+        arm: { 1: armR, "-1": armL }, // 1 is the right side in the model
+        thigh: { 1: thighR, "-1": thighL },
+        calf: { 1: one(v.calf, BODY_REF.calf), "-1": one(v.calf, BODY_REF.calf) },
+        /* what is worth saying out loud underneath it */
+        lopsided: [
+            Math.abs(armR - armL) > 0.015 ? "arms" : null,
+            Math.abs(thighR - thighL) > 0.015 ? "thighs" : null,
+        ].filter(Boolean),
+        measured: Object.keys(v).filter((k) => typeof v[k] === "number").length,
+    };
+}
+/* every set of measurements you have, oldest first — the slider runs on it */
+const bodyDates = (st) => (st.meas || []).filter((m) => m && m.v)
+    .map((m) => m.date).sort();
+function Body3D({ weekly, onPick, height = 460, shape }) {
+    const sh = shape || { shoulders: 1, chest: 1, waist: 1, hips: 1,
+        arm: { 1: 1, "-1": 1 }, thigh: { 1: 1, "-1": 1 }, calf: { 1: 1, "-1": 1 } };
     const host = useRef(null);
     const api = useRef({ zoom: 1, spin: true });
     const [sel, setSel] = useState(null);
@@ -4295,22 +4337,27 @@ function Body3D({ weekly, onPick, height = 460 }) {
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.078, 0.12, 18), plain);
         neck.position.set(0, 1.665, 0);
         root.add(neck);
-        // broad at the shoulders, narrow at the waist, like the chart
-        seg("torso", 0.232, 0.158, 0.68, 0, 1.285, 1, 0.62);
-        seg("hip", 0.172, 0.176, 0.19, 0, 0.895, 1, 0.74);
+        /* Wide at the top by the shoulder measurement, narrow at the bottom by the
+           waist, deep by the chest. Three numbers off the tape, three dimensions. */
+        seg("torso", 0.232 * sh.shoulders, 0.158 * sh.waist, 0.68, 0, 1.285, 1, 0.62 * sh.chest);
+        seg("hip", 0.172 * sh.hips, 0.176 * sh.hips, 0.19, 0, 0.895, 1, 0.74);
         [1, -1].forEach((sd) => {
-            ball("shoulder", 0.098, sd * 0.238, 1.535, sd, 0.96);
-            seg("upperarm", 0.070, 0.052, 0.33, sd * 0.276, 1.355, sd, 0.94, sd * 0.045);
-            seg("forearm", 0.050, 0.038, 0.30, sd * 0.305, 1.035, sd, 0.92, sd * 0.028);
+            const arm = sh.arm[sd] || 1, thg = sh.thigh[sd] || 1, clf = sh.calf[sd] || 1;
+            /* the shoulders carry the arms outward as they widen, or the arms grow
+               into the ribs */
+            const out = 0.238 * sh.shoulders;
+            ball("shoulder", 0.098 * sh.shoulders, sd * out, 1.535, sd, 0.96);
+            seg("upperarm", 0.070 * arm, 0.052 * arm, 0.33, sd * (out + 0.038), 1.355, sd, 0.94, sd * 0.045);
+            seg("forearm", 0.050 * arm, 0.038 * arm, 0.30, sd * (out + 0.067), 1.035, sd, 0.92, sd * 0.028);
             const hand = new THREE.Mesh(new THREE.SphereGeometry(0.042, 16, 12), plain);
             hand.position.set(sd * 0.318, 0.858, 0);
             hand.scale.set(0.78, 1.25, 0.58);
             root.add(hand);
-            seg("thigh", 0.104, 0.066, 0.45, sd * 0.090, 0.575, sd, 0.86);
+            seg("thigh", 0.104 * thg, 0.066 * thg, 0.45, sd * 0.090 * sh.hips, 0.575, sd, 0.86);
             const knee = new THREE.Mesh(new THREE.SphereGeometry(0.057, 16, 12), plain);
             knee.position.set(sd * 0.096, 0.340, 0);
             root.add(knee);
-            seg("calf", 0.060, 0.032, 0.34, sd * 0.098, 0.170, sd, 0.84);
+            seg("calf", 0.060 * clf, 0.032 * clf, 0.34, sd * 0.098 * sh.hips, 0.170, sd, 0.84);
             const foot = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.042, 0.19), plain);
             foot.position.set(sd * 0.098, 0.018, 0.05);
             root.add(foot);
@@ -4451,7 +4498,7 @@ function Body3D({ weekly, onPick, height = 460 }) {
             rnd.dispose();
             el.innerHTML = "";
         };
-    }, [height]);
+    }, [height, shape && shape.date, shape && shape.arm[1], shape && shape.arm["-1"]]);
     useEffect(() => { api.current.zoom = zoom; }, [zoom]);
     useEffect(() => { api.current.onZoom = (z) => setZoom(+z.toFixed(2)); }, []);
     useEffect(() => { api.current.spin = spin; api.current.stop && api.current.stop(spin); }, [spin]);
@@ -4929,7 +4976,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v249 · 3 Aug";
+const APP_VERSION = "v250 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14829,7 +14876,8 @@ function CookMode({ st, save, sheet, close, setSheet }) {
             setRan(true);
             setTimer(null);
             try {
-                navigator.vibrate?.([400, 200, 400]);
+                if (navigator.vibrate)
+                    navigator.vibrate([400, 200, 400]);
             }
             catch { }
             return;
@@ -21659,6 +21707,7 @@ function RingsSheet({ st, save, today, close }) {
 /* ---------------- BODY ---------------- */
 function Body({ st, save, a, today, setSheet }) {
     const [view, setView] = useState("model");
+    const [shapeAt, setShapeAt] = useState(null); // which set of measurements the model is drawn from
     const last = st.meas[st.meas.length - 1], prev = st.meas[st.meas.length - 2];
     const jump = weightJump(st, a, today || iso(new Date()));
     return (React.createElement(React.Fragment, null,
@@ -21724,7 +21773,30 @@ function Body({ st, save, a, today, setSheet }) {
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Last 4 weeks"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Forty-one muscles, each with its own useful weekly range. Green is inside it, amber is short, red is barely touched, purple is more than pays."),
-                React.createElement(Body3D, { weekly: a.anatMap, onPick: (m) => setSheet({ t: "anatmus", m }) }),
+                (() => {
+                    /* the model is shaped by whichever set of measurements you are
+                       looking at, so dragging back through the dates is dragging back
+                       through your own shape */
+                    const dates = bodyDates(st);
+                    const at = dates.includes(shapeAt) ? shapeAt : dates[dates.length - 1] || null;
+                    const sh = bodyShape(st, at);
+                    return (React.createElement(React.Fragment, null,
+                        React.createElement(Body3D, { weekly: a.anatMap, shape: sh, onPick: (m) => setSheet({ t: "anatmus", m }) }),
+                        dates.length > 0 && (React.createElement("div", { style: { marginTop: 10 } },
+                            React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                                React.createElement("span", { className: "il-lbl" },
+                                    "Shaped by ",
+                                    sh.from),
+                                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, sh.date ? dtiny(sh.date) : "")),
+                            dates.length > 1 && (React.createElement("input", { type: "range", min: 0, max: dates.length - 1, step: 1, value: Math.max(0, dates.indexOf(at)), style: { width: "100%" }, onChange: (e) => setShapeAt(dates[Number(e.target.value)]) })),
+                            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6 } },
+                                dates.length > 1
+                                    ? `Drag back through your ${dates.length} sets of measurements and watch it change.`
+                                    : "Measure again and this becomes a slider you can drag through.",
+                                sh.lopsided.length
+                                    ? ` Your ${sh.lopsided.join(" and ")} are not the same size — turn it round and you can see it.`
+                                    : "")))));
+                })(),
                 React.createElement(MuscleList, { weekly: a.anatMap, sel: null, onPick: (m) => setSheet({ t: "anatmus", m }) }),
                 React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
                     React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "niggle" }) }, "Something's grumbling"),
