@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v260 · 3 Aug";
+const APP_VERSION = "v262 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -15082,7 +15082,7 @@ function useAwake(on) {
    are actually standing, so nothing here is small and nothing scrolls if it
    can help it. */
 function CookMode({ st, save, sheet, close, setSheet }) {
-    const rec = findRec(st, sheet.name);
+    const rec = recipeAsYouMakeIt(st, findRec(st, sheet.name));
     const [n, setN] = useState(0);
     const [serves, setServes] = useState(sheet.serves || (rec && rec.serves) || 2);
     const [timer, setTimer] = useState(null); // seconds left
@@ -15153,10 +15153,11 @@ function CookMode({ st, save, sheet, close, setSheet }) {
 }
 function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
     const found0 = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]).find((r) => r.n === sheet.name);
-    const base = found0 ? applySwaps(st, found0) : null;
+    const base = found0 ? recipeAsYouMakeIt(st, found0) : null;
     const [serves, setServes] = useState(base ? base.serves : 1);
     const [ate, setAte] = useState(1); // how many of those servings you had
     const [fix, setFix] = useState(null); // which missing ingredient is open
+    const [sub, setSub] = useState(null); // the substitution being set up
     const [shot, setShot] = useState(null);
     const [busy, setBusy] = useState(false);
     const [naming, setNaming] = useState("");
@@ -15287,6 +15288,29 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 ? `As written. Change it and the amounts below rescale.`
                 : `Scaled from ${base.serves} to ${serves}. Cooking times mostly stay the same — check things are done rather than trusting the clock.${serves > base.serves * 2 ? " At this size use a bigger pan or do it in two, or it'll steam instead of browning." : ""}`)),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "What you need"),
+        sub && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } },
+                "Instead of ",
+                sub.ing),
+            React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, placeholder: "What you use \u2014 e.g. Veetee brown rice pack", value: sub.name, onChange: (e) => setSub({ ...sub, name: e.target.value }) }),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                React.createElement("input", { className: "il-in il-n", style: { flex: 1 }, inputMode: "decimal", placeholder: "How much", value: sub.amount, onChange: (e) => setSub({ ...sub, amount: e.target.value }) }),
+                React.createElement("input", { className: "il-in", style: { width: 92, textAlign: "left" }, placeholder: "unit", value: sub.unit, onChange: (e) => setSub({ ...sub, unit: e.target.value }) })),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "8px 0 12px" } }, "Leave the amount blank to keep the recipe's own. A swap follows the ingredient, so it still works when you scale the recipe or rename it."),
+            React.createElement("div", { style: { display: "grid", gap: 7 } },
+                React.createElement("button", { className: "il-btn", disabled: !sub.name.trim(), onClick: () => {
+                        save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "recipe"));
+                        setSub(null);
+                        setFix(null);
+                    } }, "Just in this recipe"),
+                React.createElement("button", { className: "il-btn g", disabled: !sub.name.trim(), onClick: () => {
+                        save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "global"));
+                        setSub(null);
+                        setFix(null);
+                    } },
+                    "In every recipe that uses ",
+                    sub.ing.toLowerCase()),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSub(null) }, "Cancel")))),
         React.createElement("div", { className: "il-card" },
             base.ing.map((i, n) => {
                 const missing = cm && cm.missing.some((x) => String(i[2]).toLowerCase().includes(x.split(",")[0].trim()));
@@ -15303,6 +15327,22 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                         React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, missing ? `I can't find ${i[2].toLowerCase()} in your kitchen.`
                             : `You've got ${i[2].toLowerCase()}. Running low on it?`),
                         React.createElement(SwapRows, { name: i[2] }),
+                        (() => {
+                            const mine = mySwapFor(st, base.n, i[2]);
+                            const was = (base.yourSwaps || []).find((x) => x.to === i[2]);
+                            if (mine || was) {
+                                return (React.createElement("div", { className: "il-note", style: { fontSize: 12, color: "var(--grn)" } },
+                                    "You use ",
+                                    (mine && mine.name) || i[2],
+                                    " instead",
+                                    was ? ` of ${was.from}` : "",
+                                    (mine && mine.scope) === "global" ? ", in every recipe" : ", in this recipe",
+                                    ".",
+                                    " ",
+                                    React.createElement("button", { className: "il-chip", style: { marginLeft: 4 }, onClick: () => save(clearMySwap(st, base.n, was ? was.from : i[2])) }, "Undo")));
+                            }
+                            return (React.createElement("button", { className: "il-btn g sm", onClick: () => setSub({ ing: i[2], amount: "", unit: i[1] || "", name: "" }) }, "Use something else instead"));
+                        })(),
                         React.createElement("div", { style: { display: "flex", gap: 7 } },
                             missing ? (React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => {
                                     save({ ...st,
@@ -16191,9 +16231,11 @@ function Shopping({ sheet, st, save, a, today, close, setSheet }) {
     const [showHave, setShowHave] = useState(false);
     const raw = [];
     Object.entries(plan).forEach(([k, name]) => {
-        const r = all.find((x) => x.n === name);
-        if (!r)
+        const r0 = all.find((x) => x.n === name);
+        if (!r0)
             return;
+        /* buy what you actually cook with, not what the card says */
+        const r = recipeAsYouMakeIt(st, r0);
         r.ing.forEach(([amt, unit, ing]) => raw.push({ name: ing, amount: amt, unit, from: r.n }));
     });
     const items = combine(raw);
@@ -16383,6 +16425,63 @@ function ruleCheck(st, rec) {
     });
     return { ok: !broken.length, broken, swaps };
 }
+/* ============ YOUR OWN SUBSTITUTIONS ============
+   Different from the dietary rules above: those are things you will not eat,
+   these are things you would rather use. Brown rice becomes a Veetee pack —
+   either just in this recipe, or in every recipe that ever calls for it.
+   Stored by the original ingredient's name so it keeps working when a recipe
+   is renamed or rescaled. */
+const swapKey = (n) => String(n || "").toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+function mySwapFor(st, recName, ingName) {
+    const m = st.mySwaps || {};
+    const k = swapKey(ingName);
+    if (!k)
+        return null;
+    /* this recipe's own swap wins over the standing one */
+    const mine = ((m.byRecipe || {})[recName] || {})[k];
+    if (mine)
+        return { ...mine, scope: "recipe" };
+    const all = (m.global || {})[k];
+    return all ? { ...all, scope: "global" } : null;
+}
+function setMySwap(st, recName, ingName, to, scope) {
+    const m = st.mySwaps || {};
+    const k = swapKey(ingName);
+    if (scope === "global") {
+        return { ...st, mySwaps: { ...m, global: { ...(m.global || {}), [k]: to } } };
+    }
+    const byRecipe = { ...(m.byRecipe || {}) };
+    byRecipe[recName] = { ...(byRecipe[recName] || {}), [k]: to };
+    return { ...st, mySwaps: { ...m, byRecipe } };
+}
+function clearMySwap(st, recName, ingName) {
+    const m = st.mySwaps || {};
+    const k = swapKey(ingName);
+    const global = { ...(m.global || {}) };
+    delete global[k];
+    const byRecipe = { ...(m.byRecipe || {}) };
+    if (byRecipe[recName]) {
+        byRecipe[recName] = { ...byRecipe[recName] };
+        delete byRecipe[recName][k];
+    }
+    return { ...st, mySwaps: { global, byRecipe } };
+}
+/* the ingredient list with your substitutions made */
+function swapIngredients(st, rec) {
+    const done = [];
+    const ing = (rec.ing || []).map((line) => {
+        const [amt, unit, name] = line;
+        const to = mySwapFor(st, rec.n, name);
+        if (!to || !to.name)
+            return line;
+        done.push({ from: name, to: to.name, scope: to.scope });
+        /* keep the original amount unless the swap states its own — a rice pack
+           is a pack however many grams the recipe asked for */
+        return [to.amount != null && to.amount !== "" ? Number(to.amount) : amt,
+            to.amount != null && to.amount !== "" ? (to.unit || "") : unit, to.name];
+    });
+    return { ing, done };
+}
 /* apply the swappable ones so the recipe still reads correctly */
 function applySwaps(st, rec) {
     const { swaps } = ruleCheck(st, rec);
@@ -16397,6 +16496,16 @@ function applySwaps(st, rec) {
     };
     return { ...rec, ing: rec.ing.map(([a, u, n]) => [a, u, swap(n)]),
         method: (rec.method || []).map(swap), swapped: swaps.map((r) => r.label) };
+}
+/* Both kinds at once: the rules first, then what you would rather use. Every
+   screen that shows a recipe goes through this, so a swap made once shows up
+   on the card, in cook mode and on the shopping list. */
+function recipeAsYouMakeIt(st, rec) {
+    if (!rec)
+        return rec;
+    const ruled = applySwaps(st, rec);
+    const { ing, done } = swapIngredients(st, ruled);
+    return done.length ? { ...ruled, ing, yourSwaps: done } : ruled;
 }
 const RULE_GROUPS = [
     ["Meat and fish", ["no_fish", "no_shellfish", "no_pork", "no_lamb", "no_beef", "no_offal", "breast_not_thigh"]],
@@ -16840,9 +16949,11 @@ function shopLines(st, wk) {
     const all = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
     const raw = [];
     Object.values(plan).forEach((name) => {
-        const r = all.find((x) => x.n === name);
-        if (!r)
+        const r0 = all.find((x) => x.n === name);
+        if (!r0)
             return;
+        /* buy what you actually cook with, not what the card says */
+        const r = recipeAsYouMakeIt(st, r0);
         r.ing.forEach(([amt, unit, ing]) => raw.push({ name: ing, amount: amt, unit, from: r.n }));
     });
     const fromPlan = combine(raw);
@@ -17220,6 +17331,25 @@ function toggleTaking(st, name) {
     const off = st.suppOff || [];
     return { ...st, suppOff: off.includes(name) ? off.filter((x) => x !== name) : [...off, name] };
 }
+/* Matching a tub on the shelf to the twenty the app knows about. It was done
+   inline in three places with slightly different rules; one rule now. */
+function suppKnown(s) {
+    const n = String((s && (s.what || s.name)) || s || "").toLowerCase();
+    if (!n)
+        return null;
+    return SUPPS.find((x) => x.name.toLowerCase() === n) ||
+        SUPPS.find((x) => n.includes(x.name.toLowerCase())) ||
+        SUPPS.find((x) => n.includes(x.name.toLowerCase().split(" ")[0]) && x.name.split(" ")[0].length > 4) ||
+        null;
+}
+/* the badge that goes on the row: what the evidence says, in one word */
+function suppBadge(s) {
+    const k = suppKnown(s);
+    if (!k)
+        return { bg: "#1E2024", fg: "#8E949E", word: "Not rated", rec: false };
+    const [bg, fg, word] = SUPP_STRENGTH[k.strength] || ["#1E2024", "#8E949E", "?"];
+    return { bg, fg, word, rec: k.strength === "strong" || k.strength === "moderate", strength: k.strength };
+}
 function tickedToday(st, today) { return ((st.suppTicks || {})[today]) || []; }
 function toggleTick(st, today, name) {
     const now = tickedToday(st, today);
@@ -17422,43 +17552,38 @@ function Supplements({ st, save, a, today, setSheet }) {
                                 React.createElement("div", { style: { fontSize: 14, textDecoration: on ? "line-through" : "none" } },
                                     x.name,
                                     x.dose ? ` · ${x.dose}` : ""),
+                                (() => {
+                                    /* what the evidence says, on the row, so the main page
+                                       answers "is this one worth taking" without a tap */
+                                    const b = suppBadge(x);
+                                    return (React.createElement("span", { style: { display: "inline-block", fontSize: 9.5, fontWeight: 600,
+                                            letterSpacing: ".05em", textTransform: "uppercase", marginTop: 4,
+                                            background: b.bg, color: b.fg, padding: "2px 7px", borderRadius: 5 } }, b.word));
+                                })(),
                                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 2 } }, why),
                                 avoid && (React.createElement("div", { style: { fontSize: 11.5, marginTop: 4, color: "var(--red)", lineHeight: 1.45 } }, avoid))))));
                 })))),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 4px" } }, "Ticks clear themselves overnight. The order is worked out from what each one is, so it updates on its own when you add something."),
-            React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
-                React.createElement("span", { className: "il-lbl" }, "What you take daily"),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, mine.length)),
-            mine.map((s, i) => {
-                const known = SUPPS.find((x) => x.name.toLowerCase() === (s.what || s.name || "").toLowerCase()) ||
-                    SUPPS.find((x) => (s.what || s.name || "").toLowerCase().includes(x.name.toLowerCase().split(" ")[0]));
-                const [bg, fg, word] = known ? SUPP_STRENGTH[known.strength] : ["#1E2024", "#8E949E", "Not in my list"];
-                return (React.createElement("div", { key: i, className: "il-rt", onClick: () => setSheet({ t: "suppone", i }) },
-                    React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
-                        React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15 } }, s.name),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 4px" } }, "Ticks clear themselves overnight. The order is worked out from what each one is, so it updates on its own when you add something.")),
+        shelf.length > 0 && (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
+                React.createElement("span", { className: "il-lbl" }, "MY CUPBOARD"),
+                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, shelf.length)),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, margin: "0 16px 8px" } }, "Everything else you own. Still yours, still explained when you tap one \u2014 just not on today's list. Anything marked worth taking is one tap from being on it."),
+            shelf.map((s, i) => {
+                const b = suppBadge(s);
+                return (React.createElement("div", { key: i, className: "il-rt" },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
+                        React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15, flex: 1 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) }, s.name),
                         React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
-                                background: bg, color: fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0 } }, word)),
+                                background: b.bg, color: b.fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginLeft: 8 } }, b.word)),
                     React.createElement("div", { className: "il-row" },
                         React.createElement("span", { className: "il-sub", style: { margin: 0, minWidth: 0 } },
                             s.what || "?",
                             s.dose ? ` · ${s.dose}` : ""),
-                        React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: (e) => { e.stopPropagation(); save(toggleTaking(st, s.name)); } }, "Not daily"))));
-            })),
-        shelf.length > 0 && (React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
-                React.createElement("span", { className: "il-lbl" }, "In the cupboard, not daily"),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, shelf.length)),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12, margin: "0 16px 8px" } }, "Still yours, still explained when you tap one \u2014 just not on today's list. A cupboard is not a routine."),
-            shelf.map((s, i) => (React.createElement("div", { key: i, className: "il-rt", style: { opacity: .72 } },
-                React.createElement("div", { className: "il-row" },
-                    React.createElement("div", { style: { minWidth: 0 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) },
-                        React.createElement("div", { className: "il-h2", style: { fontSize: 15 } }, s.name),
-                        React.createElement("div", { className: "il-sub" },
-                            s.what || "?",
-                            s.dose ? ` · ${s.dose}` : "")),
-                    React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, "Take daily"))))))),
+                        React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily"))));
+            }))),
         React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
-            React.createElement("span", { className: "il-lbl" }, "Worth considering"),
+            React.createElement("span", { className: "il-lbl" }, "RECOMMENDED FOR YOU"),
             rec.answered > 0 && React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, rec.list.length)),
         rec.answered === 0 ? (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Answer the ten questions below and I'll work out what is actually missing rather than reciting a list. Without them all I can tell you is what everybody gets told."))) : rec.list.length === 0 ? (React.createElement("div", { className: "il-card" },
@@ -17686,8 +17811,9 @@ function SuppOne({ sheet, st, save, close, setSheet }) {
         return React.createElement(React.Fragment, null,
             React.createElement(SH, { title: "Supplement", close: close }),
             React.createElement("div", { className: "il-empty" }, "Gone."));
-    const known = SUPPS.find((x) => x.name.toLowerCase() === (s.what || "").toLowerCase()) ||
-        SUPPS.find((x) => (s.what || s.name || "").toLowerCase().includes(x.name.toLowerCase().split(" ")[0]));
+    /* one matcher for the whole app — this had its own slightly different rules,
+       so a tub could be rated on the list and unrated on its own screen */
+    const known = suppKnown(s);
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: s.name, sub: s.what || "", close: close }),
         s.dose && React.createElement("div", { className: "il-card" },
@@ -22375,7 +22501,8 @@ function Fuel({ st, save, a, today, setSheet }) {
             return (React.createElement("div", { className: "il-menu" },
                 React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Carry on where you left off" : "Ask her anything, or tell her what you ate" }),
                 React.createElement(Row, { to: { t: "meals" }, title: "What should I eat?", sub: "Round the time and the macros you have left" }),
-                React.createElement(Row, { to: { t: "inspo" }, title: "What shall I cook?", sub: "A few questions and she'll pick three" })));
+                React.createElement(Row, { to: { t: "inspo" }, title: "What shall I cook?", sub: "A few questions and she'll pick three" }),
+                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` })));
         })(),
         React.createElement(FuelCard, { st, save, a, today, setSheet }),
         (() => {
@@ -22541,7 +22668,6 @@ function Fuel({ st, save, a, today, setSheet }) {
             const rated = Object.keys(st.ratings || {}).length;
             return (React.createElement("div", { className: "il-menu" },
                 React.createElement(Row, { to: { t: "addrec" }, title: "Photograph a recipe", sub: "A card, a page from a book, or your own handwriting" }),
-                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
                 React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: planned ? `${planned} meals planned` : "And the shopping writes itself" }),
                 React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: shopN ? `${shopN} thing${shopN === 1 ? "" : "s"} on it` : "Nothing on it yet" }),
                 React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" }),
