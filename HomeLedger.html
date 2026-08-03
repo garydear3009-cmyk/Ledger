@@ -4854,7 +4854,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v218 · 3 Aug";
+const APP_VERSION = "v220 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -7404,45 +7404,12 @@ function SearchAll({ st, close, setSheet }) {
                 React.createElement("span", { className: "il-lbl", style: { color: g.colour } }, g.label),
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, g.rows.length)),
             g.rows.map((r, i) => (React.createElement("div", { key: i, className: "il-list", style: { margin: "0 12px 6px" } },
-                React.createElement("div", { className: "il-li", onClick: () => { close(); setTimeout(() => setSheet(r.to), 50); } },
+                React.createElement("div", { className: "il-li", onClick: () => setSheet(r.to) },
                     React.createElement("div", { style: { minWidth: 0 } },
                         React.createElement("div", { style: { fontSize: 14.5 } }, r.name),
                         r.sub && React.createElement("div", { className: "il-sub" }, r.sub)),
                     React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))))));
 }
-function EatWindow({ st, save, close }) {
-    const cur = st.eatWindow || standard;
-    const [tab, setTab] = useState(training);
-    return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "When I eat", sub: "And what it means for training", close: close }),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "A normal day for me"),
-            React.createElement("div", { style: { display: "grid", gap: 7 } }, EAT_WINDOWS.map(([id, label, sub]) => (React.createElement("div", { key: id, className: "il-row", style: { padding: "8px 0", alignItems: "flex-start",
-                    borderTop: id === "standard" ? 0 : "1px solid var(--line)" }, onClick: () => save({ ...st, eatWindow: id }) },
-                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10 } },
-                    React.createElement("span", { style: { width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1,
-                            border: cur === id ? "none" : "1.5px solid var(--line)",
-                            background: cur === id ? "var(--grn)" : "transparent" } }),
-                    React.createElement("div", null,
-                        React.createElement("div", { style: { fontSize: 14 } }, label),
-                        React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 2 } }, sub)))))))),
-        React.createElement("div", { style: { display: "flex", gap: 6, padding: "0 12px 10px" } }, [["training", "On a training day"], ["rest", "On a rest day"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (tab === k ? " on" : ""), onClick: () => setTab(k) }, l)))),
-        FASTING_NOTES[tab].map(([head, body], i) => (React.createElement("div", { key: i, className: "il-card" },
-            React.createElement("div", { className: "il-h2", style: { fontSize: 14.5, marginBottom: 5 } }, head),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, body)))),
-        React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 14px" } }, "Effect sizes here are small and the trials disagree with each other more than the headlines suggest. None of this is a reason to start fasting or to stop. General information rather than medical advice."));
-}
-/* ============ END OF DAY CATCH-UP ============
-   The food log is honest about being incomplete rather than pretending a
-   half-logged day is a low-calorie one. Three routes out of it:
-
-   - tick the things you actually eat most, which covers most days in seconds
-   - ask for an estimate, which fills the gap and MARKS the day as estimated
-   - say it was right, which records that too
-
-   An estimated day is flagged so the analytics and the review can weight it
-   differently. Quietly inventing calories and then treating them as measured
-   would be worse than the gap.                                             */
 function loggedKcal(st, date) {
     const day = (st.foods || []).find((x) => x.date === date);
     return (day && day.entries || []).reduce((t, e) => t + (e.kcal || 0), 0);
@@ -7486,74 +7453,6 @@ function estimateDay(st, a, date) {
         meal: "Other", at: "", ts: Date.now(), estimated: true,
         kcal: gap, p: pShare, c: cShare, f: fShare,
     };
-}
-function DayPlan({ st, save, a, today, close, setSheet }) {
-    const saved = st.dayPlan || {};
-    /* if he does not eat first thing, breakfast should not be on by default */
-    const [meals, setMeals] = useState(saved.meals || {
-        breakfast: { on: !fastsAtAll(st), setting: "rush", at: "" },
-        lunch: { on: true, setting: "desk", at: "" },
-        dinner: { on: false, setting: "home", at: "" },
-        snack: { on: false, setting: "car", at: "" },
-    });
-    const [notes, setNotes] = useState(saved.notes || "");
-    const plan = { meals, notes };
-    const b = dayBudget(st, a, plan);
-    const set = (k, patch) => setMeals({ ...meals, [k]: { ...meals[k], ...patch } });
-    const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
-    return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "Plan a day", sub: "Tell me the shape of it and I'll work round it", close: close }),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Say which meals you want ideas for and where you will actually be. A meal you are buying out is a shopping decision, not a recipe, and one that is already sorted comes off the day's budget instead of being suggested again.")),
-        DAY_MEALS.map(([k, label]) => {
-            const m = meals[k];
-            return (React.createElement("div", { key: k, className: "il-card" },
-                React.createElement("div", { className: "il-row", style: { marginBottom: m.on ? 10 : 0 } },
-                    React.createElement("div", { className: "il-h2", style: { fontSize: 15 } }, label),
-                    React.createElement("button", { className: "il-chip" + (m.on ? " on" : ""), onClick: () => set(k, { on: !m.on }) }, m.on ? "Want ideas" : "Skip")),
-                m.on && (React.createElement(React.Fragment, null,
-                    React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 } }, MEAL_SETTINGS.map((o) => (React.createElement("button", { key: o.id, className: "il-chip" + (m.setting === o.id ? " on" : ""), onClick: () => set(k, { setting: o.id }) }, o.label)))),
-                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginBottom: 8 } }, settingBy(m.setting).hint),
-                    m.setting === "sorted" ? (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 } },
-                        React.createElement("input", { className: "il-in", style: { textAlign: "left", fontSize: 13 }, placeholder: "What is it?", value: m.what || "", onChange: (e) => set(k, { what: e.target.value }) }),
-                        React.createElement("input", { className: "il-in", style: { fontSize: 13 }, placeholder: "kcal", inputMode: "numeric", value: m.kcal || "", onChange: (e) => set(k, { kcal: e.target.value }) }),
-                        React.createElement("input", { className: "il-in", style: { fontSize: 13 }, placeholder: "protein", inputMode: "numeric", value: m.protein || "", onChange: (e) => set(k, { protein: e.target.value }) }))) : (() => {
-                        const fits = book.filter((r) => (r.meal === k || (k === "snack" && r.meal === "snack")) && fitsSetting(r, m.setting));
-                        if (m.setting === "bought")
-                            return (React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "Nothing in the book helps here \u2014 the nutritionist will name what to pick up."));
-                        return fits.length ? (React.createElement("div", null,
-                            React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 6 } },
-                                fits.length,
-                                " from your book fit that"),
-                            fits.slice(0, 3).map((r, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "6px 0", borderTop: i ? "1px solid var(--line)" : 0 }, onClick: () => setSheet({ t: "recipe", r }) },
-                                React.createElement("span", { style: { fontSize: 13.5 } }, r.n),
-                                React.createElement("span", { className: "il-n", style: { fontSize: 12, color: "var(--dim)", flexShrink: 0 } }, r.m ? `${r.m[0]} kcal · ${r.m[1]}g` : "")))))) : (React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "Nothing in the book fits that yet. The nutritionist will come up with something."));
-                    })()))));
-        }),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Anything else about the day"),
-            React.createElement("textarea", { className: "il-in", rows: 3, style: { textAlign: "left", fontSize: 13, lineHeight: 1.5 }, placeholder: "Up at 6, out by 7, two hours driving, desk until 5, drive back, late dinner", value: notes, onChange: (e) => setNotes(e.target.value) })),
-        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What is left to cover"),
-            React.createElement("div", { className: "il-ring" },
-                React.createElement("div", { className: "il-mini" },
-                    React.createElement("div", { className: "v" }, b.kcal),
-                    React.createElement("div", { className: "l" }, "calories left")),
-                React.createElement("div", { className: "il-mini" },
-                    React.createElement("div", { className: "v" }, b.protein),
-                    React.createElement("div", { className: "l" }, "g protein left")),
-                React.createElement("div", { className: "il-mini" },
-                    React.createElement("div", { className: "v" }, b.needIdeas),
-                    React.createElement("div", { className: "l" }, "meals to fill"))),
-            b.usedKcal > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } },
-                b.usedKcal,
-                " kcal already accounted for by what you have sorted."))),
-        React.createElement("div", { style: { padding: "0 12px 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn", onClick: () => {
-                    save({ ...st, dayPlan: plan });
-                    setSheet({ t: "ntalk", seed: dayPlanPrompt(st, a, plan) });
-                } }, "Ask for ideas for these meals"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { save({ ...st, dayPlan: plan }); close(); } }, "Save the shape of the day")));
 }
 function Diary({ st, save, a, close, setSheet }) {
     const [open, setOpen] = useState(null);
@@ -7908,7 +7807,7 @@ function SaveIt({ st, save, a, today, close, setSheet, health }) {
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "A copy off the phone"),
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Copies on the phone go with the phone. Send one to yourself once a month and a lost handset costs you nothing but the time since."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "diag" }), 50); } }, "Send a copy somewhere"),
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "diag" }); } }, "Send a copy somewhere"),
                 React.createElement("input", { type: "file", accept: "application/json,.json,.txt", ref: fileRef, style: { display: "none" }, onChange: fromFile }),
                 React.createElement("button", { className: "il-btn g", onClick: () => fileRef.current?.click() }, "Bring one back from a file")),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Bringing one back replaces everything on this phone, and keeps a copy of what was here first.")));
@@ -10968,12 +10867,11 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Add what you did"),
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Anything you added won't be in the numbers unless it's logged. Add it as an exercise so the volume counts."),
             React.createElement("button", { className: "il-btn g", onClick: () => {
-                    close();
-                    setTimeout(() => setSheet({ t: "pick", title: "Add what you did", onPick: (e) => {
+                    setSheet({ t: "pick", title: "Add what you did", onPick: (e) => {
                             const sessions = st.sessions.map((x) => x.id !== s.id ? x : ({ ...x,
                                 exercises: [...x.exercises, { exId: e.id, sets: [{ w: 0, reps: e.lo, warm: false, done: false, rir: null }] }] }));
                             save({ ...st, sessions });
-                        } }), 40);
+                        } });
                 } }, "Add an exercise"))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Anything worth remembering?"),
@@ -11495,7 +11393,7 @@ function FuelSheet({ st, save, a, today, close, setSheet }) {
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "The rest of today"),
             plan.lines.map((l, i) => (React.createElement("div", { key: i, className: "il-note", style: { fontSize: 13.5, marginBottom: 8 } }, l))),
-            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 6 }, onClick: () => { close(); setTimeout(() => setSheet({ t: "meals" }), 40); } }, "Find me something that fits")),
+            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 6 }, onClick: () => { setSheet({ t: "meals" }); } }, "Find me something that fits")),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What actually matters around a session"),
             [["Protein across the day beats protein around the session",
@@ -11916,10 +11814,7 @@ ${reviewDossier({ ...st, sessions: liveSessions(st) }, a)}`, 4000, "deep");
                     React.createElement("div", { style: { display: "flex", gap: 6 } },
                         React.createElement("button", { className: "il-chip", disabled: out || sets <= 1, onClick: () => setBump((b) => ({ ...b, [i]: sets - 1 })) }, "\u2212 set"),
                         React.createElement("button", { className: "il-chip", disabled: out || sets >= 6, onClick: () => setBump((b) => ({ ...b, [i]: sets + 1 })) }, "+ set"),
-                        hit && React.createElement("button", { className: "il-chip", onClick: () => {
-                                close();
-                                setTimeout(() => setSheet({ t: "info", exId: hit.id }), 50);
-                            } }, "Show me"),
+                        hit && React.createElement("button", { className: "il-chip", onClick: () => { setSheet({ t: "info", exId: hit.id }); } }, "Show me"),
                         React.createElement("button", { className: "il-chip", style: { marginLeft: "auto", color: out ? "var(--tint)" : "var(--red)" }, onClick: () => setDropped((d) => out ? d.filter((y) => y !== i) : [...d, i]) }, out ? "Put it back" : "Take it out"))));
             }),
             (() => {
@@ -12459,9 +12354,9 @@ function ShowHim({ sheet, st, save, a, today, close, setSheet }) {
                 React.createElement("div", { className: "il-note", style: { fontSize: 14 } }, res.priority))),
             (res.asks || []).length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "He'd like to know"),
-                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "ctalk", seed: `About the photo you looked at — ${q}` }), 50); } }, q))))),
+                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { setSheet({ t: "ctalk", seed: `About the photo you looked at — ${q}` }); } }, q))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "ctalk", seed: "About what you saw in that photo — " }), 50); } }, "Talk to him about it"),
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "ctalk", seed: "About what you saw in that photo — " }); } }, "Talk to him about it"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setImgs([]); setStage("pick"); } }, "Show him something else"))));
 }
 /* ---- over time: several shots from different dates, compared honestly ---- */
@@ -12715,9 +12610,9 @@ function OverTime({ st, save, a, today, close, setSheet }) {
                 React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.next))),
             (res.asks || []).length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "He'd like to know"),
-                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "ctalk", seed: `About the pictures you compared — ${q}` }), 50); } }, q))))),
+                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { setSheet({ t: "ctalk", seed: `About the pictures you compared — ${q}` }); } }, q))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "ctalk", seed: "About the pictures you just compared — " }), 50); } }, "Talk to him about it"),
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "ctalk", seed: "About the pictures you just compared — " }); } }, "Talk to him about it"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setItems([]); setStage("pick"); } }, "Compare a different set"))));
 }
 function PickSession({ st, a, close, setSheet }) {
@@ -12732,7 +12627,7 @@ function PickSession({ st, a, close, setSheet }) {
             const sets = s.exercises.reduce((x, e) => x + e.sets.filter((q) => !q.warm && q.done).length, 0);
             const exs = s.exercises.length;
             const imported = /^imp/.test(s.id);
-            return (React.createElement("div", { key: s.id, className: "il-rt", onClick: () => { close(); setTimeout(() => setSheet({ t: "feedback", id: s.id }), 50); } },
+            return (React.createElement("div", { key: s.id, className: "il-rt", onClick: () => { setSheet({ t: "feedback", id: s.id }); } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
                     React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15 } }, s.routineName || "Session"),
                     React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } }, dtiny(s.date))),
@@ -14430,8 +14325,6 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
     const [ate, setAte] = useState(1); // how many of those servings you had
     const [fix, setFix] = useState(null); // which missing ingredient is open
     const [shot, setShot] = useState(null);
-    const [ask, setAsk] = useState("");
-    const [chat, setChat] = useState([]);
     const [busy, setBusy] = useState(false);
     const [naming, setNaming] = useState("");
     const fileRef = useRef(null);
@@ -14478,48 +14371,6 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
         }
         catch { }
     };
-    const askHer = async (preset) => {
-        const text = (preset || ask).trim();
-        if (!text || busy)
-            return;
-        setAsk("");
-        setBusy(true);
-        setChat((c) => [...c, { role: "user", text }]);
-        try {
-            const txt = await callClaude(`${NUT_BRIEF}
-
-They are looking at this recipe and have a question about it. Answer it directly, three or four
-sentences. If they want it higher in protein, lower in carbs, dairy-free or whatever else, give them
-the actual swap with the amount, and say what it does to the numbers. If a substitution won't work,
-say so rather than being agreeable.
-
-Return ONLY JSON: { "reply": "your answer" }
-
-=== THE RECIPE ===
-${base.n} — ${base.cui}, ${base.mins} minutes, serves ${base.serves}
-Per serving: ${per[0]} cal, ${per[1]}g protein, ${per[2]}g carbs, ${per[3]}g fat
-Ingredients: ${base.ing.map((i) => `${i[0]}${i[1] || ""} ${i[2]}`).join(", ")}
-Method: ${base.method.join(" ")}
-${base.note ? `Note: ${base.note}` : ""}
-
-=== WHAT'S IN THEIR CUPBOARD ===
-${(st.cupboard || []).map((c) => c.name).join(", ") || "not recorded"}
-
-=== THEM ===
-${st.profile.weightKg}kg, goal ${st.profile.goal}, protein target ${st.profile.proteinTarget}g
-${st.likes ? `Likes: ${st.likes}` : ""}
-${st.dislikes ? `Won't eat: ${st.dislikes}` : ""}
-
-=== THEIR QUESTION ===
-${text}`, 1600, "mid");
-            const j = looseJson(txt) || { reply: txt.trim() };
-            setChat((c) => [...c, { role: "nut", text: j.reply || txt.trim() }]);
-        }
-        catch (e) {
-            setChat((c) => [...c, { role: "nut", text: `Couldn't answer — ${e.message || e}` }]);
-        }
-        setBusy(false);
-    };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: base.n, sub: `${base.cui} · ${base.mins} minutes`, close: close }),
         naming !== "" ? (React.createElement("div", { className: "il-card lead" },
@@ -14554,7 +14405,7 @@ ${text}`, 1600, "mid");
         React.createElement(RecipePhoto, { st, save, rec: base, h: 160, close, setSheet }),
         ratingOf(st, base.n) && (() => {
             const r = ratingOf(st, base.n), [, , word, col] = rateWord(r.score);
-            return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${col}` }, onClick: () => { close(); setTimeout(() => setSheet({ t: "rate", name: base.n }), 50); } },
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${col}` }, onClick: () => { setSheet({ t: "rate", name: base.n }); } },
                 React.createElement("div", { className: "il-row" },
                     React.createElement("div", { style: { minWidth: 0 } },
                         React.createElement("div", { className: "il-lbl", style: { marginBottom: 3 } }, "You said"),
@@ -14638,7 +14489,7 @@ ${text}`, 1600, "mid");
                                 setTimeout(() => setSheet({ t: missing ? "additem" : "kitchen", prefill: i[2] }), 50);
                             } }, missing ? "Let me say how much, or photograph it" : "Open it in my kitchen")))));
             }),
-            cm && cm.missing.length > 1 && (React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 10 }, onClick: () => { close(); setTimeout(() => setSheet({ t: "rcheck", name: base.n }), 50); } },
+            cm && cm.missing.length > 1 && (React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 10 }, onClick: () => { setSheet({ t: "rcheck", name: base.n }); } },
                 "Go through all ",
                 cm.missing.length,
                 " at once"))),
@@ -14650,19 +14501,6 @@ ${text}`, 1600, "mid");
         base.note && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Worth knowing"),
             React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, base.note))),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Ask the nutritionist about this one"),
-            chat.map((m, i) => m.role === "user" ? (React.createElement("div", { key: i, style: { display: "flex", justifyContent: "flex-end", padding: "5px 0" } },
-                React.createElement("div", { style: { background: "var(--acc)", color: "#fff", borderRadius: "12px 12px 4px 12px",
-                        padding: "9px 12px", maxWidth: "88%", fontSize: 13.5 } }, m.text))) : (React.createElement("div", { key: i, style: { padding: "5px 0" } },
-                React.createElement("div", { style: { background: "var(--c2)", borderRadius: "12px 12px 12px 4px", padding: "11px 13px",
-                        fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" } }, m.text)))),
-            busy && React.createElement("div", { className: "il-empty", style: { padding: "10px 0" } }, "Thinking\u2026"),
-            React.createElement("div", { className: "il-fld", style: { marginTop: 8 } },
-                React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1 }, placeholder: "How could I change this?", value: ask, enterKeyHint: "send", onChange: (e) => setAsk(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
-                        askHer(); } }),
-                React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: busy || !ask.trim(), onClick: () => askHer() }, "Ask")),
-            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 } }, ["Make it higher protein", "Lower the carbs", "I haven't got everything", "Can I meal prep this?"].map((x) => (React.createElement("button", { key: x, className: "il-chip", onClick: () => askHer(x) }, x))))),
         React.createElement("div", { className: "il-card", style: { display: "none" } },
             React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                 React.createElement("div", { className: "il-lbl" }, "How much did you actually have?"),
@@ -14675,29 +14513,13 @@ ${text}`, 1600, "mid");
                 ate !== 1 ? ` Logging ${Math.round(per[0] * ate)} cal, ${Math.round(per[1] * ate)}g protein.` : "")),
         React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: addPhoto }),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "rcheck", name: base.n }), 50); } }, (() => {
-                const cupNames = (st.cupboard || []).map((c) => (c.name || "").toLowerCase());
-                const cupSubs = new Set((st.cupboard || []).map((c) => subOf(c)).filter(Boolean));
-                const miss = (base.ing || []).filter(([, , n]) => {
-                    const b = String(n).toLowerCase().split(",")[0].trim();
-                    if (/\b(salt|pepper|water)\b/i.test(n))
-                        return false;
-                    if (cupNames.some((c) => c.includes(b) || b.includes(c)))
-                        return false;
-                    const w = subOf({ name: n });
-                    return !(w && cupSubs.has(w));
-                }).length;
-                return miss ? `Check what I need · ${miss} missing` : "Check what I need";
-            })()),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "rlog", name: base.n }), 50); } }, "Log what I ate"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "lighter", name: base.n }), 50); } },
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "rtweak", name: base.n }) }, "Nutritionist view"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rlog", name: base.n }) }, "Log what I ate"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "lighter", name: base.n }) },
                 "Make it lighter \u00B7 ",
                 base.m[0],
                 " cal now"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "healthier", name: base.n }), 50); } }, "Make it healthier"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "rate", name: base.n }), 50); } }, ratingOf(st, base.n) ? `You gave it ${ratingOf(st, base.n).score}/20 — change it?` : "Rate it"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "rtweak", name: base.n }), 50); } }, "What would she change?"),
-            React.createElement("button", { className: "il-btn g", onClick: () => fileRef.current?.click() }, "Add a photo of yours"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rate", name: base.n }) }, ratingOf(st, base.n) ? `You gave it ${ratingOf(st, base.n).score}/20 — change it?` : "Rate it"),
             React.createElement("button", { className: "il-btn g", onClick: () => save({ ...st,
                     savedRecipes: saved ? (st.savedRecipes || []).filter((x) => x !== base.n) : [...(st.savedRecipes || []), base.n] }) }, saved ? "Remove from favourites" : "Save to favourites")));
 }
@@ -16151,14 +15973,13 @@ ${lines}`, 2200, "mid");
                         r.serves),
                     React.createElement("div", { className: "il-note", style: { fontSize: 13.5, marginBottom: p.watch ? 8 : 12 } }, p.why),
                     p.watch && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, color: "var(--gold)", marginBottom: 12 } }, p.watch),
-                    r && React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "recipe", name: r.n }), 50); } }, "Open it")));
+                    r && React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => { setSheet({ t: "recipe", name: r.n }); } }, "Open it")));
             }),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setStep(0); setAns({}); } }, "Ask again, different answers"),
                 React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ntalk",
-                            seed: `You suggested ${res.picks.map((p) => p.n).join(", ")}. ` }), 50);
+                        setSheet({ t: "ntalk",
+                            seed: `You suggested ${res.picks.map((p) => p.n).join(", ")}. ` });
                     } }, "Talk to her about these")));
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "What shall I cook?", sub: `Question ${step + 1} of ${INSPO_Q.length}`, close: close }),
@@ -16686,9 +16507,8 @@ function SuppOne({ sheet, st, save, close, setSheet }) {
             React.createElement("div", { className: "il-note" }, "Not one I hold evidence on. Ask her about it and she'll tell you what's known."))),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn g", onClick: () => {
-                    close();
-                    setTimeout(() => setSheet({ t: "ntalk",
-                        seed: `I take ${s.name}${s.what ? ` (${s.what})` : ""}${s.dose ? `, ${s.dose}` : ""}. Is it worth it for me, and am I taking it at the right time?` }), 50);
+                    setSheet({ t: "ntalk",
+                        seed: `I take ${s.name}${s.what ? ` (${s.what})` : ""}${s.dose ? `, ${s.dose}` : ""}. Is it worth it for me, and am I taking it at the right time?` });
                 } }, "Ask her about this one"),
             React.createElement("button", { className: "il-btn g", onClick: () => {
                     if (window.confirm(`Remove ${s.name}?`)) {
@@ -16710,7 +16530,7 @@ function HealthQ({ st, save, close, setSheet }) {
             React.createElement("div", { style: { fontSize: 14.5, marginBottom: 11 } }, q.q),
             React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, q.opts.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (a[q.id] === v ? " on" : ""), onClick: () => set(q.id, v) }, l))))))),
         done >= 6 && (React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "suppadvice" }), 50); } }, "Right \u2014 what should I take?"))));
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "suppadvice" }); } }, "Right \u2014 what should I take?"))));
 }
 const SUPP_ADVICE = `You are a nutritionist advising somebody on supplements. You are sceptical by
 default and you say so when something isn't worth their money.
@@ -16819,9 +16639,9 @@ ${SUPPS.map((s) => `${s.name} (${s.strength}): ${s.evidence}`).join("\n")}`, 300
                 React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.spend))),
             (res.asks || []).length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "She'd like to know"),
-                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "ntalk", seed: `About supplements — ${q}` }), 50); } }, q))))),
+                res.asks.map((q, i) => (React.createElement("button", { key: i, className: "il-btn g sm", style: { width: "100%", marginBottom: 6, textAlign: "left", justifyContent: "flex-start" }, onClick: () => { setSheet({ t: "ntalk", seed: `About supplements — ${q}` }); } }, q))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "ntalk", seed: "About the supplement advice you gave me — " }), 50); } }, "Talk to her about it"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "ntalk", seed: "About the supplement advice you gave me — " }); } }, "Talk to her about it"),
                 React.createElement("button", { className: "il-btn g", onClick: go }, "Ask again"))));
 }
 /* Every section opens with a way to be asked rather than to hunt. */
@@ -17372,7 +17192,7 @@ ${focus ? `\nThey've asked specifically about: ${focus}` : ""}`, 3000, "deep");
                     React.createElement("div", { className: "il-note" },
                         added,
                         " added to your shopping list."),
-                    React.createElement("button", { className: "il-chip", onClick: () => { close(); setTimeout(() => setSheet({ t: "list" }), 50); } }, "See it")))),
+                    React.createElement("button", { className: "il-chip", onClick: () => { setSheet({ t: "list" }); } }, "See it")))),
             Object.entries(STOCK_CAT).map(([c, label]) => {
                 const list = picks.filter((p) => (p.cat || "other") === c);
                 if (!list.length)
@@ -17402,9 +17222,8 @@ ${focus ? `\nThey've asked specifically about: ${focus}` : ""}`, 3000, "deep");
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginTop: 8 } },
                 React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setGone([]); } }, "Ask again"),
                 React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ntalk",
-                            seed: `You suggested I stock up on ${(res.picks || []).slice(0, 6).map((p) => p.n).join(", ")}. ` }), 50);
+                        setSheet({ t: "ntalk",
+                            seed: `You suggested I stock up on ${(res.picks || []).slice(0, 6).map((p) => p.n).join(", ")}. ` });
                     } }, "Talk to her about these")),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } },
@@ -17505,9 +17324,8 @@ function ExpiryBoard({ st, save, a, today, close, setSheet }) {
                 urgent.length === 1 ? "" : "s",
                 " to use up. Ask her for something to cook with them rather than letting them go."),
             React.createElement("button", { className: "il-btn g", style: { width: "100%", marginTop: 12 }, onClick: () => {
-                    close();
-                    setTimeout(() => setSheet({ t: "ntalk",
-                        seed: `These need using up: ${urgent.map((c) => c.name).join(", ")}. What can I make?` }), 50);
+                    setSheet({ t: "ntalk",
+                        seed: `These need using up: ${urgent.map((c) => c.name).join(", ")}. What can I make?` });
                 } }, "What can I make with these?"))),
         EXP_BANDS.map((b) => {
             const list = byBand[b.id] || [];
@@ -18125,7 +17943,7 @@ function ItemDetail({ item, st, save, close, setSheet }) {
             React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" } }, PANTRY_CATS.map(([c, l]) => (React.createElement("button", { key: c, className: "il-chip" + ((item.cat || "other") === c ? " on" : ""), style: { fontSize: 11.5, padding: "4px 10px" }, onClick: () => set({ cat: c }) }, l))))),
         uses.length > 0 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Recipes that use it"),
-            uses.map((r, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0 }, onClick: () => { close(); setTimeout(() => setSheet({ t: "recipe", name: r.n }), 50); } },
+            uses.map((r, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0 }, onClick: () => { setSheet({ t: "recipe", name: r.n }); } },
                 React.createElement("span", { style: { fontSize: 13.5, minWidth: 0 } }, r.n),
                 React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
@@ -18360,9 +18178,8 @@ function Duplicates({ st, save, a, today, close, setSheet }) {
         !dups.length && React.createElement("div", { className: "il-empty" }, "Nothing duplicated. Tidy cupboard."),
         React.createElement("div", { style: { padding: "0 12px" } },
             React.createElement("button", { className: "il-btn g", onClick: () => {
-                    close();
-                    setTimeout(() => setSheet({ t: "ntalk",
-                        seed: `I've got duplicates of these: ${dups.map((d) => `${d.key} ×${d.items.length}`).join(", ")}. Is there any point keeping more than one, and what should I use up first?` }), 50);
+                    setSheet({ t: "ntalk",
+                        seed: `I've got duplicates of these: ${dups.map((d) => `${d.key} ×${d.items.length}`).join(", ")}. Is there any point keeping more than one, and what should I use up first?` });
                 } }, "Ask her whether it matters")));
 }
 /* ============ APPLIANCES ============ */
@@ -18704,7 +18521,7 @@ ${activeRules(st).length ? `Will not eat: ${activeRules(st).map((r) => r.label).
                 React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, [[10, "10 min"], [20, "20 min"], [45, "45 min"], [90, "An hour or more"], [0, "No rush"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (mins === v ? " on" : ""), onClick: () => setMins(v) }, l))))),
             !mine.length && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
                 React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "You haven't told me what you cook with yet, so I can't offer you the options."),
-                React.createElement("button", { className: "il-btn g", style: { width: "100%" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "mykit" }), 50); } }, "Add my appliances"))),
+                React.createElement("button", { className: "il-btn g", style: { width: "100%" }, onClick: () => { setSheet({ t: "mykit" }); } }, "Add my appliances"))),
             mine.length > 0 && React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "What you've got"),
                 mine.map((x) => {
@@ -19194,6 +19011,50 @@ function RecipeTweaks({ rec, st, save, a, close, setSheet }) {
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
     const KIND = { protein: ["#3ECF8E", "Protein"], calories: ["#FFB443", "Calories"],
+        const: [ask, setAsk] = useState(""),
+        const: [chat, setChat] = useState([]),
+        const: askHer = async (preset) => {
+            const text = (preset || ask).trim();
+            if (!text || busy)
+                return;
+            setAsk("");
+            setBusy(true);
+            setChat((c) => [...c, { role: "user", text }]);
+            try {
+                const txt = await callClaude(`${NUT_BRIEF}
+
+They are looking at this recipe and have a question about it. Answer it directly, three or four
+sentences. If they want it higher in protein, lower in carbs, dairy-free or whatever else, give them
+the actual swap with the amount, and say what it does to the numbers. If a substitution won't work,
+say so rather than being agreeable.
+
+Return ONLY JSON: { "reply": "your answer" }
+
+=== THE RECIPE ===
+${rec.n} — ${rec.cui}, ${rec.mins} minutes, serves ${rec.serves}
+Per serving: ${rec.m[0]} cal, ${rec.m[1]}g protein, ${rec.m[2]}g carbs, ${rec.m[3]}g fat
+Ingredients: ${rec.ing.map((i) => `${i[0]}${i[1] || ""} ${i[2]}`).join(", ")}
+Method: ${rec.method.join(" ")}
+${rec.note ? `Note: ${rec.note}` : ""}
+
+=== WHAT'S IN THEIR CUPBOARD ===
+${(st.cupboard || []).map((c) => c.name).join(", ") || "not recorded"}
+
+=== THEM ===
+${st.profile.weightKg}kg, goal ${st.profile.goal}, protein target ${st.profile.proteinTarget}g
+${st.likes ? `Likes: ${st.likes}` : ""}
+${st.dislikes ? `Won't eat: ${st.dislikes}` : ""}
+
+=== THEIR QUESTION ===
+${text}`, 1600, "mid");
+                const j = looseJson(txt) || { reply: txt.trim() };
+                setChat((c) => [...c, { role: "nut", text: j.reply || txt.trim() }]);
+            }
+            catch (e) {
+                setChat((c) => [...c, { role: "nut", text: `Couldn't answer — ${e.message || e}` }]);
+            }
+            setBusy(false);
+        },
         carbs: ["#7FA8F0", "Carbs"], flavour: ["#FF6B4A", "Flavour"], ease: ["#B47CFF", "Easier"] };
     const go = async () => {
         setBusy(true);
@@ -19272,11 +19133,23 @@ ${(st.cupboard || []).slice(0, 70).map((c) => c.name).join(", ") || "not recorde
                         borderTop: i ? "1px solid var(--line)" : 0 } }, x))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ntalk",
-                            seed: `About ${rec.n} — you suggested ${(res.tweaks || []).slice(0, 3).map((t) => t.what).join("; ")}. ` }), 50);
+                        setSheet({ t: "ntalk",
+                            seed: `About ${rec.n} — you suggested ${(res.tweaks || []).slice(0, 3).map((t) => t.what).join("; ")}. ` });
                     } }, "Talk to her about it"),
-                React.createElement("button", { className: "il-btn g", onClick: go }, "Ask again"))));
+                React.createElement("button", { className: "il-btn g", onClick: go }, "Ask again"))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Ask the nutritionist about this one"),
+            chat.map((m, i) => m.role === "user" ? (React.createElement("div", { key: i, style: { display: "flex", justifyContent: "flex-end", padding: "5px 0" } },
+                React.createElement("div", { style: { background: "var(--acc)", color: "#fff", borderRadius: "12px 12px 4px 12px",
+                        padding: "9px 12px", maxWidth: "88%", fontSize: 13.5 } }, m.text))) : (React.createElement("div", { key: i, style: { padding: "5px 0" } },
+                React.createElement("div", { style: { background: "var(--c2)", borderRadius: "12px 12px 12px 4px", padding: "11px 13px",
+                        fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" } }, m.text)))),
+            busy && React.createElement("div", { className: "il-empty", style: { padding: "10px 0" } }, "Thinking\u2026"),
+            React.createElement("div", { className: "il-fld", style: { marginTop: 8 } },
+                React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1 }, placeholder: "How could I change this?", value: ask, enterKeyHint: "send", onChange: (e) => setAsk(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                        askHer(); } }),
+                React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: busy || !ask.trim(), onClick: () => askHer() }, "Ask")),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 9 } }, ["Make it higher protein", "Lower the carbs", "I haven't got everything", "Can I meal prep this?"].map((x) => (React.createElement("button", { key: x, className: "il-chip", onClick: () => askHer(x) }, x))))));
 }
 /* the three of them need the recipe looked up by name */
 const findRec = (st, n) => renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]).find((r) => r.n === n);
@@ -19451,7 +19324,7 @@ function MyRatings({ st, save, close, setSheet }) {
         rated.map((r, i) => {
             const [, , word, col] = rateWord(r.score);
             const times = cookedCount(st, r.n);
-            return (React.createElement("div", { key: i, className: "il-rt", style: { borderLeft: `3px solid ${col}` }, onClick: () => { close(); setTimeout(() => setSheet({ t: "recipe", name: r.n }), 50); } },
+            return (React.createElement("div", { key: i, className: "il-rt", style: { borderLeft: `3px solid ${col}` }, onClick: () => { setSheet({ t: "recipe", name: r.n }); } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
                     React.createElement("div", { className: "il-h2", style: { fontSize: 15, minWidth: 0 } }, r.n),
                     React.createElement("span", { className: "il-n", style: { fontSize: 16, fontWeight: 600, color: col, flexShrink: 0 } },
@@ -19590,6 +19463,12 @@ function Lighter({ sheet, st, save, close, setSheet }) {
             React.createElement(SH, { title: "Recipe", close: close }),
             React.createElement("div", { className: "il-empty" }, "Gone."));
     const out = lighten(rec, target);
+    /* "Lighter" and "healthier" were two buttons doing one job on the card. They
+       are still two different questions — fewer calories, or more of what your
+       week is short of — so this is one door with both behind it. */
+    const other = (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } },
+        React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Not trying to cut the calories? She can go the other way instead \u2014 same dish, more of whatever your week is short of."),
+        React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "healthier", name: rec.n }) }, "Make it healthier instead")));
     const askHer = async () => {
         setBusy(true);
         setErr("");
@@ -19726,7 +19605,8 @@ ${out.short ? `That still leaves it ${out.short} over.` : "That gets it there."}
             !out.already && out.changes.length > 0 && (React.createElement("button", { className: "il-btn", onClick: applyIt }, "Save the lighter version")),
             !asked && (React.createElement("button", { className: "il-btn g", disabled: busy, onClick: askHer }, busy ? "Asking…" : "Ask her for a smarter way"))),
         React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "The original stays exactly as it is. This saves a second version alongside it.")));
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "The original stays exactly as it is. This saves a second version alongside it.")),
+        other);
 }
 /* What each vegetable, pulse and seed is genuinely a good source of, so
    the suggestions are grounded rather than "add more veg". */
@@ -20180,10 +20060,7 @@ function Niggle({ st, save, a, today, close, setSheet }) {
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "When to reassess"),
                 React.createElement("div", { className: "il-note" }, res.check_back))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ask", ctx: "train" }), 50);
-                    } }, "Ask him more about it"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "ask", ctx: "train" }); } }, "Ask him more about it"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setStage("ask"); setRes(null); } }, "Somewhere else")),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 14px" } }, "This is worked out from what you have been training and what you own. It is not a diagnosis and cannot be \u2014 nobody has looked at you."));
     }
@@ -20312,9 +20189,8 @@ ${P.healthQ ? Object.entries(st.healthQ).map(([k, v]) => {
                 React.createElement("div", { className: "il-note", style: { fontSize: 13.5 } }, res.medical))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ctalk",
-                            seed: `About the read you gave me — ${res.headline} ` }), 50);
+                        setSheet({ t: "ctalk",
+                            seed: `About the read you gave me — ${res.headline} ` });
                     } }, "Talk to him about it"),
                 React.createElement("button", { className: "il-btn g", onClick: go }, "Read it again")),
             React.createElement("div", { className: "il-card" },
@@ -20536,7 +20412,7 @@ function Staples({ st, save, close, setSheet }) {
                 React.createElement("strong", { style: { color: "var(--txt)" } }, "Need it"),
                 " puts it on your shopping list instead. Anything you tick goes into your kitchen properly \u2014 you can edit the amount, add a date, or mark it run out like anything else.")),
         React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "kitchen" }), 50); } }, "See my kitchen")));
+            React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "kitchen" }); } }, "See my kitchen")));
 }
 /* ---------------- CROSS-CHECK ---------------- */
 /* ============ TONIGHT'S NUMBERS ============
@@ -20735,8 +20611,8 @@ function Nightly({ st, save, a, today, close, setSheet }) {
             React.createElement("button", { className: "il-btn", onClick: keep }, "Save these"))),
         React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 8px" } }, "Once it's all in"),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "review" }), 60); } }, "Read everything back to me"),
-            React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "catchup" }), 60); } }, "I haven't logged my food either")),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "review" }); } }, "Read everything back to me"),
+            React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "catchup" }); } }, "I haven't logged my food either")),
         React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "10px 16px 14px" } }, "Anything read off a screenshot is marked as read rather than typed, so if two apps disagree the review knows which number came from where. Check the numbers before you save \u2014 it misreads a blurry one occasionally, and a wrong weight is worse than no weight."));
 }
 function RingsSheet({ st, save, today, close }) {
@@ -21056,6 +20932,7 @@ function Progress({ a, setSheet }) {
 }
 /* ---------------- FOOD ---------------- */
 function Fuel({ st, save, a, today, setSheet }) {
+    const [tips, setTips] = useState(false);
     const i = st.foods.findIndex((x) => x.date === today);
     const f = i >= 0 ? st.foods[i] : { date: today, entries: [] };
     const t = f.entries.reduce((x, e) => ({ k: x.k + e.kcal, p: x.p + e.p, c: x.c + e.c, f: x.f + e.f }), { k: 0, p: 0, c: 0, f: 0 });
@@ -21074,182 +20951,20 @@ function Fuel({ st, save, a, today, setSheet }) {
     };
     const sug = suggestFoods({ p: P.proteinTarget - t.p, c: P.carbTarget - t.c, f: P.fatTarget - t.f }, st);
     return (React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "list" }), style: { borderLeft: "3px solid var(--gold)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "Shopping list"),
-                    React.createElement("div", { className: "il-sub" }, (() => {
-                        const n = shopLines(st, weekStart(today));
-                        const c = n.need.length + n.ranOut.length + n.added.length;
-                        return c ? `${c} thing${c === 1 ? "" : "s"} on it` : "Nothing on it yet";
-                    })())),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "cookit" }), style: { borderLeft: "3px solid var(--tint)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "How shall I cook it?"),
-                    React.createElement("div", { className: "il-sub" }, (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "myratings" }), style: { borderLeft: "3px solid var(--gold)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "What I thought"),
-                    React.createElement("div", { className: "il-sub" }, (() => {
-                        const n = Object.keys(st.ratings || {}).length;
-                        if (!n)
-                            return "Rate meals after you cook them";
-                        const avg = Math.round(Object.values(st.ratings).reduce((t, r) => t + r.score, 0) / n * 10) / 10;
-                        return `${n} rated, averaging ${avg} out of 20`;
-                    })())),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "rules" }), style: { borderLeft: "3px solid var(--pmp)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "What I won't eat"),
-                    React.createElement("div", { className: "il-sub" }, (st.foodRules || []).length
-                        ? `${(st.foodRules || []).map((id) => (FOOD_RULES.find((r) => r.id === id) || {}).label).filter(Boolean).join(", ")}`
-                        : "Nothing ruled out — tap to set some")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "kitchen" }), style: { borderLeft: "3px solid var(--grn)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "My kitchen"),
-                    React.createElement("div", { className: "il-sub" }, (() => {
-                        const n = (st.cupboard || []).length;
-                        const soon = (st.cupboard || []).filter((c) => { const d = daysLeft(c.exp); return d != null && d <= 3; }).length;
-                        return n ? `${n} thing${n === 1 ? "" : "s"} in${soon ? ` · ${soon} need using` : ""}` : "Photograph a shelf to start";
-                    })())),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "inspo" }), style: { borderLeft: "3px solid var(--pmp)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "What shall I cook?"),
-                    React.createElement("div", { className: "il-sub" }, "A few questions and she'll pick three")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "planner" }), style: { borderLeft: "3px solid var(--tint)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "Plan the week"),
-                    React.createElement("div", { className: "il-sub" }, Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length
-                        ? `${Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length} meals planned` : "And the shopping writes itself")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "eatwindow" }) },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "When I eat"),
-                    React.createElement("div", { className: "il-sub" }, "Fasting, and what it does on a training day")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")),
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "dayplan" }) },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "Plan a day"),
-                    React.createElement("div", { className: "il-sub" }, "Ideas for the meals you need, round the day you have got")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")),
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "recipes" }), style: { borderLeft: "3px solid var(--gold)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "Recipes"),
-                    React.createElement("div", { className: "il-sub" },
-                        COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length,
-                        " of them, filterable")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
-            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "nut" }), style: { borderLeft: "3px solid var(--grn)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 14.5 } }, "Nutritionist"),
-                    React.createElement("div", { className: "il-sub" }, (st.nutChat || []).length ? "Carry on where you left off" : "Ask her anything, or tell her what you ate")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
-        React.createElement(FuelCard, { st, save, a, today, setSheet }),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 14 } },
-                React.createElement("div", { className: "il-stat" },
-                    React.createElement("div", { className: "v" }, Math.round(t.k)),
-                    React.createElement("div", { className: "l" },
-                        "of ",
-                        kt,
-                        " calories",
-                        bonus ? React.createElement("span", { style: { color: "var(--grn)" } },
-                            " \u00B7 +",
-                            bonus.extra,
-                            " earned") : "")),
-                React.createElement("button", { className: "il-btn sm", onClick: () => setSheet({ t: "food" }) }, "+ Add food")),
-            [["Protein", t.p, P.proteinTarget, "#2F7BFF"], ["Carbs", t.c, P.carbTarget, "#35C26B"], ["Fat", t.f, P.fatTarget, "#E5B94E"]].map(([l, v, tg, col]) => (React.createElement("div", { key: l, style: { marginBottom: 11 } },
-                React.createElement("div", { className: "il-row" },
-                    React.createElement("span", { style: { fontSize: 13.5 } }, l),
-                    React.createElement("span", { className: "il-n", style: { fontSize: 13, color: "var(--dim)" } },
-                        Math.round(v),
-                        " / ",
-                        tg,
-                        " g",
-                        v < tg ? ` · ${Math.round(tg - v)} to go` : "")),
-                React.createElement("div", { className: "il-bar" },
-                    React.createElement("i", { style: { width: Math.min(100, (v / tg) * 100) + "%", background: col } })))))),
         (() => {
-            const per = Math.round(P.weightKg * 0.4);
-            const byMeal = MEALS.map((m) => ({ m, p: f.entries.filter((e) => (e.meal || "Snacks") === m).reduce((x, e) => x + e.p, 0) }));
-            const hits = byMeal.filter((x) => x.p >= per * 0.8).length;
-            if (!f.entries.length)
-                return null;
-            return (React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
-                    React.createElement("div", { className: "il-lbl" }, "Protein across the day"),
-                    React.createElement("span", { className: "il-n", style: { fontSize: 13, color: hits >= 3 ? "var(--grn)" : "var(--gold)", fontWeight: 600 } },
-                        hits,
-                        " of 4 doses")),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 10, fontSize: 12.5 } },
-                    "Three to five doses of about ",
-                    per,
-                    "g does more than the same total in one sitting."),
-                byMeal.map((x) => (React.createElement("div", { key: x.m, style: { marginBottom: 8 } },
-                    React.createElement("div", { className: "il-row" },
-                        React.createElement("span", { style: { fontSize: 13 } }, x.m),
-                        React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } },
-                            Math.round(x.p),
-                            "g")),
-                    React.createElement("div", { className: "il-bar" },
-                        React.createElement("i", { style: { width: Math.min(100, (x.p / per) * 100) + "%", background: x.p >= per * 0.8 ? "var(--grn)" : "var(--c2)" } })))))));
+            const Row = ({ to, title, sub, colour }) => (React.createElement("button", { className: "il-mrow", onClick: () => setSheet(to) },
+                React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
+                    colour && React.createElement("span", { style: { width: 3, height: 26, borderRadius: 2, background: colour, flexShrink: 0 } }),
+                    React.createElement("span", { style: { minWidth: 0 } },
+                        React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, title),
+                        React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
+            return (React.createElement("div", { className: "il-menu" },
+                React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Carry on where you left off" : "Ask her anything, or tell her what you ate" }),
+                React.createElement(Row, { to: { t: "meals" }, title: "What should I eat?", sub: "Round the time and the macros you have left" }),
+                React.createElement(Row, { to: { t: "inspo" }, title: "What shall I cook?", sub: "A few questions and she'll pick three" })));
         })(),
-        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } },
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "meals" }) }, "What should I eat?"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "food" }) }, "Ask coach about today's food"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "fuelling" }) }, "Before and after training"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "supps" }) }, "Supplements worth taking"),
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "scalephoto" }) }, "Photograph my food"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scan" }) }, "Scan a label"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "takeaway" }) }, "Takeaway menu")),
-        sug.macro && (() => {
-            const label = { p: "protein", c: "carbs", f: "fat" }[sug.macro];
-            const Row = ({ c }) => (React.createElement("div", { className: "il-row", style: { padding: "10px 0", borderTop: "1px solid var(--line)" } },
-                React.createElement("div", { style: { minWidth: 0, flex: 1 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) },
-                    React.createElement("div", { style: { fontSize: 13.5 } }, c.food.name),
-                    React.createElement("div", { className: "il-sub il-n" },
-                        AMT(c.food, c.grams),
-                        " \u00B7 ",
-                        Math.round(c.m.kcal),
-                        " cal \u00B7 ",
-                        React.createElement("strong", { style: { color: "var(--grn)" } },
-                            Math.round(c.m[sug.macro]),
-                            "g ",
-                            label),
-                        " · closes ",
-                        Math.round(c.closes * 100),
-                        "%")),
-                React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) }, "Adjust")));
-            return (React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Closing today's gap"),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 6 } },
-                    "You're ",
-                    Math.round(sug.gap),
-                    "g short on ",
-                    label,
-                    ". These are ranked by how much of that a normal serving closes per calorie, so nothing here is padding."),
-                sug.mine.length > 0 && React.createElement(React.Fragment, null,
-                    React.createElement("div", { className: "il-lbl", style: { margin: "12px 0 0", color: "var(--dim)" } }, "From your usuals"),
-                    sug.mine.map((c, i) => React.createElement(Row, { key: "m" + i, c: c }))),
-                sug.fresh.length > 0 && React.createElement(React.Fragment, null,
-                    React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 0", color: "var(--dim)" } }, sug.mine.length ? "Or something new" : "Worth a look"),
-                    sug.fresh.map((c, i) => React.createElement(Row, { key: "f" + i, c: c }))),
-                React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "food" }) }, "More suggestions \u2192"),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Tap any of them to pick your own portion before logging it.")));
-        })(),
+        React.createElement(FuelCard, { st, save, a, today, setSheet }),
         (() => {
             /* what is left, at a glance, before anything else on the screen */
             const bars = [
@@ -21310,7 +21025,100 @@ function Fuel({ st, save, a, today, setSheet }) {
                             Math.round(e.c),
                             " F",
                             Math.round(e.f))),
-                    React.createElement("button", { className: "il-x", onClick: () => del(e.id) }, "\u00D7"))))))))));
+                    React.createElement("button", { className: "il-x", onClick: () => del(e.id) }, "\u00D7")))))))),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } },
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scan" }) }, "Scan a label"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scalephoto" }) }, "Photograph my food"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "menu" }) }, "I'm out, read me the menu")),
+        (() => {
+            const per = Math.round(P.weightKg * 0.4);
+            const byMeal = MEALS.map((m) => ({ m, p: f.entries.filter((e) => (e.meal || "Snacks") === m).reduce((x, e) => x + e.p, 0) }));
+            const hits = byMeal.filter((x) => x.p >= per * 0.8).length;
+            if (!f.entries.length)
+                return null;
+            return (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                    React.createElement("div", { className: "il-lbl" }, "Protein across the day"),
+                    React.createElement("span", { className: "il-n", style: { fontSize: 13, color: hits >= 3 ? "var(--grn)" : "var(--gold)", fontWeight: 600 } },
+                        hits,
+                        " of 4 doses")),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 10, fontSize: 12.5 } },
+                    "Three to five doses of about ",
+                    per,
+                    "g does more than the same total in one sitting."),
+                byMeal.map((x) => (React.createElement("div", { key: x.m, style: { marginBottom: 8 } },
+                    React.createElement("div", { className: "il-row" },
+                        React.createElement("span", { style: { fontSize: 13 } }, x.m),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } },
+                            Math.round(x.p),
+                            "g")),
+                    React.createElement("div", { className: "il-bar" },
+                        React.createElement("i", { style: { width: Math.min(100, (x.p / per) * 100) + "%", background: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } })))))));
+        })(),
+        sug.macro && (() => {
+            const label = { p: "protein", c: "carbs", f: "fat" }[sug.macro];
+            const Row = ({ c }) => (React.createElement("div", { className: "il-row", style: { padding: "10px 0", borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { minWidth: 0, flex: 1 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) },
+                    React.createElement("div", { style: { fontSize: 13.5 } }, c.food.name),
+                    React.createElement("div", { className: "il-sub il-n" },
+                        AMT(c.food, c.grams),
+                        " \u00B7 ",
+                        Math.round(c.m.kcal),
+                        " cal \u00B7 ",
+                        React.createElement("strong", { style: { color: "var(--grn)" } },
+                            Math.round(c.m[sug.macro]),
+                            "g ",
+                            label),
+                        " · closes ",
+                        Math.round(c.closes * 100),
+                        "%")),
+                React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) }, "Adjust")));
+            return (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Closing today's gap"),
+                React.createElement("div", { className: "il-note", style: { marginBottom: 6 } },
+                    "You're ",
+                    Math.round(sug.gap),
+                    "g short on ",
+                    label,
+                    ". These are ranked by how much of that a normal serving closes per calorie, so nothing here is padding."),
+                sug.mine.length > 0 && React.createElement(React.Fragment, null,
+                    React.createElement("div", { className: "il-lbl", style: { margin: "12px 0 0", color: "var(--dim)" } }, "From your usuals"),
+                    sug.mine.map((c, i) => React.createElement(Row, { key: "m" + i, c: c }))),
+                sug.fresh.length > 0 && React.createElement(React.Fragment, null,
+                    React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 0", color: "var(--dim)" } }, sug.mine.length ? "Or something new" : "Worth a look"),
+                    sug.fresh.map((c, i) => React.createElement(Row, { key: "f" + i, c: c }))),
+                React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "food" }) }, "More suggestions \u2192"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Tap any of them to pick your own portion before logging it.")));
+        })(),
+        React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 8px" } }, "Cooking and shopping"),
+        (() => {
+            const Row = ({ to, title, sub }) => (React.createElement("button", { className: "il-mrow", onClick: () => setSheet(to) },
+                React.createElement("span", { style: { minWidth: 0 } },
+                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, title),
+                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
+            const planned = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
+            const shop = shopLines(st, weekStart(today));
+            const shopN = shop.need.length + shop.ranOut.length + shop.added.length;
+            const cup = (st.cupboard || []).length;
+            const soon = (st.cupboard || []).filter((c) => { const d = daysLeft(c.exp); return d != null && d <= 3; }).length;
+            const rated = Object.keys(st.ratings || {}).length;
+            return (React.createElement("div", { className: "il-menu" },
+                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
+                React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: planned ? `${planned} meals planned` : "And the shopping writes itself" }),
+                React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: shopN ? `${shopN} thing${shopN === 1 ? "" : "s"} on it` : "Nothing on it yet" }),
+                React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" }),
+                React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: cup ? `${cup} thing${cup === 1 ? "" : "s"} in${soon ? ` · ${soon} need using` : ""}` : "Photograph a shelf to start" }),
+                React.createElement(Row, { to: { t: "myratings" }, title: "What I thought", sub: rated ? `${rated} rated` : "Rate meals after you cook them" })));
+        })(),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", onClick: () => setTips(!tips), style: { cursor: "pointer" } },
+                React.createElement("div", { className: "il-lbl" }, "Tips"),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, tips ? "\u2013" : "+")),
+            tips && (React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "fuelling" }) }, "Before and after training"),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "supps" }) }, "Supplements worth taking"),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "takeaway" }) }, "Eating out without wrecking it"))))));
 }
 /* Rank by how much of the gap a normal serving actually closes per
    calorie — the old version rewarded foods that dragged nothing else
@@ -21979,6 +21787,14 @@ function You({ st, save, a, today, setSheet, go }) {
 function Settings({ st, save, today, setSheet, health }) {
     const done = ALLQ.filter((q) => answered(st, q)).length;
     return (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "il-menu", style: { marginBottom: 10 } },
+            React.createElement("button", { className: "il-mrow", onClick: () => setSheet({ t: "rules" }) },
+                React.createElement("span", { style: { minWidth: 0 } },
+                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, "What I won't eat"),
+                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, (st.foodRules || []).length
+                        ? (st.foodRules || []).map((id) => (FOOD_RULES.find((r) => r.id === id) || {}).label).filter(Boolean).join(", ")
+                        : "Nothing ruled out")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Your answers"),
@@ -22221,7 +22037,6 @@ function Guide({ st, close, go }) {
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "One screen with everything behind it: straight off the packet, described in your own words, searched in the food table, a label photographed, or something you have built before. Every entry gets a time, and the time decides which meal it lands in."),
             React.createElement(Link, { tab: "fuel", sh: { t: "catchup" } }, "I haven't logged a thing all day"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "This is the one to use if you would rather not open the app after every meal. Say the whole day at once \u2014 \"porridge and a banana about 8, chicken salad at work, curry tonight, couple of beers\" \u2014 and it comes back split into foods with times and macros, which you can drop anything from before it saves. Everything it assumed is flagged as a guess and the review is told not to lean on it."),
-            React.createElement(Link, { tab: "fuel", sh: { t: "dayplan" } }, "Plan today around where I'll be"),
             React.createElement(Link, { tab: "fuel", sh: { t: "recipes" } }, "Find something to cook"),
             React.createElement(Link, { tab: "fuel", sh: { t: "meals" } }, "Tell me what to eat with the time I've got"),
             React.createElement(Link, { tab: "fuel", sh: { t: "catchup" } }, "It's the evening and I haven't logged anything"),
@@ -22279,6 +22094,11 @@ function Guide({ st, close, go }) {
 }
 function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go }) {
     const close = () => back();
+    const box = useRef(null);
+    /* The scrolling container is reused between sheets, so opening a recipe from
+       halfway down a list opened the recipe halfway down. */
+    useEffect(() => { if (box.current)
+        box.current.scrollTop = 0; }, [sheet && sheet.t, sheet && sheet.name, sheet && sheet.exId, depth]);
     /* Without this the screen behind scrolls under your finger while the sheet
        moves over it, which is most of why nothing felt solid. */
     useEffect(() => {
@@ -22330,7 +22150,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
     const wrap = vp ? { top: vp.top, height: vp.h, bottom: "auto" } : undefined;
     const inner = vp ? { maxHeight: `calc(${vp.h}px - env(safe-area-inset-top) - 6px)` } : undefined;
     return (React.createElement("div", { className: "il-sheet", style: wrap, onClick: close },
-        React.createElement("div", { className: "il-si", style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) => e.stopPropagation() },
+        React.createElement("div", { className: "il-si", ref: box, style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) => e.stopPropagation() },
             depth > 1 && (React.createElement("button", { onClick: close, style: { position: "sticky", top: 17, zIndex: 4, display: "flex", alignItems: "center",
                     gap: 6, background: "var(--bg)", border: 0, color: "var(--acc)", font: "inherit", fontSize: 13.5,
                     padding: "6px 16px 0", cursor: "pointer", width: "100%", textAlign: "left" } },
@@ -22342,8 +22162,6 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "rings" && React.createElement(RingsSheet, { st, save, today, close }),
             sheet.t === "nightly" && React.createElement(Nightly, { st, save, a, today, close, setSheet }),
             sheet.t === "diary" && React.createElement(Diary, { st, save, a, close, setSheet }),
-            sheet.t === "dayplan" && React.createElement(DayPlan, { st, save, a, today, close, setSheet }),
-            sheet.t === "eatwindow" && React.createElement(EatWindow, { st, save, close }),
             sheet.t === "catchup" && React.createElement(CatchUp, { st, save, a, today, close, setSheet }),
             sheet.t === "search" && React.createElement(SearchAll, { st, close, setSheet }),
             sheet.t === "saveit" && React.createElement(SaveIt, { st, save, a, today, close, setSheet, health }),
@@ -22895,7 +22713,7 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
         React.createElement(SH, { title: live ? "Your programme" : "Build a programme", sub: live ? `Week ${live.week} · ${slots.length} sessions` : "A week of sessions, in the order you do them", close: close }),
         !routines.length && (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "A programme is made of sessions, and you haven't built any yet. Make one or two first and they'll appear here to choose from."),
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "cbuild" }), 50); } }, "Build a session"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "cbuild" }); } }, "Build a session"))),
         routines.length > 0 && (React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What it's called"),
@@ -22929,7 +22747,7 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
                         " \u00B7 ",
                         r.exercises.length,
                         " exercises"))),
-                    React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => { close(); setTimeout(() => setSheet({ t: "cbuild" }), 50); } }, "Build another one first")))),
+                    React.createElement("button", { className: "il-btn g sm", style: { width: "100%" }, onClick: () => { setSheet({ t: "cbuild" }); } }, "Build another one first")))),
             chosen.length > 0 && (React.createElement("div", { className: "il-card lead" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "What that week comes to"),
                 React.createElement("div", { className: "il-note", style: { fontSize: 13.5, color: "var(--txt)" } },
@@ -22949,18 +22767,9 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
                     "."))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", disabled: !slots.length, onClick: keep }, live ? "Save the changes" : "Start this programme"),
-                React.createElement("button", { className: "il-btn g", disabled: !slots.length, onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "ask", ctx: "program" }), 50);
-                    } }, "Ask the coach what he makes of it"),
-                React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "blockplan" }), 50);
-                    } }, "Have the coach plan a whole block"),
-                React.createElement("button", { className: "il-btn g", onClick: () => {
-                        close();
-                        setTimeout(() => setSheet({ t: "importplan" }), 50);
-                    } }, "Import a plan from a picture"),
+                React.createElement("button", { className: "il-btn g", disabled: !slots.length, onClick: () => { setSheet({ t: "ask", ctx: "program" }); } }, "Ask the coach what he makes of it"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "blockplan" }); } }, "Have the coach plan a whole block"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "importplan" }); } }, "Import a plan from a picture"),
                 live && React.createElement("button", { className: "il-btn dz", onClick: () => {
                         if (!window.confirm("End this programme? Your sessions stay where they are."))
                             return;
@@ -24168,15 +23977,15 @@ ${desc.trim()}`, 1200, "cheap");
                 "The food table has ",
                 FOODS.length,
                 " things in it, with portions you can pick by eye."),
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "food" }), 50); } }, "Search the food table"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "food" }); } }, "Search the food table"))),
         tab === "scan" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Photograph the nutrition label and the numbers come off it. Works on anything with a panel on the back."),
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "scan" }), 50); } }, "Scan a label"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scan" }); } }, "Scan a label"))),
         tab === "mine" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Things you've built yourself \u2014 a dish you make often, or a recipe out of the book."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "dish" }), 50); } }, "My dishes"),
-                React.createElement("button", { className: "il-btn g", onClick: () => { close(); setTimeout(() => setSheet({ t: "recipes" }), 50); } }, "Cook something from the book")))));
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "dish" }); } }, "My dishes"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "recipes" }); } }, "Cook something from the book")))));
 }
 function FoodSheet({ st, save, today, close, setSheet, foodId }) {
     const [q, setQ] = useState("");
@@ -24568,7 +24377,7 @@ function SidesSheet({ st, save, a, today, close, setSheet }) {
         React.createElement(SH, { title: "Left and right", sub: "Where the two sides differ, and what to do about it", close: close }),
         !anyTape && !read.lifts.length && (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Nothing to compare yet. Measure both arms and both thighs, and log a one-sided lift with the reps for each side, and this fills itself in."),
-            React.createElement("button", { className: "il-btn", onClick: () => { close(); setTimeout(() => setSheet({ t: "meas" }), 50); } }, "Take both sides"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "meas" }); } }, "Take both sides"))),
         read.lines.length > 0 && (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Where you are"),
             read.lines.map((l, i) => (React.createElement("div", { key: i, style: { fontSize: 13.5, color: "var(--txt)", lineHeight: 1.5,
