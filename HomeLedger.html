@@ -4792,7 +4792,7 @@ const TITLE = {
     coach: "Coach", train: "Train", body: "Body", progress: "Progress", fuel: "Food", you: "You"
 };
 const HEADBTN = { train: ["My kit", "equip"], body: ["My goal", "goal"], progress: ["Diary", "diary"],
-    fuel: ["Macro coach", "coach"], you: ["Edit", "profile"] };
+    fuel: ["Macro coach", "coach"], you: ["About you", "profile"] };
 /* ================= APP ================= */
 /* The documented signature takes a third "shared" argument and the docs say
    to always pass it explicitly. Every call I wrote omitted it, which is what
@@ -4877,7 +4877,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v228 · 3 Aug";
+const APP_VERSION = "v230 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14901,6 +14901,8 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             setStage("in");
         }
     };
+    /* one ingredient line, kept as [amount, unit, what] */
+    const setIng = (n, line) => setRes({ ...res, ing: res.ing.map((x, i) => (i === n ? line : x)) });
     const keep = () => {
         const rec = { n: res.n, meal: res.meal || "dinner", cui: res.cui || "", mins: res.mins || 30,
             tags: deriveTags(res), serves: res.serves || 2, ing: res.ing || [], method: res.method || [],
@@ -14949,27 +14951,21 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             React.createElement("div", { className: "il-note" }, "Reading it\u2026")),
         stage === "out" && res && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
-                React.createElement("div", { className: "il-h2", style: { marginBottom: 6 } }, res.n),
-                React.createElement("div", { className: "il-sub il-n" },
-                    res.cui ? `${res.cui} · ` : "",
-                    res.mins,
-                    " min \u00B7 serves ",
-                    res.serves)),
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "What it is called"),
+                React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 12 }, value: res.n || "", onChange: (e) => setRes({ ...res, n: e.target.value }) }),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 9 } },
+                    [["mins", "Minutes", 5], ["serves", "Serves", 1]].map(([k, l, stp]) => (React.createElement("div", { key: k },
+                        React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 4, textAlign: "center" } }, l),
+                        React.createElement(NumIn, { value: res[k] || 0, step: stp, onChange: (v) => setRes({ ...res, [k]: v }) })))),
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 4, textAlign: "center" } }, "Cuisine"),
+                        React.createElement("input", { className: "il-in", value: res.cui || "", onChange: (e) => setRes({ ...res, cui: e.target.value }) })))),
             React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-ring" },
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, res.m?.[0] ?? "?"),
-                        React.createElement("div", { className: "l" }, "calories")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, res.m?.[1] ?? "?"),
-                        React.createElement("div", { className: "l" }, "protein")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, res.m?.[2] ?? "?"),
-                        React.createElement("div", { className: "l" }, "carbs")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, res.m?.[3] ?? "?"),
-                        React.createElement("div", { className: "l" }, "fat"))),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } }, "per serving")),
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Per serving"),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 } }, [["calories", 0, 10], ["protein", 1, 1], ["carbs", 2, 1], ["fat", 3, 1]].map(([l, n, stp]) => (React.createElement("div", { key: l },
+                    React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 4, textAlign: "center" } }, l),
+                    React.createElement(NumIn, { value: (res.m || [])[n] ?? 0, step: stp, onChange: (v) => { const m = [...(res.m || [0, 0, 0, 0])]; m[n] = v; setRes({ ...res, m }); } }))))),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "If the card doesn't give these, leave them at nought \u2014 she can work them out from the ingredients later.")),
             res.alt && res.alt.serves && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "The card gives two sizes"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
@@ -14993,21 +14989,32 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } },
                 (res.ing || []).length,
                 " ingredients"),
-            React.createElement("div", { className: "il-card" }, (res.ing || []).map((i, n) => (React.createElement("div", { key: n, className: "il-row", style: { padding: "7px 0", borderTop: n ? "1px solid var(--line)" : 0 } },
-                React.createElement("span", { style: { fontSize: 14, minWidth: 0 } }, i[2]),
-                React.createElement("span", { className: "il-n", style: { fontSize: 14, color: "var(--dim)", flexShrink: 0 } },
-                    i[0],
-                    i[1] || ""))))),
+            React.createElement("div", { className: "il-card" },
+                (res.ing || []).map((i, n) => (React.createElement("div", { key: n, style: { display: "flex", gap: 6, alignItems: "center",
+                        padding: "6px 0", borderTop: n ? "1px solid var(--line)" : 0 } },
+                    React.createElement(NumIn, { style: { width: 62 }, value: i[0] ?? 0, step: i[1] === "g" || i[1] === "ml" ? 10 : 1, onChange: (v) => setIng(n, [v, i[1], i[2]]) }),
+                    React.createElement("input", { className: "il-in", style: { width: 54, padding: "8px 6px", textAlign: "center" }, value: i[1] || "", placeholder: "g", onChange: (e) => setIng(n, [i[0], e.target.value || null, i[2]]) }),
+                    React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1, minWidth: 0 }, value: i[2] || "", onChange: (e) => setIng(n, [i[0], i[1], e.target.value]) }),
+                    React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setRes({ ...res, ing: res.ing.filter((_, x) => x !== n) }) }, "\u00D7")))),
+                React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setRes({ ...res, ing: [...(res.ing || []), [1, null, ""]] }) }, "+ Another ingredient")),
             React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } },
                 (res.method || []).length,
                 " steps"),
-            (res.method || []).map((m, i) => (React.createElement("div", { key: i, className: "il-card", style: { display: "flex", gap: 12, alignItems: "flex-start" } },
+            (res.method || []).map((m, i) => (React.createElement("div", { key: i, className: "il-card", style: { display: "flex", gap: 10, alignItems: "flex-start" } },
                 React.createElement("span", { style: { width: 24, height: 24, borderRadius: 12, background: "var(--c2)", color: "var(--dim)",
-                        fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, i + 1),
-                React.createElement("span", { style: { fontSize: 14.5, lineHeight: 1.5 } }, m)))),
+                        fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 4 } }, i + 1),
+                React.createElement("textarea", { className: "il-in", rows: Math.max(2, Math.ceil((m || "").length / 44)), style: { textAlign: "left", flex: 1, minWidth: 0, fontFamily: "inherit", resize: "none", lineHeight: 1.5 }, value: m, onChange: (e) => {
+                        const method = [...res.method];
+                        method[i] = e.target.value;
+                        setRes({ ...res, method });
+                    } }),
+                React.createElement("button", { className: "il-x", style: { flexShrink: 0, marginTop: 4 }, onClick: () => setRes({ ...res, method: res.method.filter((_, x) => x !== i) }) }, "\u00D7")))),
+            React.createElement("div", { style: { padding: "0 12px 4px" } },
+                React.createElement("button", { className: "il-chip", onClick: () => setRes({ ...res, method: [...(res.method || []), ""] }) }, "+ Another step")),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: keep }, "Add it to my book"),
-                React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setStage("in"); } }, "Not quite \u2014 try again"))));
+                React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "Check it against the card before you file it \u2014 handwriting especially. Everything above can be changed, and what you save is what you see."),
+                React.createElement("button", { className: "il-btn", disabled: !String(res.n || "").trim() || !(res.ing || []).length, onClick: keep }, "Add it to my book"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setRes(null); setStage("in"); } }, "Photograph it again"))));
 }
 /* work out the macro tags from the numbers rather than trusting a label */
 /* One list, because the last fix renamed two ingredients instead of widening
@@ -21280,6 +21287,7 @@ function Fuel({ st, save, a, today, setSheet }) {
             const soon = (st.cupboard || []).filter((c) => { const d = daysLeft(c.exp); return d != null && d <= 3; }).length;
             const rated = Object.keys(st.ratings || {}).length;
             return (React.createElement("div", { className: "il-menu" },
+                React.createElement(Row, { to: { t: "addrec" }, title: "Photograph a recipe", sub: "A card, a page from a book, or your own handwriting" }),
                 React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
                 React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: planned ? `${planned} meals planned` : "And the shopping writes itself" }),
                 React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: shopN ? `${shopN} thing${shopN === 1 ? "" : "s"} on it` : "Nothing on it yet" }),
@@ -24705,7 +24713,13 @@ const fmtHtu = (cm, u) => { if (u.ht !== "ftin")
 function ProfileSheet({ st, save, close }) {
     const [p, setP] = useState(st.profile);
     const [justSaved, setJustSaved] = useState(false);
+    const [editW, setEditW] = useState(false);
     const u = { ...DEFAULT_UNITS, ...(p.units || {}) };
+    /* The scales are the source. Typing it in again gives the app two answers to
+       one question, and the typed one wins everything downstream. */
+    const lastW = [...(st.weights || [])].sort((a2, b2) => a2.date.localeCompare(b2.date)).pop() || null;
+    const daysOld = lastW ? Math.round((new Date() - new Date(lastW.date + "T12:00:00")) / 864e5) : null;
+    const stale = daysOld != null && daysOld > 21;
     const set = (k, v) => setP({ ...p, [k]: v });
     const setUnits = (nu) => setP({ ...p, units: nu });
     const T = targets(p, null);
@@ -24721,15 +24735,36 @@ function ProfileSheet({ st, save, close }) {
                     React.createElement("div", { className: "il-lbl", style: { marginBottom: 5, fontSize: 10 } }, "Sleep, hours a night"),
                     React.createElement(NumIn, { value: p.sleep, step: 0.5, onChange: (v) => set("sleep", v) }))),
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 5, fontSize: 10 } }, "Weight"),
-            React.createElement("div", { className: "il-fld", style: { marginBottom: 14 } },
-                u.bw === "st" ? React.createElement(React.Fragment, null,
-                    React.createElement(NumIn, { value: Math.floor(p.weightKg * LB / 14), step: 1, onChange: (v) => set("weightKg", Math.round((v * 14 + (p.weightKg * LB % 14)) / LB * 100) / 100) }),
-                    React.createElement(NumIn, { value: Math.round((p.weightKg * LB % 14) * 10) / 10, step: 0.5, onChange: (v) => set("weightKg", Math.round((Math.floor(p.weightKg * LB / 14) * 14 + v) / LB * 100) / 100) })) : React.createElement(NumIn, { step: 0.1, value: u.bw === "lb" ? Math.round(p.weightKg * LB * 10) / 10 : p.weightKg, onChange: (v) => set("weightKg", u.bw === "lb" ? Math.round(v / LB * 100) / 100 : v) }),
-                React.createElement("select", { className: "il-sel", value: u.bw, onChange: (e) => setUnits({ ...u, bw: e.target.value }), style: { width: 128 } },
-                    React.createElement("option", { value: "kg" }, "kg"),
-                    React.createElement("option", { value: "st" }, "st & lb"),
-                    React.createElement("option", { value: "lb" }, "lb"))),
-            u.bw === "st" && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: -8, marginBottom: 14 } }, "Stone in the first box, pounds in the second."),
+            lastW && !editW ? (React.createElement("div", { style: { marginBottom: 14 } },
+                React.createElement("div", { className: "il-row" },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { className: "il-d", style: { fontSize: 19, fontWeight: 600 } }, fmtBWu(lastW.kg, u)),
+                        React.createElement("div", { className: "il-sub", style: { margin: "2px 0 0" } },
+                            daysOld === 0 ? "weighed today" : daysOld === 1 ? "weighed yesterday" : `weighed ${daysOld} days ago`,
+                            lastW.read ? " · read off your scales" : "")),
+                    React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => setEditW(true) }, "Type a different one")),
+                Math.abs(lastW.kg - p.weightKg) > 0.3 && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                    "Your profile still says ",
+                    fmtBWu(p.weightKg, u),
+                    ". Everything is worked out from the profile figure, so",
+                    React.createElement("button", { className: "il-chip", style: { marginLeft: 6 }, onClick: () => set("weightKg", lastW.kg) },
+                        "use ",
+                        fmtBWu(lastW.kg, u)))),
+                stale && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } },
+                    "Nothing on the scales for ",
+                    daysOld,
+                    " days. Your targets are built on this, so it is worth a weigh-in.")))) : (React.createElement(React.Fragment, null,
+                !lastW && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 8 } }, "No weigh-in logged yet, so type it here. Once you log one, this fills itself in.")),
+                React.createElement("div", { className: "il-fld", style: { marginBottom: 14 } },
+                    u.bw === "st" ? React.createElement(React.Fragment, null,
+                        React.createElement(NumIn, { value: Math.floor(p.weightKg * LB / 14), step: 1, onChange: (v) => set("weightKg", Math.round((v * 14 + (p.weightKg * LB % 14)) / LB * 100) / 100) }),
+                        React.createElement(NumIn, { value: Math.round((p.weightKg * LB % 14) * 10) / 10, step: 0.5, onChange: (v) => set("weightKg", Math.round((Math.floor(p.weightKg * LB / 14) * 14 + v) / LB * 100) / 100) })) : React.createElement(NumIn, { step: 0.1, value: u.bw === "lb" ? Math.round(p.weightKg * LB * 10) / 10 : p.weightKg, onChange: (v) => set("weightKg", u.bw === "lb" ? Math.round(v / LB * 100) / 100 : v) }),
+                    React.createElement("select", { className: "il-sel", value: u.bw, onChange: (e) => setUnits({ ...u, bw: e.target.value }), style: { width: 128 } },
+                        React.createElement("option", { value: "kg" }, "kg"),
+                        React.createElement("option", { value: "st" }, "st & lb"),
+                        React.createElement("option", { value: "lb" }, "lb"))),
+                u.bw === "st" && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: -8, marginBottom: 14 } }, "Stone in the first box, pounds in the second."),
+                lastW && editW && (React.createElement("button", { className: "il-chip", style: { marginBottom: 14 }, onClick: () => setEditW(false) }, "Use the reading from the scales instead")))),
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 5, fontSize: 10 } }, "Height"),
             React.createElement("div", { className: "il-fld" },
                 u.ht === "ftin" ? React.createElement(React.Fragment, null,
