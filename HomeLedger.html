@@ -4877,7 +4877,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v227 · 3 Aug";
+const APP_VERSION = "v228 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -11948,9 +11948,42 @@ ${reviewDossier({ ...st, sessions: liveSessions(st) }, a)}`, 4000, "deep");
 /* ---- what he's working from, and what to leave out ---- */
 function CoachData({ st, save, a, close }) {
     const [tab, setTab] = useState("sessions");
+    const [picking, setPicking] = useState(false);
+    const [picked, setPicked] = useState([]);
     const exc = st.excluded || [];
     const isOut = (id) => exc.includes(id);
     const toggle = (id) => save({ ...st, excluded: isOut(id) ? exc.filter((x) => x !== id) : [...exc, id] });
+    /* Every id on the tab you are looking at, so "all" means all of these rather
+       than everything in the app. */
+    const idsOn = (which) => which === "sessions" ? st.sessions.map((x) => x.id)
+        : which === "weights" ? st.weights.map((x) => "w" + x.date)
+            : st.meas.map((x) => "m" + x.date);
+    const all = idsOn(tab);
+    const pick = (id) => setPicked((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+    const leave = () => { setPicking(false); setPicked([]); };
+    const wipeMany = () => {
+        const n = picked.length;
+        if (!n)
+            return;
+        const what = tab === "sessions" ? "session" : tab === "weights" ? "weigh-in" : "set of measurements";
+        if (!window.confirm(`Delete ${n} ${what}${n === 1 ? "" : "s"} for good? This can't be undone.`))
+            return;
+        const gone = new Set(picked);
+        save({
+            ...st,
+            sessions: tab === "sessions" ? st.sessions.filter((x) => !gone.has(x.id)) : st.sessions,
+            weights: tab === "weights" ? st.weights.filter((x) => !gone.has("w" + x.date)) : st.weights,
+            meas: tab === "meas" ? st.meas.filter((x) => !gone.has("m" + x.date)) : st.meas,
+            excluded: exc.filter((x) => !gone.has(x)),
+        });
+        leave();
+    };
+    const outMany = (out) => {
+        if (!picked.length)
+            return;
+        save({ ...st, excluded: out ? [...new Set([...exc, ...picked])] : exc.filter((x) => !picked.includes(x)) });
+        leave();
+    };
     const wipe = (kind, id, label) => {
         if (!window.confirm(`Delete ${label} for good? This can't be undone.`))
             return;
@@ -11961,15 +11994,23 @@ function CoachData({ st, save, a, close }) {
         if (kind === "m")
             save({ ...st, meas: st.meas.filter((x) => "m" + x.date !== id), excluded: exc.filter((x) => x !== id) });
     };
-    const Row = ({ id, kind, title, sub, label }) => (React.createElement("div", { className: "il-card", style: { opacity: isOut(id) ? .5 : 1, padding: "12px 14px" } },
-        React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-            React.createElement("div", { style: { minWidth: 0 } },
-                React.createElement("div", { style: { fontSize: 14, textDecoration: isOut(id) ? "line-through" : "none" } }, title),
-                React.createElement("div", { className: "il-sub il-n" }, sub)),
-            isOut(id) && React.createElement("span", { className: "il-tag t2", style: { flexShrink: 0 } }, "IGNORED")),
-        React.createElement("div", { style: { display: "flex", gap: 6 } },
-            React.createElement("button", { className: "il-chip", style: { flex: 1 }, onClick: () => toggle(id) }, isOut(id) ? "Count it again" : "Leave it out"),
-            React.createElement("button", { className: "il-chip", style: { color: "var(--red)" }, onClick: () => wipe(kind, id, label) }, "Delete"))));
+    const Row = ({ id, kind, title, sub, label }) => {
+        const on = picked.includes(id);
+        return (React.createElement("div", { className: "il-card", style: { opacity: isOut(id) && !picking ? .5 : 1, padding: "12px 14px",
+                borderLeft: picking && on ? "3px solid var(--tint)" : undefined }, onClick: picking ? () => pick(id) : undefined },
+            React.createElement("div", { className: "il-row", style: { marginBottom: picking ? 0 : 8 } },
+                React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
+                    picking && (React.createElement("span", { style: { width: 19, height: 19, borderRadius: 5, flexShrink: 0,
+                            border: on ? "none" : "1.5px solid var(--line)", background: on ? "var(--tint)" : "transparent",
+                            color: "#0B0B0D", fontSize: 12.5, fontWeight: 700, textAlign: "center", lineHeight: "19px" } }, on ? "\u2713" : "")),
+                    React.createElement("span", { style: { minWidth: 0 } },
+                        React.createElement("span", { style: { display: "block", fontSize: 14, textDecoration: isOut(id) ? "line-through" : "none" } }, title),
+                        React.createElement("span", { className: "il-sub il-n", style: { display: "block" } }, sub))),
+                isOut(id) && React.createElement("span", { className: "il-tag t2", style: { flexShrink: 0 } }, "IGNORED")),
+            !picking && (React.createElement("div", { style: { display: "flex", gap: 6 } },
+                React.createElement("button", { className: "il-chip", style: { flex: 1 }, onClick: () => toggle(id) }, isOut(id) ? "Count it again" : "Leave it out"),
+                React.createElement("button", { className: "il-chip", style: { color: "var(--red)" }, onClick: () => wipe(kind, id, label) }, "Delete")))));
+    };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Everything you've logged", sub: exc.length ? `${exc.length} left out · edit or delete any of it` : "Leave anything out, or delete it for good", close: close }),
         React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))" } },
@@ -11979,7 +12020,26 @@ function CoachData({ st, save, a, close }) {
                 " keeps the record but hides it from him and from every calculation.",
                 React.createElement("strong", { style: { color: "#F5F6F7" } }, " Delete"),
                 " removes it for good.")),
-        React.createElement("div", { style: { padding: "0 12px 4px", display: "flex", gap: 7 } }, [["sessions", `Sessions · ${st.sessions.length}`], ["weights", `Weigh-ins · ${st.weights.length}`], ["meas", `Tape · ${st.meas.length}`]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (tab === k ? " on" : ""), onClick: () => setTab(k) }, l)))),
+        React.createElement("div", { style: { padding: "0 12px 4px", display: "flex", gap: 7 } }, [["sessions", `Sessions · ${st.sessions.length}`], ["weights", `Weigh-ins · ${st.weights.length}`], ["meas", `Tape · ${st.meas.length}`]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (tab === k ? " on" : ""), onClick: () => { setTab(k); setPicked([]); } }, l)))),
+        React.createElement("div", { style: { padding: "0 12px 6px", display: "flex", gap: 7, alignItems: "center" } }, !picking ? (React.createElement("button", { className: "il-chip", onClick: () => { setPicking(true); setPicked([]); } }, "Pick several")) : (React.createElement(React.Fragment, null,
+            React.createElement("button", { className: "il-chip", onClick: () => setPicked(picked.length === all.length ? [] : all) }, picked.length === all.length ? "None" : `All ${all.length}`),
+            React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
+                picked.length,
+                " picked"),
+            React.createElement("button", { className: "il-chip", style: { marginLeft: "auto" }, onClick: leave }, "Cancel")))),
+        picking && picked.length > 0 && (React.createElement("div", { style: { padding: "0 12px 8px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn g", onClick: () => outMany(true) },
+                "Leave ",
+                picked.length,
+                " out of his numbers"),
+            React.createElement("button", { className: "il-btn g", onClick: () => outMany(false) },
+                "Count ",
+                picked.length,
+                " again"),
+            React.createElement("button", { className: "il-btn dz", onClick: wipeMany },
+                "Delete ",
+                picked.length,
+                " for good"))),
         tab === "sessions" && [...st.sessions].reverse().slice(0, 60).map((s) => (React.createElement(Row, { key: s.id, id: s.id, kind: "s", label: `the session on ${dlong(s.date)}`, title: `${s.routineName || "Session"} · ${dtiny(s.date)}`, sub: `${s.exercises.reduce((x, e) => x + e.sets.filter((q) => !q.warm).length, 0)} sets · ${VOL(sessVol(s)).toLocaleString()} ${VOLU()} · ${dur(s.durationSec)}${s.imported ? " · imported" : ""}${s.completion && s.completion.status !== "planned" ? ` · ${s.completion.status.replace("_", " ")}` : ""}` }))),
         tab === "weights" && [...st.weights].reverse().slice(0, 60).map((w) => (React.createElement(Row, { key: w.date, id: "w" + w.date, kind: "w", label: `the weigh-in on ${dlong(w.date)}`, title: fmtBW(w.kg), sub: dlong(w.date) + (w.fat != null ? ` · ${w.fat}% fat` : "") }))),
         tab === "meas" && [...st.meas].reverse().slice(0, 40).map((m) => (React.createElement(Row, { key: m.date, id: "m" + m.date, kind: "m", label: `the measurements on ${dlong(m.date)}`, title: dlong(m.date), sub: SITES.filter((si) => m.v[si.id] != null).map((si) => `${si.label} ${T2(m.v[si.id])}`).join(" · ") || "no sites" }))),
