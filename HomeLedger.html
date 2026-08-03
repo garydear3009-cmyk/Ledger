@@ -4873,7 +4873,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v222 · 3 Aug";
+const APP_VERSION = "v225 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6174,6 +6174,7 @@ If the photo does not show a nutrition panel at all, or you cannot read the numb
 set confidence to "low", set every value in per100 to null, and explain in notes.
 Never guess a number you cannot see. A null is far better than a wrong figure.`;
 function ScanLabel({ st, save, today, close, setSheet }) {
+    const [howMuch, setHowMuch] = useState("serving");
     const [stage, setStage] = useState("start"); // start | reading | check
     const [shot, setShot] = useState(null);
     const [res, setRes] = useState(null);
@@ -6219,16 +6220,47 @@ function ScanLabel({ st, save, today, close, setSheet }) {
         }
         setStage("check");
     };
+    const asFood = () => ({
+        id: "my" + Date.now(), name: form.name || "Scanned product", cat: -1,
+        kcal: +form.kcal || 0, p: +form.p || 0, c: +form.c || 0, f: +form.f || 0,
+        serv: +form.serv || 100, servLabel: bareLabel(form.servLabel), unit: form.unit === "ml" ? "ml" : "g",
+        mine: true, scanned: true,
+    });
     const commit = () => {
-        const food = {
-            id: "my" + Date.now(), name: form.name || "Scanned product", cat: -1,
-            kcal: +form.kcal || 0, p: +form.p || 0, c: +form.c || 0, f: +form.f || 0,
-            serv: +form.serv || 100, servLabel: bareLabel(form.servLabel), unit: form.unit === "ml" ? "ml" : "g",
-            mine: true, scanned: true,
-        };
-        save({ ...st, myFoods: [...(st.myFoods || []), food] });
+        const food = asFood();
+        /* it belongs at the top of "recently added" — that is what you just did */
+        save({ ...st, myFoods: [...(st.myFoods || []), food],
+            recent: [food.id, ...(st.recent || []).filter((x) => x !== food.id)].slice(0, 60) });
         close();
         setTimeout(() => setSheet({ t: "food" }), 60);
+    };
+    /* Saving it to the list and then making you search for the thing you just
+       scanned is the long way round. This keeps it AND logs the portion. */
+    const commitAndLog = () => {
+        const food = asFood();
+        const per = (+form.serv || 100) / 100; // the label is per 100; a serving is what you had
+        const mult = (howMuch === "serving" ? per : howMuch === "half" ? per / 2 : howMuch === "double" ? per * 2 : 1);
+        const now = new Date();
+        const hh = now.getHours();
+        const meal = hh < 11 ? "Breakfast" : hh < 15 ? "Lunch" : hh < 21 ? "Dinner" : "Snacks";
+        const entry = {
+            id: "sc" + Date.now(),
+            name: `${food.name}${howMuch === "hundred" ? ` · 100${food.unit}`
+                : howMuch === "half" ? " · half a serving" : howMuch === "double" ? " · two servings" : ""}`,
+            meal, at: hhmm(hh, now.getMinutes()),
+            kcal: Math.round(food.kcal * mult), p: Math.round(food.p * mult),
+            c: Math.round(food.c * mult), f: Math.round(food.f * mult),
+        };
+        const foods = [...(st.foods || [])];
+        let i = foods.findIndex((x) => x.date === today);
+        if (i < 0) {
+            foods.push({ date: today, entries: [] });
+            i = foods.length - 1;
+        }
+        foods[i] = { ...foods[i], entries: [...foods[i].entries, entry] };
+        save({ ...st, myFoods: [...(st.myFoods || []), food], foods,
+            recent: [food.id, ...(st.recent || []).filter((x) => x !== food.id)].slice(0, 60) });
+        close();
     };
     const sane = (() => {
         const k = +form.kcal, p = +form.p, c = +form.c, f = +form.f;
@@ -6335,7 +6367,11 @@ function ScanLabel({ st, save, today, close, setSheet }) {
                         React.createElement("div", { className: "v" }, (+form.f * +form.serv / 100).toFixed(1)),
                         React.createElement("div", { className: "l" }, "fat"))))) : null,
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", disabled: !form.name || !form.kcal, onClick: commit }, "Save to my foods"),
+                React.createElement("div", { className: "il-lbl", style: { margin: "4px 0 8px" } }, "How much did you have?"),
+                React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 } }, [["serving", form.servLabel ? `One ${bareLabel(form.servLabel)}` : `One serving · ${form.serv || 100}${form.unit || "g"}`],
+                    ["half", "Half"], ["double", "Two"], ["hundred", `100${form.unit || "g"}`]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (howMuch === k ? " on" : ""), onClick: () => setHowMuch(k) }, l)))),
+                React.createElement("button", { className: "il-btn", disabled: !form.name || !form.kcal, onClick: commitAndLog }, "Log it and keep it"),
+                React.createElement("button", { className: "il-btn g", disabled: !form.name || !form.kcal, onClick: commit }, "Just keep it for later"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setStage("start"); setRes(null); setShot(null); setNote(""); } }, "Start over")),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "The photo isn't kept once you've saved. Reading a label isn't the same as knowing it \u2014 check the numbers against the pack. Saved products go in your own list, so you only scan a thing once."))));
@@ -22298,7 +22334,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
             !NO_DONE.includes(sheet.t) && !(vp && vp.open) &&
-                React.createElement(DoneBar, { close: close, label: DONE_LABEL[sheet.t] || "Done" }))));
+                React.createElement(DoneBar, { close: close, back: BACK_ONLY.includes(sheet.t), label: BACK_ONLY.includes(sheet.t) ? "Back" : DONE_LABEL[sheet.t] || "Done" }))));
 }
 /* plain number input that allows an empty box — a controlled Number() input
    snaps back to 0 the moment you clear it, which is where "044" came from */
@@ -22321,6 +22357,11 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
    it moves you on when it does not. */
 const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
     "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood"];
+/* A screen you look at rather than fill in. "Done" implies you are confirming
+   something; these have their own button for that, or nothing to confirm at
+   all, so the bar just takes you back. */
+const BACK_ONLY = ["scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
+    "guide", "sides", "adhere", "muscle", "volume", "recipe", "myratings", "photos"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
     additem: "Done adding", kitchen: "Done", list: "Done shopping", expiry: "Done",
@@ -22337,9 +22378,9 @@ function SH({ title, sub, close }) {
 }
 /* Everything saves as you go, so this is really "I'm finished" — but a
    button you can reach with your thumb beats an × in the top corner.  */
-function DoneBar({ close, label = "Done" }) {
+function DoneBar({ close, label = "Done", back }) {
     return (React.createElement("div", { className: "il-done" },
-        React.createElement("button", { className: "il-btn", onClick: close }, label)));
+        React.createElement("button", { className: "il-btn" + (back ? " g" : ""), onClick: close }, label)));
 }
 function ExProgress({ sheet, a, close, setSheet }) {
     const r = a.review.find((x) => x.id === sheet.id);
@@ -24031,15 +24072,7 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
     const [sel, setSel] = useState(pre || null);
     const [grams, setGrams] = useState(pre ? pre.serv : 100);
     const [custom, setCustom] = useState(null);
-    const [quick, setQuick] = useState("usual");
-    const nowMeal = (() => { const h = new Date().getHours(); return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks"; })();
-    const [mealTab, setMealTab] = useState(nowMeal);
-    // what you actually eat at this meal, most-used first
-    const usual = useMemo(() => {
-        const counts = (st.byMeal || {})[mealTab] || {};
-        return Object.entries(counts).sort((x, y) => y[1] - x[1])
-            .map(([id, n]) => ({ f: pool.find((z) => z.id === id), n })).filter((x) => x.f).slice(0, 12);
-    }, [st.byMeal, mealTab, st.myFoods]);
+    const [quick, setQuick] = useState("recent");
     const [dish, setDish] = useState(null);
     const [newDish, setNewDish] = useState(false);
     const [scan, setScan] = useState(false);
@@ -24162,7 +24195,7 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
             React.createElement("button", { className: "il-chip" + (cat < 0 ? " on" : ""), onClick: () => setCat(-1) }, "All"),
             FCAT.map((c, i) => React.createElement("button", { key: c, className: "il-chip" + (cat === i ? " on" : ""), onClick: () => setCat(i) }, c))),
         !q && cat < 0 && (recent.length > 0 || top.length > 0) && React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { padding: "2px 12px 8px", display: "flex", gap: 7 } }, [["usual", "My usuals"], ["recent", `Recent${recent.length ? " · " + recent.length : ""}`], ["top", "Most used"], ["dishes", `My dishes${(st.dishes || []).length ? " · " + (st.dishes || []).length : ""}`], ["all", "All foods"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (quick === k ? " on" : ""), onClick: () => setQuick(k) }, l)))),
+            React.createElement("div", { style: { padding: "2px 12px 8px", display: "flex", gap: 7 } }, [["recent", `Recently added${recent.length ? " · " + recent.length : ""}`], ["top", "Most used"], ["dishes", `My dishes${(st.dishes || []).length ? " · " + (st.dishes || []).length : ""}`], ["all", "All foods"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (quick === k ? " on" : ""), onClick: () => setQuick(k) }, l)))),
             quick === "dishes" && React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "il-list", style: { marginBottom: 10 } },
                     (st.dishes || []).map((d) => {
@@ -24187,35 +24220,6 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
                     !(st.dishes || []).length && React.createElement("div", { className: "il-empty" }, "No dishes yet. Build one from whatever you actually cook \u2014 a chilli, your usual breakfast, your dad's pasta \u2014 and it logs in two taps forever after.")),
                 React.createElement("div", { style: { padding: "0 12px 4px" } },
                     React.createElement("button", { className: "il-btn", onClick: () => setNewDish(true) }, "+ Create a dish"))),
-            quick === "usual" && React.createElement(React.Fragment, null,
-                React.createElement("div", { className: "il-scroll", style: { paddingTop: 4, paddingBottom: 4 } }, MEALS.map((mm) => (React.createElement("button", { key: mm, className: "il-chip" + (mealTab === mm ? " on" : ""), onClick: () => setMealTab(mm) },
-                    mm,
-                    mm === nowMeal ? " · now" : "")))),
-                React.createElement("div", { className: "il-list", style: { marginBottom: 12 } },
-                    usual.map(({ f, n }) => {
-                        const fit = foodFit(f, st.profile);
-                        const g = (st.portions || {})[f.id] || f.serv;
-                        return (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(g); } },
-                            React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 9, alignItems: "center" } },
-                                fit && React.createElement("span", { style: { width: 4, height: 30, borderRadius: 2, background: FIT_COLOUR[fit.tier], flexShrink: 0 } }),
-                                React.createElement("div", { style: { minWidth: 0 } },
-                                    React.createElement("div", { style: { fontSize: 14 } }, f.name),
-                                    React.createElement("div", { className: "il-sub il-n" },
-                                        AMT(f, g),
-                                        " \u00B7 ",
-                                        Math.round(f.kcal * g / 100),
-                                        " cal \u00B7 P",
-                                        Math.round(f.p * g / 100),
-                                        " \u00B7 ",
-                                        n,
-                                        "\u00D7 at ",
-                                        mealTab.toLowerCase()))),
-                            React.createElement("span", { className: "il-chip" }, "Add")));
-                    }),
-                    !usual.length && React.createElement("div", { className: "il-empty" },
-                        "Nothing logged at ",
-                        mealTab.toLowerCase(),
-                        " yet. Log a few and they'll appear here in the order you actually eat them, with the portion you usually have."))),
             (quick === "recent" || quick === "top") && React.createElement("div", { className: "il-list", style: { marginBottom: 12 } },
                 (quick === "recent" ? recent : top).slice(0, 20).map((f) => {
                     const fit = foodFit(f, st.profile);
