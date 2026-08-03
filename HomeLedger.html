@@ -4894,7 +4894,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v237 · 3 Aug";
+const APP_VERSION = "v238 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5762,14 +5762,15 @@ function Train({ st, save, a, today, setSheet }) {
                     "Week ",
                     prog.week,
                     prog.program.weeks ? ` of ${prog.program.weeks}` : "")),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 10 } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 10, cursor: "pointer" }, onClick: () => setSheet({ t: "program" }) },
                 React.createElement("div", { className: "il-hero", style: { flexShrink: 0,
                         color: prog.doneCount >= prog.slots.length ? "var(--grn)" : "var(--txt)" } },
                     prog.doneCount,
                     React.createElement("span", { style: { fontSize: 20, color: "var(--faint)" } },
                         "/",
                         prog.slots.length)),
-                React.createElement("div", { className: "il-hatch" + (prog.doneCount >= prog.slots.length ? " grn" : "") }, prog.slots.map((_, i) => (React.createElement("i", { key: i, className: prog.ticked[i] ? "on" : "" }))))),
+                React.createElement("div", { className: "il-hatch" + (prog.doneCount >= prog.slots.length ? " grn" : "") }, prog.slots.map((_, i) => (React.createElement("i", { key: i, className: prog.ticked[i] ? "on" : "" })))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } }, prog.next ? `Next up is ${prog.next.routine ? prog.next.routine.name : "a session that has been deleted"}` : "That's the week."),
             prog.slots.map((rt, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0,
                     opacity: prog.ticked[i] ? .5 : 1 }, onClick: () => rt && setSheet({ t: "startrt", id: rt.id }) },
@@ -16636,10 +16637,16 @@ function Supplements({ st, save, a, today, setSheet }) {
     const rec = suppSuggestions(st, a);
     return (React.createElement(React.Fragment, null,
         React.createElement("div", { className: "il-card lead" },
-            React.createElement("div", { className: "il-h2", style: { marginBottom: 6, fontSize: 19 } }, "Supplements"),
-            React.createElement("div", { className: "il-note", style: { color: "#D9BAFF", fontSize: 13.5 } }, mine.length
-                ? `${mine.length} in your cupboard. Tap any of them for what the evidence actually says.`
-                : "Photograph what you've got and I'll tell you what each one does, what the evidence says, and — often — that you don't need it."),
+            mine.length > 0 ? (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 12 } },
+                    React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: left === 0 ? "var(--grn)" : "var(--txt)" } },
+                        done.length,
+                        React.createElement("span", { style: { fontSize: 20, color: "var(--faint)" } },
+                            "/",
+                            mine.length)),
+                    React.createElement("div", { className: "il-hatch" + (left === 0 ? " grn" : "") }, mine.map((x, i) => (React.createElement("i", { key: i, className: i < done.length ? "on" : "" }))))),
+                React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, left === 0 ? "all taken today" : `${left} still to take`),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 4 } }, "Tap any of them for what the evidence actually says."))) : (React.createElement("div", { className: "il-note", style: { color: "#D9BAFF", fontSize: 13.5 } }, "Photograph what you've got and I'll tell you what each one does, what the evidence says, and \u2014 often \u2014 that you don't need it.")),
             React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "suppshot" }) }, mine.length ? "Add more" : "Photograph what I take")),
         mine.length > 0 && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
@@ -21220,6 +21227,24 @@ function Body({ st, save, a, today, setSheet }) {
     const jump = weightJump(st, a, today || iso(new Date()));
     return (React.createElement(React.Fragment, null,
         (() => {
+            /* the number this tab is about: where you are, and how long since */
+            const w = [...(st.weights || [])].sort((x, y) => x.date.localeCompare(y.date)).pop();
+            if (!w)
+                return null;
+            const days = Math.round((new Date() - new Date(w.date + "T12:00:00")) / 864e5);
+            const recent = (st.weights || []).slice(-10).map((x) => x.kg);
+            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "nightly" }) },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+                    React.createElement("div", { className: "il-hero", style: { flexShrink: 0 } }, fmtBW(w.kg)),
+                    React.createElement("div", { style: { minWidth: 0, flex: 1 } },
+                        React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, days === 0 ? "weighed today" : days === 1 ? "weighed yesterday" : `${days} days ago`),
+                        React.createElement("div", { style: { marginTop: 4 } },
+                            React.createElement(BigSpark, { points: recent, h: 26, colour: "var(--tint)" }))),
+                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                        React.createElement(Trend, { points: recent, invert: true }),
+                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))));
+        })(),
+        (() => {
             const r = sideRead(st);
             if (!r.worst || !r.worst.has || r.worst.pct < 3)
                 return null;
@@ -21482,16 +21507,17 @@ function Fuel({ st, save, a, today, setSheet }) {
             ];
             const left = Math.max(0, Math.round(baseK) - Math.round(t.k));
             return (React.createElement("div", { className: "il-card lead" },
-                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16 } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16, cursor: "pointer" }, onClick: () => setSheet({ t: "targets" }) },
                     React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: left ? "var(--txt)" : "var(--grn)" } }, left),
-                    React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { minWidth: 0, flex: 1 } },
                         React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, left ? "calories left" : "target met"),
                         React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } },
                             Math.round(t.k),
                             " of ",
                             Math.round(baseK),
                             " logged",
-                            bonus ? ` · +${bonus.extra} earned today` : ""))),
+                            bonus ? ` · +${bonus.extra} earned today` : "")),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
                 bars.map(([label, got, target, colour], i) => {
                     const pct = target ? Math.min(100, Math.round((got / target) * 100)) : 0;
                     const over = target && got > target;
@@ -22786,6 +22812,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "sides" && React.createElement(SidesSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close, setSheet }),
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
+            sheet.t === "targets" && React.createElement(TargetSheet, { st, save, a, close, setSheet }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
             !NO_DONE.includes(sheet.t) && !(vp && vp.open) &&
@@ -25102,6 +25129,58 @@ const fmtBWu = (kg, u) => { if (u.bw === "lb")
 } return `${kg} kg`; };
 const fmtHtu = (cm, u) => { if (u.ht !== "ftin")
     return `${Math.round(cm)} cm`; const t = cm * INCH, f = Math.floor(t / 12); return `${f}ft ${Math.round(t - f * 12)}in`; };
+/* Where the daily numbers come from, and how to disagree with them. They were
+   worked out from your profile and there was nowhere to change them. */
+function TargetSheet({ st, save, a, close, setSheet }) {
+    const P = st.profile;
+    const auto = targets(P, a.maint || estMaint(P));
+    const [p, setP] = useState(P);
+    const set = (k, v) => setP({ ...p, [k]: Math.max(0, Math.round(v)) });
+    const kcal = p.proteinTarget * 4 + p.carbTarget * 4 + p.fatTarget * 9;
+    const autoK = auto.protein * 4 + (auto.carbs || 0) * 4 + auto.fat * 9;
+    const changed = p.proteinTarget !== P.proteinTarget || p.carbTarget !== P.carbTarget || p.fatTarget !== P.fatTarget;
+    const off = autoK ? Math.round(((kcal - autoK) / autoK) * 100) : 0;
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Your daily targets", sub: "What the bars on the Food tab are filling up", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+                React.createElement("div", { className: "il-hero", style: { flexShrink: 0 } }, kcal),
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "calories a day"),
+                    React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } }, Math.abs(off) < 3 ? "as worked out from your profile"
+                        : `${Math.abs(off)}% ${off > 0 ? "above" : "below"} what your profile suggests`))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 12 } },
+                "Calories are the three macros added up \u2014 ",
+                p.proteinTarget,
+                "g protein and ",
+                p.carbTarget,
+                "g carbs at four each, ",
+                p.fatTarget,
+                "g fat at nine. Change a macro and the calories follow.")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 12 } }, "The three that matter"),
+            [["proteinTarget", "Protein", auto.protein, "var(--grn)",
+                    `${auto.pPerKg}g per kilo of bodyweight — the one worth hitting every day`],
+                ["carbTarget", "Carbs", auto.carbs, "var(--gold)",
+                    "whatever is left after protein and fat, and where you have the most room"],
+                ["fatTarget", "Fat", auto.fat, "var(--pmp)",
+                    "enough for hormones and joints; going much under is a false economy"]].map(([k, label, sug, colour, why]) => (React.createElement("div", { key: k, style: { marginBottom: 16 } },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                    React.createElement("span", { className: "il-lbl", style: { color: colour } }, label),
+                    sug != null && p[k] !== sug && (React.createElement("button", { className: "il-chip", onClick: () => set(k, sug) },
+                        "use ",
+                        sug,
+                        "g"))),
+                React.createElement(NumIn, { value: p[k], step: 5, onChange: (v) => set(k, v) }),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 6 } }, why))))),
+        React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Before you change them"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, lineHeight: 1.55 } }, "These come from your weight, your goal and how much you move \u2014 not from a table. Moving them is fine when you have a reason, and pointless as a way of feeling better about a day. If you are hitting them and nothing is happening, the answer is usually a few weeks of honest logging rather than a new number.")),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", disabled: !changed, onClick: () => { save({ ...st, profile: { ...st.profile, proteinTarget: p.proteinTarget, carbTarget: p.carbTarget, fatTarget: p.fatTarget } }); close(); } }, changed ? "Save these targets" : "Nothing changed"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setP({ ...p, proteinTarget: auto.protein, carbTarget: auto.carbs ?? p.carbTarget, fatTarget: auto.fat }) }, "Work them out for me again"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "profile" }) }, "Change my weight or goal instead")));
+}
 function ProfileSheet({ st, save, close }) {
     const [p, setP] = useState(st.profile);
     const [justSaved, setJustSaved] = useState(false);
