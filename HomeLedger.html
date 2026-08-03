@@ -121,10 +121,10 @@ const CSS = `
 .il-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:460px;display:flex;
  flex-wrap:wrap;justify-content:center;background:rgba(11,11,13,.96);backdrop-filter:blur(14px);
  border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom);}
-.il-tab{flex:0 0 20%;background:none;border:0;color:var(--faint);padding:9px 2px 10px;cursor:pointer;font-family:'Outfit';
+.il-tab{flex:0 0 33.333%;background:none;border:0;color:var(--faint);padding:9px 2px 10px;cursor:pointer;font-family:'Outfit';
  font-size:11px;font-weight:500;display:flex;flex-direction:column;align-items:center;gap:4px;}
-/* the second row is a shade quieter, so the eye still lands on the top five */
-.il-tabs > .il-tab:nth-child(n+6){padding-top:2px;padding-bottom:8px;}
+/* three and three, both rows equal — there is no longer an overflow row */
+.il-tabs > .il-tab:nth-child(n+4){padding-top:4px;padding-bottom:9px;}
 .il-tab.on{color:var(--txt);}
 .il-tab[data-k="you"].on{color:var(--t-you);}
 .il-tab[data-k="train"].on{color:var(--t-train);}
@@ -219,13 +219,17 @@ const CSS = `
 .il-mrow:last-child{border-bottom:0;}
 .il-mrow:active{background:var(--c2);}
 .il-sw{position:relative;overflow:hidden;border-radius:13px;margin:0 12px 9px;touch-action:pan-y;}
+/* inside a card that already has padding, the 12px each side pushed the row
+   wider than the card and clipped both ends of it */
+.il-sw.tight{margin:0 0 6px;border-radius:10px;}
 .il-sw-bin{position:absolute;top:0;right:0;bottom:0;width:84px;display:flex;align-items:center;justify-content:center;
  background:var(--red);border:0;cursor:pointer;color:#fff;}
 .il-sw-bin svg{width:22px;height:22px;}
 .il-sw-body{position:relative;background:var(--card);border-radius:13px;will-change:transform;}
 .il-live{position:sticky;top:calc(57px + env(safe-area-inset-top));z-index:19;background:linear-gradient(180deg,rgba(11,11,13,.97),rgba(11,11,13,.92));
  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:11px 14px;display:flex;align-items:center;gap:12px;}
-.il-lrow{display:grid;grid-template-columns:30px 1fr 1fr 46px;gap:8px;align-items:center;padding:6px 0;}
+.il-lrow{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,1fr) 44px;gap:7px;align-items:center;
+ padding:6px 8px;box-sizing:border-box;width:100%;}
 .il-lin{font-family:'Inter';font-variant-numeric:tabular-nums;font-size:16px;font-weight:600;border:1px solid var(--line);
  border-radius:9px;padding:10px 4px;width:100%;text-align:center;background:var(--c2);color:var(--txt);}
 .il-lin:focus{outline:2px solid var(--acc);outline-offset:-1px;}
@@ -1366,6 +1370,9 @@ const anatOf = (ex) => (ex && ANAT[ex.name]) || {};
 /* the app tracks left and right separately; the guidance is the same, so
    point both at one description and mirror the marker */
 const MSITE = (id) => {
+    /* the navel guide was written before abdomen was a site of its own */
+    if (id === "abdomen" && MGUIDE.navel)
+        return MGUIDE.navel;
     if (MGUIDE[id])
         return MGUIDE[id];
     const m = id.match(/^(arm|thigh|calf|forearm)([LR])$/);
@@ -2311,6 +2318,10 @@ const SITES = [
     { id: "shoulders", label: "Shoulders", how: "Around the widest point, arms relaxed at your sides.", when: "Morning. Needs a mirror to keep the tape level." },
     { id: "chest", label: "Chest", how: "Around the fullest part, level with your nipples. Breathe out normally first.", when: "Morning, before food." },
     { id: "waist", label: "Waist", how: "Around the narrowest part, just above your belly button. Don't suck in.", when: "First thing, before eating or drinking." },
+    /* Renpho and most Bluetooth tapes report this separately from the waist, and
+       it is the more honest one — a waist can be found at a flattering height,
+       a navel cannot. */
+    { id: "abdomen", label: "Abdomen", how: "Straight across the belly button, tape level all the way round. Breathe out normally and leave it out.", when: "First thing, before eating or drinking — same as the waist." },
     { id: "hips", label: "Hips", how: "Around the widest part of your bum, feet together.", when: "Morning, before food." },
     { id: "armL", label: "Left arm", how: "Around the thickest part of your upper arm.", when: "Morning, not when sore. Pick flexed or relaxed and never switch." },
     { id: "armR", label: "Right arm", how: "Around the thickest part of your upper arm.", when: "Same rule as the left." },
@@ -3872,7 +3883,7 @@ const PARTS = [
     [null, "b", [0.24, 0.14, 0.5], [-0.22, -1.42, 0.12]], [null, "b", [0.24, 0.14, 0.5], [0.22, -1.42, 0.12]],
 ];
 /* Slide a card left to uncover a bin. Works with a finger or a mouse. */
-function SwipeDelete({ onDelete, children }) {
+function SwipeDelete({ onDelete, children, inCard }) {
     const W = 84;
     const [dx, setDx] = useState(0);
     const [live, setLive] = useState(false);
@@ -3900,10 +3911,10 @@ function SwipeDelete({ onDelete, children }) {
         e.preventDefault();
         e.stopPropagation();
     } };
-    return (React.createElement("div", { className: "il-sw" },
-        React.createElement("button", { className: "il-sw-bin", onClick: (e) => { e.stopPropagation(); onDelete(); }, "aria-label": "Delete" },
+    return (React.createElement("div", { className: "il-sw" + (inCard ? " tight" : "") },
+        dx !== 0 && (React.createElement("button", { className: "il-sw-bin", onClick: (e) => { e.stopPropagation(); onDelete(); }, "aria-label": "Delete" },
             React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.9", strokeLinecap: "round", strokeLinejoin: "round" },
-                React.createElement("path", { d: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5" }))),
+                React.createElement("path", { d: "M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5" })))),
         React.createElement("div", { className: "il-sw-body", style: { transform: `translateX(${dx}px)`, transition: live ? "none" : "transform .22s cubic-bezier(.2,.8,.3,1)" }, onPointerDown: (e) => begin(e.clientX), onPointerMove: (e) => move(e.clientX, e), onPointerUp: end, onPointerCancel: end, onTouchStart: (e) => begin(e.touches[0].clientX), onTouchMove: (e) => move(e.touches[0].clientX, e), onTouchEnd: end, onClickCapture: swallow }, children)));
 }
 function RestTimer({ secs, onClose }) {
@@ -4758,11 +4769,12 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v206 · 2 Aug";
+const APP_VERSION = "v213 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
     const [tab, setTab] = useState("you");
+    const [sub, setSub] = useState("train"); // which half of the Train tab
     const [st, setSt] = useState(null);
     /* sheets stack, so closing one hands you back to whatever opened it
        rather than dropping you out to the tab underneath */
@@ -4974,16 +4986,31 @@ function HomeLedgerInner() {
     const today = iso(new Date());
     UNIT = { ...DEFAULT_UNITS, ...(st.profile.units || {}) };
     LOADS = loadOptions(st);
-    const go = ({ tab: t, sheet: sh } = {}) => { if (t)
-        setTab(t); if (sh)
-        setSheet(sh); };
-    const hb = HEADBTN[tab];
+    /* Body is no longer a tab. Anything that asks for it — a link in the guide,
+       a jump from the coach — goes to Train with the Body side showing. */
+    const go = ({ tab: t, sheet: sh } = {}) => {
+        if (t === "body") {
+            setTab("train");
+            setSub("body");
+        }
+        else if (t) {
+            setTab(t);
+            if (t !== "train")
+                setSub("train");
+        }
+        if (sh)
+            setSheet(sh);
+    };
+    /* Body is half of Train now, so anything keyed by tab — the heading, the
+       header button, the section tint — has to ask which half you are on. */
+    const view = tab === "train" && sub === "body" ? "body" : tab;
+    const hb = HEADBTN[view];
     return (React.createElement("div", { className: "il" },
         React.createElement("style", null, CSS),
-        React.createElement("div", { className: "il-shell", "data-tab": tab },
+        React.createElement("div", { className: "il-shell", "data-tab": view },
             React.createElement("header", { className: "il-top" },
                 React.createElement("div", null,
-                    React.createElement("h1", { className: "il-d" }, TITLE[tab]),
+                    React.createElement("h1", { className: "il-d" }, TITLE[view]),
                     React.createElement("div", { className: "dt" }, dlong(today))),
                 React.createElement("div", { style: { display: "flex", gap: 7, alignItems: "center" } },
                     health?.probe === false
@@ -5024,18 +5051,25 @@ function HomeLedgerInner() {
                     React.createElement("div", { className: "il-lbl" }, "Heads up"),
                     React.createElement("button", { className: "il-x", onClick: () => setBootNote("") }, "\u00D7")),
                 React.createElement("div", { className: "il-note" }, bootNote)),
-            React.createElement(AskStrip, { tab, setSheet }),
-            tab === "train" && React.createElement(Train, { st, save, a, today, setSheet }),
-            tab === "body" && React.createElement(Body, { st, save, a, setSheet }),
+            React.createElement(AskStrip, { tab: view, setSheet }),
+            tab === "train" && (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { padding: "10px 12px 2px", display: "flex", gap: 7 } },
+                    React.createElement("button", { className: "il-chip" + (sub === "train" ? " on" : ""), onClick: () => setSub("train") }, "Training"),
+                    React.createElement("button", { className: "il-chip" + (sub === "body" ? " on" : ""), onClick: () => setSub("body") }, "Body")),
+                sub === "body"
+                    ? React.createElement(Body, { st, save, a, today, setSheet })
+                    : React.createElement(Train, { st, save, a, today, setSheet }))),
             tab === "progress" && React.createElement(Progress, { a, setSheet }),
             tab === "fuel" && React.createElement(Fuel, { st, save, a, today, setSheet }),
             tab === "you" && React.createElement(You, { st, save, a, today, setSheet, go }),
             tab === "coach" && React.createElement(CoachTab, { st, save, a, today, setSheet }),
             tab === "supps" && React.createElement(Supplements, { st, save, a, today, setSheet }),
-            React.createElement("nav", { className: "il-tabs" }, ["you", "train", "fuel", "body", "coach", "supps", "progress"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : ""), onClick: () => setTab(k) },
+            React.createElement("nav", { className: "il-tabs" }, ["you", "coach", "train", "fuel", "supps", "progress"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : "") +
+                    (k === "train" && sub === "body" ? " on" : ""), onClick: () => { setTab(k); if (k !== "train")
+                    setSub("train"); } },
                 React.createElement(Ico, { d: ICONS[k] }),
                 TITLE[k])))),
-            React.createElement(AskBar, { st, setSheet, tab }),
+            React.createElement(AskBar, { st, setSheet, tab: view }),
             sheet && React.createElement(Sheet, { sheet, setSheet, st, save, a, today, health, go, depth: stack.length, back: () => setStack((s) => s.slice(0, -1)) }))));
 }
 /* ---------------- TRAIN ---------------- */
@@ -5246,7 +5280,7 @@ function LiveSession({ st, save, s, setSheet }) {
                         React.createElement("span", { className: "il-lbl", style: { textAlign: "center" } }, ex.timed || ex.cardio ? "secs" : "reps"),
                         React.createElement("span", null)),
                     !ex.aerobic && !e.sets.some((q) => q.warm) && (React.createElement("button", { className: "il-chip", style: { marginBottom: 8 }, onClick: () => addWarm(e.exId) }, "+ Warm-up sets")),
-                    !ex.aerobic && e.sets.map((x, j) => (React.createElement(SwipeDelete, { key: j, onDelete: () => dropSet(e.exId, j) },
+                    !ex.aerobic && e.sets.map((x, j) => (React.createElement(SwipeDelete, { key: j, inCard: true, onDelete: () => dropSet(e.exId, j) },
                         React.createElement("div", { className: "il-lrow" + (x.done ? " il-done" : ""), style: { background: "var(--card)" } },
                             React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
                             React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
@@ -5300,6 +5334,13 @@ function LiveSession({ st, save, s, setSheet }) {
             React.createElement("div", { className: "il-h2", style: { fontSize: 15, marginBottom: 4 } }, trackerGuide(st, s).pick),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, trackerGuide(st, s).why))),
         React.createElement("div", { style: { padding: "4px 12px", display: "grid", gap: 8 } },
+            !fin && (React.createElement(React.Fragment, null,
+                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "wrapup", id: s.id }) }, doneSets >= allSets.length && allSets.length ? "Finish the session" : `Finish here · ${doneSets} of ${allSets.length} sets done`),
+                doneSets < allSets.length && allSets.length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, textAlign: "center" } },
+                    allSets.length - doneSets,
+                    " set",
+                    allSets.length - doneSets === 1 ? "" : "s",
+                    " still unticked \u2014 finishing keeps what you did.")))),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "pick" }) }, "+ Add exercise"),
             fin && React.createElement("div", { style: { display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, packed: true } : x) }) }, "Done \u2014 put this away"),
@@ -11265,19 +11306,18 @@ function CoachTab({ st, save, a, today, setSheet }) {
         ["Is my programme sound?", { t: "ctalk", seed: "Look at the sessions I've got saved and tell me honestly whether the programme is sound for my goal, or whether I'd do better with something else." }],
     ];
     return (React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))", borderLeft: "3px solid var(--tint)" } },
-            React.createElement("div", { className: "il-h2", style: { marginBottom: 6 } }, "Your coach"),
-            React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "He has your whole log in front of him \u2014 every session, your volume muscle by muscle, your weight trend, your tape, what you eat and how you sleep. Ask him anything. He'll tell you when he's certain and when he's guessing.")),
-        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ctalk" }) }, th.length ? "Carry on the conversation" : "Start talking to him"),
-            th.length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 12, textAlign: "center" } },
-                th.filter((m) => m.role === "user").length,
-                " questions so far \u00B7 he remembers all of it"))),
+        React.createElement("div", { className: "il-note", style: { margin: "4px 16px 12px", fontSize: 13.5 } },
+            "He has your whole log in front of him and will tell you when he's certain and when he's guessing.",
+            th.length > 0 && ` ${th.filter((m) => m.role === "user").length} questions so far — he remembers all of it.`),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ctalk" }) }, th.length ? "Carry on the conversation" : "Start talking to him")),
         last && last.role === "coach" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Last thing he said"),
             React.createElement("div", { className: "il-note", style: { fontSize: 13.5, whiteSpace: "pre-wrap" } }, last.text.length > 320 ? last.text.slice(0, 320) + "…" : last.text))),
         React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "Ask him about"),
-        React.createElement("div", { style: { display: "grid", gap: 8, padding: "0 12px" } }, OPENERS.map(([label, dest], i) => (React.createElement("button", { key: i, className: "il-btn g", style: { textAlign: "left", justifyContent: "flex-start" }, onClick: () => setSheet(dest) }, label)))),
+        React.createElement("div", { className: "il-menu" }, OPENERS.map(([label, dest], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
+            React.createElement("span", { style: { fontSize: 14.5, minWidth: 0 } }, label),
+            React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))),
         React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "The longer jobs"),
         React.createElement("div", { className: "il-menu" }, [
             ["Full review and next week", rev ? `Last one ${dtiny(iso(new Date(rev.at)))}` : "Twelve weeks of data, then a plan", { t: "review" }],
@@ -12592,21 +12632,98 @@ function pumpPick(st, a, mids, mins) {
         return (y.w || 0) - (x.w || 0);
     });
 }
+/* How the sets are arranged. The exercises are the same; what changes is the
+   order you do them in and where the rest goes — which is most of what makes
+   a short session feel hard or feel pointless. */
+const PUMP_SHAPES = [
+    { id: "straight", label: "Straight sets", sub: "One exercise at a time, rest between sets",
+        rest: 45, mult: 1,
+        how: "All the sets of one exercise, then move on. Rest 45 seconds between them.",
+        who: "The default. Easiest to judge effort on, and the only one where the weight means anything." },
+    { id: "super", label: "Supersets", sub: "Two exercises back to back, then rest",
+        rest: 60, mult: 0.75,
+        how: "Pair them up. Do a set of the first, straight into a set of the second, then rest 60 seconds.",
+        who: "Roughly a third quicker than straight sets for the same work. Best when the two do not fight each other — a push and a pull." },
+    { id: "circuit", label: "Circuit", sub: "Round the lot, short rests, repeat",
+        rest: 20, mult: 0.6,
+        how: "One set of each exercise in order with about 20 seconds between them, then round again. Rest a minute at the end of each round.",
+        who: "The most work in the least time, and the one that raises your heart rate. Expect the weights to feel heavier by the last round — that is the point, not a mistake." },
+    { id: "giant", label: "Giant set", sub: "Everything for one muscle, no rest",
+        rest: 12, mult: 0.5,
+        how: "Every exercise for the same muscle, one after another with no real rest, then two minutes off before the next round.",
+        who: "Brutal and short. Only worth it on one muscle at a time, and only when the weights are light enough that form holds." },
+];
+function shapeFor(id) { return PUMP_SHAPES.find((x) => x.id === id) || PUMP_SHAPES[0]; }
+/* A shape changes where the rest goes, not how much work there is. Straight
+   sets rest after every set; a superset rests after every pair; a circuit
+   rests briefly between stations and properly at the end of a round. */
+function shapeMinutes(plan, shape) {
+    const list = plan || [];
+    const sets = list.reduce((n, p) => n + (p.sets || 0), 0);
+    if (!sets)
+        return 0;
+    const work = sets * 35;
+    const rounds = Math.max(1, Math.max(...list.map((p) => p.sets || 1)));
+    let rest;
+    if (shape.id === "super")
+        rest = Math.ceil(sets / 2) * shape.rest;
+    else if (shape.id === "circuit")
+        rest = sets * shape.rest + (rounds - 1) * 60;
+    else if (shape.id === "giant")
+        rest = sets * shape.rest + (rounds - 1) * 120;
+    else
+        rest = Math.max(0, sets - 1) * shape.rest;
+    return Math.max(1, Math.round((work + rest) / 60));
+}
+/* which shapes make sense for what was picked */
+function shapesFor(plan, mids) {
+    const n = (plan || []).length;
+    return PUMP_SHAPES.filter((sh) => {
+        if (sh.id === "super" && n < 2)
+            return false;
+        if (sh.id === "circuit" && n < 3)
+            return false;
+        if (sh.id === "giant" && ((mids || []).length !== 1 || n < 2))
+            return false;
+        return true;
+    });
+}
 function PumpSheet({ st, save, a, today, close, setSheet }) {
     const [mids, setMids] = useState((st.profile.focusPart || []).length ? [] : []);
     const [mins, setMins] = useState(12);
     const [plan, setPlan] = useState(null);
+    const [shapeId, setShapeId] = useState("straight");
+    const shape = shapeFor(shapeId);
+    /* A superset pairs them off; a circuit is one round of everything. Naming
+       the pairing on the row is the difference between a plan and a puzzle. */
+    const pairLabel = (i) => {
+        if (shape.id === "super")
+            return `Pair ${String.fromCharCode(65 + Math.floor(i / 2))}`;
+        if (shape.id === "circuit")
+            return `Station ${i + 1}`;
+        if (shape.id === "giant")
+            return `${i + 1} of ${(plan || []).length}`;
+        return "";
+    };
     const groups = REGIONS.map(([r, label]) => ({ r, label, list: MUS.filter((m) => m.region === r) }));
     const toggle = (id) => setMids((x) => x.includes(id) ? x.filter((y) => y !== id) : [...x, id].slice(0, 3));
     const warn = mids.map((id) => ({ id, m: MUSBY[id], f: muscleFatigue(st, a, id) }))
         .filter((x) => x.f.hours != null && x.f.hours < 40 && x.f.hard);
-    const build = () => setPlan(pumpPick(st, a, mids, mins));
+    const build = () => {
+        const p = pumpPick(st, a, mids, mins);
+        setPlan(p);
+        /* offer the shape that fits what came back rather than always starting at
+           straight sets — three or more exercises is a circuit waiting to happen */
+        const opts = shapesFor(p, mids);
+        setShapeId(opts.some((x) => x.id === "circuit") ? "circuit" : "straight");
+    };
     const start = () => {
         const id = "p" + Date.now();
         const now = new Date();
         const sess = {
             id, date: today, intent: "pump", routineName: `Pump: ${mids.map((m) => MUSBY[m]?.plain).filter(Boolean).join(" & ")}`,
             hour: now.getHours(), minute: now.getMinutes(), startedAt: Date.now(), finished: false,
+            shape: shape.id, shapeNote: shape.how,
             exercises: plan.map((p) => ({ exId: p.exId, lo: p.lo, hi: p.hi,
                 sets: Array.from({ length: p.sets }, () => ({ w: p.w, reps: p.lo, warm: false, done: false, rir: null })) })),
         };
@@ -12689,22 +12806,43 @@ function PumpSheet({ st, save, a, today, close, setSheet }) {
                         bands ? ` ${bands} of these use a band, so you can start straight away.` : "",
                         heavy > 1 ? " The dumbbell work is ordered heaviest first, so you're only ever turning the weight down." : ""));
                 })()),
+            (() => {
+                const options = shapesFor(plan, mids);
+                return (React.createElement("div", { className: "il-card" },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "How to run it"),
+                    React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 } }, options.map((sh) => (React.createElement("button", { key: sh.id, className: "il-chip" + (shapeId === sh.id ? " on" : ""), onClick: () => setShapeId(sh.id) }, sh.label)))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 13 } }, shape.how),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6 } }, shape.who),
+                    React.createElement("div", { className: "il-row", style: { marginTop: 10 } },
+                        React.createElement("span", { className: "il-lbl" }, "This way it takes"),
+                        React.createElement("span", { className: "il-n", style: { fontSize: 13.5,
+                                color: shapeMinutes(plan, shape) <= mins ? "var(--grn)" : "var(--gold)", flexShrink: 0 } },
+                            "about ",
+                            shapeMinutes(plan, shape),
+                            " min",
+                            shapeMinutes(plan, shape) > mins ? ` · over your ${mins}` : "")),
+                    (shape.id === "circuit" || shape.id === "giant") && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--gold)" } }, "Drop the weights a notch for this. The rest is what was holding them up."))));
+            })(),
             plan.map((p, i) => {
                 const ex = exOf(p.exId);
                 return (React.createElement("div", { key: i, className: "il-card" },
-                    React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", marginBottom: 8 } },
+                    React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", marginBottom: 8, cursor: "pointer" }, onClick: () => ex && setSheet({ t: "info", exId: ex.id }) },
                         React.createElement("div", { style: { width: 44, height: 52, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
                             React.createElement(FormDemo, { ex: ex, h: 52 })),
                         React.createElement("div", { style: { flex: 1, minWidth: 0 } },
                             React.createElement("div", { style: { fontSize: 15 } }, p.name),
-                            React.createElement("div", { className: "il-sub" }, MUSBY[p.mid]?.plain)),
-                        React.createElement("span", { className: "il-n", style: { fontSize: 13.5, color: "var(--dim)", flexShrink: 0 } },
-                            p.sets,
-                            " \u00D7 ",
-                            p.lo,
-                            "\u2013",
-                            p.hi,
-                            p.w ? ` @ ${W(p.w)}` : "")),
+                            React.createElement("div", { className: "il-sub" },
+                                MUSBY[p.mid]?.plain,
+                                shape.id !== "straight" && pairLabel(i) ? ` · ${pairLabel(i)}` : "")),
+                        React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                            React.createElement("span", { className: "il-n", style: { fontSize: 13.5, color: "var(--dim)" } },
+                                p.sets,
+                                " \u00D7 ",
+                                p.lo,
+                                "\u2013",
+                                p.hi,
+                                p.w ? ` @ ${W(p.w)}` : ""),
+                            React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))),
                     p.why && React.createElement("div", { className: "il-note", style: { fontSize: 12, color: "#8FD3AC", marginBottom: p.note ? 5 : 0 } },
                         "Band on purpose: ",
                         p.why),
@@ -13163,28 +13301,22 @@ function Nutritionist({ st, save, a, today, setSheet }) {
     const lastEat = lastMealAt(st, today);
     const hrs = lastEat ? (Date.now() - lastEat) / 3600000 : null;
     return (React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "il-card", style: { background: "linear-gradient(160deg,#14301F,#0F1E16)", borderLeft: "3px solid var(--grn)" } },
-            React.createElement("div", { className: "il-h2", style: { marginBottom: 6, fontSize: 19 } }, chat.length ? "Your nutritionist" : "You haven't met yet"),
-            React.createElement("div", { className: "il-note", style: { color: "#A8D8BC", fontSize: 13.5 } }, chat.length
-                ? `${chat.filter((m) => m.role === "user").length} things you've asked me. I work from the same numbers as your coach, and we leave each other notes.`
-                : "I work alongside your coach, from the same numbers. Tell me what you like eating and I'll stop suggesting things you'd never make."),
-            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 14, background: "var(--grn)" }, onClick: () => setSheet({ t: "ntalk", topic: "open" }) }, chat.length ? "Carry on talking" : "Say hello")),
-        !logged && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Nothing logged today"),
-            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Don't bother adding it item by item. Tell me roughly what you've had and I'll do the numbers."),
-            React.createElement("button", { className: "il-btn g", style: { width: "100%" }, onClick: () => setSheet({ t: "quickday" }) }, "Just tell her what you ate"))),
-        hrs != null && hrs > 5 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
-            React.createElement("div", { className: "il-note" },
-                "It's been about ",
-                hrs.toFixed(1),
-                " hours since you last ate. If that's deliberate, fine \u2014 tell me and I'll work around it. If it isn't, it's usually why the evening goes wrong."))),
-        React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "What would you like?"),
-        NUT_TOPICS.map(([title, sub, id]) => (React.createElement("div", { key: id, className: "il-rt", onClick: () => setSheet({ t: "ntalk", topic: id }) },
-            React.createElement("div", { className: "il-row" },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { className: "il-h2", style: { fontSize: 15.5 } }, title),
-                    React.createElement("div", { className: "il-sub" }, sub)),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))),
+        React.createElement("div", { className: "il-note", style: { margin: "4px 16px 12px", fontSize: 13.5 } }, chat.length
+            ? `She works from the same numbers as your coach, and they leave each other's jobs alone. ${chat.filter((m) => m.role === "user").length} things asked so far.`
+            : "She works alongside your coach, from the same numbers. Tell her what you like eating and she'll stop suggesting things you'd never make."),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", style: { background: "var(--grn)" }, onClick: () => setSheet({ t: "ntalk", topic: "open" }) }, chat.length ? "Carry on talking" : "Start talking to her")),
+        (!logged || (hrs != null && hrs > 5)) && (React.createElement("div", { style: { padding: "0 12px", marginTop: 10 } },
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: !logged ? 8 : 0 } }, !logged
+                ? "Nothing logged today. Don't add it item by item — tell her roughly what you've had."
+                : `About ${hrs.toFixed(0)} hours since you last ate. If that's deliberate, tell her and she'll work around it.`),
+            !logged && (React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "quickday" }) }, "Just tell her what you ate")))),
+        React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "Ask her about"),
+        React.createElement("div", { className: "il-menu" }, NUT_TOPICS.map(([title, sub, id]) => (React.createElement("button", { key: id, className: "il-mrow", onClick: () => setSheet({ t: "ntalk", topic: id }) },
+            React.createElement("span", { style: { minWidth: 0 } },
+                React.createElement("span", { style: { fontSize: 14.5, display: "block" } }, title),
+                React.createElement("span", { className: "il-sub", style: { display: "block" } }, sub)),
+            React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))),
         React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "What she knows"),
         React.createElement("div", { className: "il-list", style: { margin: "0 12px 8px" } },
             React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "recipes" }) },
@@ -16670,7 +16802,9 @@ Rules that matter:
 - If the screenshot isn't a measurement app, return found: false.`;
 const SITE_ALIAS = {
     neck: "neck", shoulder: "shoulders", shoulders: "shoulders", chest: "chest", bust: "chest",
-    waist: "waist", abdomen: "waist", belly: "waist", navel: "waist", hip: "hips", hips: "hips",
+    waist: "waist", abdomen: "abdomen", belly: "abdomen", navel: "abdomen", hip: "hips", hips: "hips",
+    "l-bicep": "armL", "r-bicep": "armR", "l-thigh": "thighL", "r-thigh": "thighR",
+    "l-calf": "calf", "r-calf": "calf", "l-arm": "armL", "r-arm": "armR",
     "left arm": "armL", "right arm": "armR", "left bicep": "armL", "right bicep": "armR",
     "left upper arm": "armL", "right upper arm": "armR", bicep: "armL", arm: "armL",
     "left thigh": "thighL", "right thigh": "thighR", thigh: "thighL",
@@ -20166,7 +20300,7 @@ Return ONLY JSON, no fences:
   "date": "YYYY-MM-DD if the screen shows one, else empty",
   "values": { "moveKcal": n, "moveGoal": n, "exerciseMin": n, "standHrs": n, "steps": n,
               "totalKcal": n, "weightKg": n, "weightLb": n, "musclePct": n, "fatPct": n,
-              "neck": n, "shoulders": n, "chest": n, "waist": n, "hips": n,
+              "neck": n, "shoulders": n, "chest": n, "waist": n, "abdomen": n, "hips": n,
               "armL": n, "armR": n, "thighL": n, "thighR": n, "calf": n },
   "unit": "cm|in for any tape measurements, else empty",
   "unsure": ["anything you could not read clearly"],
@@ -20285,7 +20419,7 @@ function Nightly({ st, save, a, today, close, setSheet }) {
         setEdited({});
     };
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "Tonight's numbers", sub: "Photograph whichever screens are due", close: close }),
+        React.createElement(SH, { title: "Screenshots from your other apps", sub: "Withings \u00B7 Renpho \u00B7 Apple Fitness \u00B7 Google Fit", close: close }),
         React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: read }),
         SHOTS.map((spec) => {
             const d = shotDue(st, spec.id, today);
@@ -20593,10 +20727,10 @@ function RingsSheet({ st, save, today, close }) {
                 "kg and the time you spend on it, with your resting burn subtracted \u2014 so it matches the \"active\" calories your watch counts rather than total. It's an estimate. Your watch measures your actual heart rate, so trust that one over this if they disagree.")));
 }
 /* ---------------- BODY ---------------- */
-function Body({ st, save, a, setSheet }) {
+function Body({ st, save, a, today, setSheet }) {
     const [view, setView] = useState("model");
     const last = st.meas[st.meas.length - 1], prev = st.meas[st.meas.length - 2];
-    const jump = weightJump(st, a, iso(new Date()));
+    const jump = weightJump(st, a, today || iso(new Date()));
     return (React.createElement(React.Fragment, null,
         jump && (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
@@ -20643,7 +20777,8 @@ function Body({ st, save, a, setSheet }) {
             })))),
         view === "meas" && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "meas" }) }, "Add measurements"),
+                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log a screenshot from Withings, Renpho, Apple or Google"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "meas" }) }, "Add measurements by hand"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "photos" }) },
                     "Progress photos",
                     (st.photos || []).length ? ` · ${(st.photos || []).length}` : ""),
@@ -21502,7 +21637,7 @@ function You({ st, save, a, today, setSheet, go }) {
                 return null;
             return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                    React.createElement("div", { className: "il-lbl" }, "Tonight's numbers"),
+                    React.createElement("div", { className: "il-lbl" }, "Screenshots to log tonight"),
                     React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
                         due.length,
                         " due")),
@@ -21514,6 +21649,7 @@ function You({ st, save, a, today, setSheet, go }) {
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "review" }) }, "Analyse everything and plan my week"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "you" }) }, "Ask coach anything"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "nightly" }) }, "Log tonight's screenshots"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "guide" }) }, "How this works")),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Your sessions"),
         React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--grn)" } }, (() => {
@@ -21921,6 +22057,11 @@ function Guide({ st, close, go }) {
             React.createElement(Link, { tab: "fuel", sh: { t: "kitchen" } }, "What's in my kitchen"),
             React.createElement(Link, { tab: "fuel", sh: { t: "list" } }, "Make me a shopping list"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Plan a day asks where you will be \u2014 at home, at a desk with no microwave, in the car \u2014 and only offers food that survives it. A desk lunch will never be something that has to be eaten hot.")),
+        React.createElement(Part, { id: "shots", title: "I track things in other apps", sub: "Screenshots from Withings, Renpho, Apple, Google" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 4 } }, "You don't have to type any of it. Photograph the screen in the other app and it reads the numbers off and files them \u2014 weight and body composition from Withings, tape measurements from Renpho, rings from Apple Fitness, calories out from Google or Fitbit."),
+            React.createElement(Link, { tab: "body", sh: { t: "nightly" } }, "Log a screenshot"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "It knows which app each screenshot came from and how often each one is worth doing \u2014 the rings nightly, the scales weekly, the tape every couple of weeks \u2014 and only asks for what is due. Every number it reads is shown to you in a box you can correct before anything is saved. The full read-back is the button underneath it."),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "You'll find it on Body, on the You screen, and as a prompt when something is due.")),
         React.createElement(Part, { id: "body", title: "I want to track my body", sub: "Weight, tape, photos" },
             React.createElement(Step, { n: "1" }, "Weigh yourself at the same time of day, ideally first thing. Day to day it jumps around; it is the direction over a fortnight that means anything."),
             React.createElement(Step, { n: "2" }, "Tape measurements every few weeks. Each one tells you exactly where to put the tape."),
@@ -22151,7 +22292,10 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
             onChange(x); } });
 }
 /* Screens with their own closing action, or that aren't a task you finish. */
-const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose"];
+/* Screens where a Done bar would either close something mid-job or look like
+   it moves you on when it does not. */
+const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
+    "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
     additem: "Done adding", kitchen: "Done", list: "Done shopping", expiry: "Done",
@@ -24175,6 +24319,8 @@ function MeasSheet({ st, save, close, setSheet }) {
     const last = st.meas[st.meas.length - 1];
     const [v, setV] = useState(Object.fromEntries(SITES.map((s) => [s.id, last?.v[s.id] != null ? tn(last.v[s.id]) : ""])));
     const [help, setHelp] = useState(null);
+    const [at, setAt] = useState(hhmm(new Date().getHours(), new Date().getMinutes()));
+    const [note, setNote] = useState("");
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add measurements", sub: last ? `Last done ${dtiny(last.date)}` : "First set — this becomes your baseline", close: close }),
         React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
@@ -24208,10 +24354,14 @@ function MeasSheet({ st, save, close, setSheet }) {
             React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Best first thing, before food or drink. Don't measure a muscle that's still sore.")),
         React.createElement("div", { className: "il-card" }, SITES.map((s) => (React.createElement("div", { key: s.id, style: { marginBottom: 10 } },
             React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
-                React.createElement("span", { style: { fontSize: 13.5 } }, s.label),
-                React.createElement("span", { style: { display: "flex", gap: 6, flexShrink: 0 } },
-                    MSITE(s.id) && React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "mguide", site: s.id }) }, "Show me"),
-                    React.createElement("button", { className: "il-chip", onClick: () => setHelp(help === s.id ? null : s.id) }, "How?"))),
+                React.createElement("span", { style: { fontSize: 13.5, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }, onClick: () => setHelp(help === s.id ? null : s.id) },
+                    s.label,
+                    React.createElement("span", { style: { width: 15, height: 15, borderRadius: 8, flexShrink: 0, background: "var(--c2)",
+                            color: "var(--faint)", fontSize: 10.5, fontWeight: 700, textAlign: "center", lineHeight: "15px" } }, "?")),
+                React.createElement("span", { style: { display: "flex", gap: 6, flexShrink: 0 } }, MSITE(s.id) && React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "mguide", site: s.id }) }, "Show me"))),
+            (st.measHow || {})[s.id] && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginBottom: 5, color: "var(--gold)" } },
+                "Your way: ",
+                (st.measHow || {})[s.id])),
             React.createElement("div", { className: "il-fld" },
                 React.createElement("input", { className: "il-in", type: "number", step: "0.1", inputMode: "decimal", placeholder: tu, value: v[s.id], onChange: (e) => setV({ ...v, [s.id]: e.target.value }) }),
                 React.createElement("span", { className: "il-sel", style: { width: 92, display: "flex", alignItems: "center", justifyContent: "flex-end", background: "transparent", border: 0, color: "var(--faint)", backgroundImage: "none", padding: 0, fontSize: 12 } }, (() => {
@@ -24228,17 +24378,30 @@ function MeasSheet({ st, save, close, setSheet }) {
                         d > 0 ? "+" : "",
                         d.toFixed(1));
                 })())),
-            help === s.id && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 7 } },
+            help === s.id && (React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 7 } },
                 React.createElement("strong", { style: { color: "var(--txt)" } }, "Where: "),
                 s.how,
                 React.createElement("br", null),
                 React.createElement("strong", { style: { color: "var(--txt)" } }, "When: "),
-                s.when))))),
+                s.when,
+                React.createElement("div", { style: { marginTop: 9 } },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 5 } }, "How you take it"),
+                    React.createElement("input", { className: "il-in", style: { textAlign: "left" }, defaultValue: (st.measHow || {})[s.id] || "", placeholder: "e.g. arms straight out in front, not flexed", onBlur: (e) => save({ ...st, measHow: { ...(st.measHow || {}), [s.id]: e.target.value.trim() } }) }),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 5 } }, "Kept and shown every time. Two numbers taken different ways are worse than one number.")))))))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14 } }, "When you took them"),
+                    React.createElement("div", { className: "il-sub" }, "Morning and evening are different people. Keep it the same each time.")),
+                React.createElement("input", { className: "il-in il-n", style: { width: 92, flexShrink: 0 }, value: at, onChange: (e) => setAt(e.target.value), placeholder: "06:40" })),
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 6 } }, "Anything worth remembering"),
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, value: note, onChange: (e) => setNote(e.target.value), placeholder: "Straight after waking, before food. Biceps measured arms out in front." })),
         React.createElement("div", { style: { padding: "0 12px" } },
             React.createElement("button", { className: "il-btn", disabled: !Object.values(v).some((x) => x !== "" && !isNaN(Number(x))), onClick: () => {
                     const clean = Object.fromEntries(Object.entries(v).filter(([, x]) => x !== "" && !isNaN(Number(x))).map(([k, x]) => [k, Math.round((tu === "in" ? Number(x) / INCH : Number(x)) * 100) / 100]));
                     if (Object.keys(clean).length)
-                        save({ ...st, meas: [...st.meas, { date: iso(new Date()), v: clean }] });
+                        save({ ...st,
+                            meas: [...st.meas, { date: iso(new Date()), v: clean, at: at.trim() || undefined, note: note.trim() || undefined }] });
                     close();
                 } },
                 "Save ",
