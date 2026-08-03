@@ -4894,7 +4894,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v243 · 3 Aug";
+const APP_VERSION = "v245 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14411,12 +14411,24 @@ function RecipeBook({ st, save, a, today, close, setSheet }) {
     const [sort, setSort] = useState("");
     const [temp, setTemp] = useState("");
     const [q, setQ] = useState("");
+    const [showFilters, setShowFilters] = useState(false);
+    /* where it came from: everything, your own, off a video, off a card */
+    const [src, setSrc] = useState("");
+    const activeFilters = [tags.length, maxMins, cupOnly, favOnly, heat != null, prot, rated, maxCal, minP, temp, src]
+        .filter(Boolean).length;
     const mine = st.myRecipes || [];
     const all = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...mine]);
     const saved = st.savedRecipes || [];
     const list = all.filter((r) => {
         if (!ruleCheck(st, r).ok)
             return false; // what you won't eat
+        /* where it came from */
+        if (src === "mine" && !r.mine)
+            return false;
+        if (src === "book" && r.mine)
+            return false;
+        if ((src === "video" || src === "photo") && r.via !== src)
+            return false;
         if (meal && r.meal !== meal)
             return false;
         if (tags.length && !tags.every((t) => r.tags.includes(t)))
@@ -14502,78 +14514,95 @@ function RecipeBook({ st, save, a, today, close, setSheet }) {
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "family" }) }, "Write one down")),
             React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search a name or an ingredient\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", value: q, onChange: (e) => setQ(e.target.value) })),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } }, RMEALS.map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (meal === k ? " on" : ""), onClick: () => setMeal(meal === k ? "" : k) }, l)))),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, Object.entries(RTAGS).map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (tags.includes(k) ? " on" : ""), onClick: () => toggleTag(k) }, l)))),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
-            [[15, "Under 15 min"], [30, "Under 30"], [60, "Under an hour"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (maxMins === v ? " on" : ""), onClick: () => setMaxMins(maxMins === v ? 0 : v) }, l))),
-            (st.cupboard || []).length > 0 && (React.createElement("button", { className: "il-chip" + (cupOnly ? " on" : ""), onClick: () => setCupOnly(!cupOnly) }, "Can make now")),
-            saved.length > 0 && (React.createElement("button", { className: "il-chip" + (favOnly ? " on" : ""), onClick: () => setFavOnly(!favOnly) },
-                "\u2605 Favourites \u00B7 ",
-                saved.length))),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
-            [[400, "Under 400"], [500, "Under 500"], [600, "Under 600"], [700, "Under 700"], [900, "Under 900"]].map(([v, l]) => {
-                const n = all.filter((r) => r.m[0] <= v).length;
+        React.createElement("div", { style: { padding: "10px 12px 0" } },
+            React.createElement("button", { className: "il-chip", onClick: () => setShowFilters(!showFilters) },
+                showFilters ? "Hide filters" : "Filters",
+                activeFilters ? ` \u00b7 ${activeFilters}` : "")),
+        showFilters && (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, [["", "Everywhere"], ["video", "From social media"], ["photo", "Off a card"],
+                ["mine", "Mine"], ["book", "The built-in book"]].map(([k, l]) => {
+                const n2 = k === "" ? all.length
+                    : k === "mine" ? all.filter((r) => r.mine).length
+                        : k === "book" ? all.filter((r) => !r.mine).length
+                            : all.filter((r) => r.via === k).length;
+                if (k && !n2)
+                    return null;
+                return (React.createElement("button", { key: k || "all", className: "il-chip" + (src === k ? " on" : ""), onClick: () => setSrc(k) },
+                    l,
+                    k ? ` \u00b7 ${n2}` : ""));
+            })),
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, Object.entries(RTAGS).map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (tags.includes(k) ? " on" : ""), onClick: () => toggleTag(k) }, l)))),
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
+                [[15, "Under 15 min"], [30, "Under 30"], [60, "Under an hour"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (maxMins === v ? " on" : ""), onClick: () => setMaxMins(maxMins === v ? 0 : v) }, l))),
+                (st.cupboard || []).length > 0 && (React.createElement("button", { className: "il-chip" + (cupOnly ? " on" : ""), onClick: () => setCupOnly(!cupOnly) }, "Can make now")),
+                saved.length > 0 && (React.createElement("button", { className: "il-chip" + (favOnly ? " on" : ""), onClick: () => setFavOnly(!favOnly) },
+                    "\u2605 Favourites \u00B7 ",
+                    saved.length))),
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
+                [[400, "Under 400"], [500, "Under 500"], [600, "Under 600"], [700, "Under 700"], [900, "Under 900"]].map(([v, l]) => {
+                    const n = all.filter((r) => r.m[0] <= v).length;
+                    if (!n)
+                        return null;
+                    return (React.createElement("button", { key: v, className: "il-chip" + (maxCal === v ? " on" : ""), onClick: () => setMaxCal(maxCal === v ? 0 : v) },
+                        l,
+                        " \u00B7 ",
+                        n));
+                }),
+                [30, 40, 50].map((v) => {
+                    const n = all.filter((r) => r.m[1] >= v).length;
+                    if (!n)
+                        return null;
+                    return (React.createElement("button", { key: "p" + v, className: "il-chip" + (minP === v ? " on" : ""), onClick: () => setMinP(minP === v ? 0 : v) },
+                        v,
+                        "g protein+ \u00B7 ",
+                        n));
+                })),
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
+                [[0, "No heat"], [1, "🌶 Warmth"], [2, "🌶🌶 A kick"], [3, "🌶🌶🌶 Hot"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (heat === v ? " on" : ""), onClick: () => setHeat(heat === v ? null : v) }, l))),
+                [["hot", "Served hot"], ["cold", "Served cold"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (temp === k ? " on" : ""), onClick: () => setTemp(temp === k ? "" : k) }, l)))),
+            Object.keys(st.ratings || {}).length > 2 && (React.createElement("div", { style: { padding: "6px 12px 0", display: "flex", gap: 7 } },
+                React.createElement("button", { className: "il-chip" + (sort === "rating" ? " on" : ""), onClick: () => setSort(sort === "rating" ? "" : "rating") }, "Best first"))),
+            Object.keys(st.ratings || {}).length > 0 && (React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, [["best", "17+ only"], ["good", "13 and up"], ["again", "Would cook again"],
+                ["any", "Rated"], ["none", "Not tried"], ["no", "Didn't like"]].map(([k, l]) => {
+                const n = all.filter((r) => {
+                    const sc = rateAvg(st, r.n);
+                    if (k === "any")
+                        return sc != null;
+                    if (k === "none")
+                        return sc == null;
+                    if (k === "best")
+                        return sc >= 17;
+                    if (k === "good")
+                        return sc >= 13;
+                    if (k === "again")
+                        return (ratingOf(st, r.n) || {}).again === true;
+                    return sc != null && sc < 9;
+                }).length;
                 if (!n)
                     return null;
-                return (React.createElement("button", { key: v, className: "il-chip" + (maxCal === v ? " on" : ""), onClick: () => setMaxCal(maxCal === v ? 0 : v) },
+                return (React.createElement("button", { key: k, className: "il-chip" + (rated === k ? " on" : ""), onClick: () => setRated(rated === k ? "" : k) },
                     l,
                     " \u00B7 ",
                     n));
-            }),
-            [30, 40, 50].map((v) => {
-                const n = all.filter((r) => r.m[1] >= v).length;
+            }))),
+            React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, [["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"], ["fish", "Fish"], ["veg", "No meat"]].map(([k, l]) => {
+                const n = all.filter((r) => {
+                    const t = (r.n + " " + r.ing.map((i) => i[2]).join(" ")).toLowerCase();
+                    if (k === "veg")
+                        return !/\b(chicken|beef|steak|mince|pork|bacon|lamb|turkey|duck|venison|ham|gammon|salmon|cod|tuna|prawn|shrimp|haddock|mackerel|sardine|anchov|sea bass|trout|halibut|crab|mussel|squid|scallop|chorizo|sausage|pepperoni|salami|prosciutto|pancetta|lardon|liver|brisket|sirloin|meatball|jerky|fish)/.test(t);
+                    const P = { chicken: /chicken/, beef: /\bbeef|steak|mince(?! turkey)|brisket|sirloin/,
+                        pork: /pork|bacon|sausage|chorizo|\bham\b|pancetta/, fish: /salmon|cod|tuna|haddock|prawn|mackerel|sea bass/ };
+                    return P[k].test(t);
+                }).length;
                 if (!n)
                     return null;
-                return (React.createElement("button", { key: "p" + v, className: "il-chip" + (minP === v ? " on" : ""), onClick: () => setMinP(minP === v ? 0 : v) },
-                    v,
-                    "g protein+ \u00B7 ",
+                return (React.createElement("button", { key: k, className: "il-chip" + (prot === k ? " on" : ""), onClick: () => setProt(prot === k ? "" : k) },
+                    l,
+                    " \u00B7 ",
                     n));
-            })),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } },
-            [[0, "No heat"], [1, "🌶 Warmth"], [2, "🌶🌶 A kick"], [3, "🌶🌶🌶 Hot"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (heat === v ? " on" : ""), onClick: () => setHeat(heat === v ? null : v) }, l))),
-            [["hot", "Served hot"], ["cold", "Served cold"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (temp === k ? " on" : ""), onClick: () => setTemp(temp === k ? "" : k) }, l)))),
-        Object.keys(st.ratings || {}).length > 2 && (React.createElement("div", { style: { padding: "6px 12px 0", display: "flex", gap: 7 } },
-            React.createElement("button", { className: "il-chip" + (sort === "rating" ? " on" : ""), onClick: () => setSort(sort === "rating" ? "" : "rating") }, "Best first"))),
-        Object.keys(st.ratings || {}).length > 0 && (React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, [["best", "17+ only"], ["good", "13 and up"], ["again", "Would cook again"],
-            ["any", "Rated"], ["none", "Not tried"], ["no", "Didn't like"]].map(([k, l]) => {
-            const n = all.filter((r) => {
-                const sc = rateAvg(st, r.n);
-                if (k === "any")
-                    return sc != null;
-                if (k === "none")
-                    return sc == null;
-                if (k === "best")
-                    return sc >= 17;
-                if (k === "good")
-                    return sc >= 13;
-                if (k === "again")
-                    return (ratingOf(st, r.n) || {}).again === true;
-                return sc != null && sc < 9;
-            }).length;
-            if (!n)
-                return null;
-            return (React.createElement("button", { key: k, className: "il-chip" + (rated === k ? " on" : ""), onClick: () => setRated(rated === k ? "" : k) },
-                l,
-                " \u00B7 ",
-                n));
-        }))),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 6 } }, [["chicken", "Chicken"], ["beef", "Beef"], ["pork", "Pork"], ["fish", "Fish"], ["veg", "No meat"]].map(([k, l]) => {
-            const n = all.filter((r) => {
-                const t = (r.n + " " + r.ing.map((i) => i[2]).join(" ")).toLowerCase();
-                if (k === "veg")
-                    return !/\b(chicken|beef|steak|mince|pork|bacon|lamb|turkey|duck|venison|ham|gammon|salmon|cod|tuna|prawn|shrimp|haddock|mackerel|sardine|anchov|sea bass|trout|halibut|crab|mussel|squid|scallop|chorizo|sausage|pepperoni|salami|prosciutto|pancetta|lardon|liver|brisket|sirloin|meatball|jerky|fish)/.test(t);
-                const P = { chicken: /chicken/, beef: /\bbeef|steak|mince(?! turkey)|brisket|sirloin/,
-                    pork: /pork|bacon|sausage|chorizo|\bham\b|pancetta/, fish: /salmon|cod|tuna|haddock|prawn|mackerel|sea bass/ };
-                return P[k].test(t);
-            }).length;
-            if (!n)
-                return null;
-            return (React.createElement("button", { key: k, className: "il-chip" + (prot === k ? " on" : ""), onClick: () => setProt(prot === k ? "" : k) },
-                l,
-                " \u00B7 ",
-                n));
-        })),
-        (meal || tags.length || maxMins || cupOnly || q || heat != null || temp || prot || rated || sort || maxCal || minP) && (React.createElement("div", { style: { padding: "10px 12px 0" } },
-            React.createElement("button", { className: "il-chip", onClick: () => { setMeal(""); setTags([]); setMaxMins(0); setCupOnly(false); setQ(""); setHeat(null); setTemp(""); setProt(""); setRated(""); setSort(""); setMaxCal(0); setMinP(0); setFavOnly(false); } }, "Clear all filters"))),
+            })))),
+        (meal || tags.length || maxMins || cupOnly || q || heat != null || temp || prot || rated || sort || maxCal || minP || src) && (React.createElement("div", { style: { padding: "10px 12px 0" } },
+            React.createElement("button", { className: "il-chip", onClick: () => { setMeal(""); setTags([]); setMaxMins(0); setCupOnly(false); setQ(""); setHeat(null); setTemp(""); setProt(""); setRated(""); setSort(""); setMaxCal(0); setSrc(""); setMinP(0); setFavOnly(false); } }, "Clear all filters"))),
         !list.length && React.createElement("div", { className: "il-empty" }, "Nothing matches all of that. Loosen one of the filters, or ask for something new below."),
         React.createElement("div", { style: { padding: "2px 12px 10px" } },
             React.createElement("button", { className: "il-btn g", onClick: () => {
@@ -15289,6 +15318,9 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
         const rec = { n: res.n, meal: res.meal || "dinner", cui: res.cui || "", mins: res.mins || 30,
             tags: deriveTags(res), serves: res.serves || 2, ing: res.ing || [], method: res.method || [],
             note: res.note || "", m: res.m || [0, 0, 0, 0], mine: true,
+            /* off a video is a different thing from off a card, and he wants them
+               kept apart */
+            via: fromVideo ? "video" : "photo",
             source: source.trim() || null, num: res.num ?? null, at: Date.now() };
         save({ ...st, myRecipes: [...(st.myRecipes || []), rec],
             recipePhotos: { ...(st.recipePhotos || {}), [rec.n]: imgs.slice(0, 2) } });
@@ -24874,8 +24906,12 @@ function AddFood({ st, save, a, today, close, setSheet }) {
     const [found, setFound] = useState(null);
     const mealFor = (t) => {
         const h = parseInt(String(t).slice(0, 2), 10);
-        return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snack";
+        return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
     };
+    /* null means "follow the clock". Pick one and it stays picked, even if you
+       then change the time — you have said what this was. */
+    const [meal, setMeal] = useState(null);
+    const theMeal = meal || mealFor(at);
     const put = (rows) => {
         const foods = [...(st.foods || [])];
         let i = foods.findIndex((x) => x.date === today);
@@ -24884,7 +24920,7 @@ function AddFood({ st, save, a, today, close, setSheet }) {
             i = foods.length - 1;
         }
         const add = rows.map((r) => ({ id: "u" + Date.now() + Math.random(), name: r.name,
-            meal: mealFor(at), at, kcal: Math.round(r.kcal || 0), p: Math.round(r.p || 0),
+            meal: theMeal, at, kcal: Math.round(r.kcal || 0), p: Math.round(r.p || 0),
             c: Math.round(r.c || 0), f: Math.round(r.f || 0), guessed: !!r.guessed }));
         foods[i] = { ...foods[i], entries: [...foods[i].entries, ...add] };
         save({ ...st, foods });
@@ -24923,7 +24959,7 @@ ${desc.trim()}`, 1200, "cheap");
     const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["search", "Search"],
         ["scan", "Scan a label"], ["mine", "Mine"]];
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "Add food", sub: `${mealFor(at)} · ${at}`, close: close }),
+        React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}`, close: close }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l)))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "When"),
@@ -24931,7 +24967,13 @@ ${desc.trim()}`, 1200, "cheap");
                 [clockOf(new Date(now.getTime() - 3 * 3600e3)), clockOf(new Date(now.getTime() - 3600e3)), clockOf(now)]
                     .map((t) => (React.createElement("button", { key: t, className: "il-chip" + (at === t ? " on" : ""), onClick: () => setAt(t) }, t))),
                 React.createElement("input", { className: "il-in", style: { width: 92, padding: "6px 8px", fontSize: 14 }, value: at, onChange: (e) => setAt(e.target.value), placeholder: "19:30" })),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, "The time decides which meal it lands in, so a late dinner does not turn up as a snack.")),
+            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which meal"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
+                MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + (theMeal === m ? " on" : ""), onClick: () => setMeal(m) }, m))),
+                meal && (React.createElement("button", { className: "il-chip", onClick: () => setMeal(null) }, "Follow the clock"))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, meal
+                ? `Logging this as ${meal} whatever the time says.`
+                : "The clock picks the meal — change it here if that's wrong.")),
         tab === "quick" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Straight off the packet"),
             React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, value: what, placeholder: "What was it?", onChange: (e) => setWhat(e.target.value) }),
