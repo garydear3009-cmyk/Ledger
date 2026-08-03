@@ -4894,7 +4894,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v238 · 3 Aug";
+const APP_VERSION = "v243 · 3 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5228,13 +5228,13 @@ function HomeLedgerInner() {
                 sub === "body"
                     ? React.createElement(Body, { st, save, a, today, setSheet })
                     : React.createElement(Train, { st, save, a, today, setSheet }))),
-            tab === "progress" && React.createElement(Progress, { a, setSheet }),
+            tab === "progress" && React.createElement(Progress, { st, a, today, setSheet }),
             tab === "settings" && React.createElement(Settings, { st, save, today, setSheet, health }),
             tab === "fuel" && React.createElement(Fuel, { st, save, a, today, setSheet }),
             tab === "you" && React.createElement(You, { st, save, a, today, setSheet, go }),
             tab === "coach" && React.createElement(CoachTab, { st, save, a, today, setSheet }),
             tab === "supps" && React.createElement(Supplements, { st, save, a, today, setSheet }),
-            React.createElement("nav", { className: "il-tabs" }, ["you", "coach", "train", "fuel", "supps", "progress", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : "") +
+            React.createElement("nav", { className: "il-tabs" }, ["you", "coach", "train", "progress", "fuel", "supps", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : "") +
                     (k === "train" && sub === "body" ? " on" : ""), onClick: () => { setTab(k); if (k !== "train")
                     setSub("train"); } },
                 React.createElement(Ico, { d: ICONS[k] }),
@@ -6221,14 +6221,72 @@ function readPhoto(file, maxW = 1100, quality = 0.85) {
    Photographs the nutrition panel and reads it. No barcode lookup —
    there's no product database behind this — but reading the panel
    works on anything, including own-brand and foreign packaging.      */
+/* ============ LOOKING A BARCODE UP ============
+   Open Food Facts is a public database with no key and no sign-up. It knows
+   most branded food sold in the UK and Europe. If it is offline, or the
+   product is not in it, the photo of the panel is still the answer. */
+const OFF_URL = "https://world.openfoodfacts.org/api/v2/product/";
+const cleanBarcode = (x) => String(x || "").replace(/\D/g, "");
+function offFood(p) {
+    const n = p && p.nutriments;
+    if (!n)
+        return null;
+    const num = (k) => (typeof n[k] === "number" && isFinite(n[k]) ? n[k] : null);
+    /* per 100 is what we store; the API gives kJ when it has no kcal */
+    let kcal = num("energy-kcal_100g");
+    if (kcal == null && num("energy_100g") != null)
+        kcal = Math.round(num("energy_100g") / 4.184);
+    const prot = num("proteins_100g"), carb = num("carbohydrates_100g"), fat = num("fat_100g");
+    if (kcal == null || prot == null)
+        return null;
+    const servRaw = String(p.serving_size || "");
+    const m = servRaw.match(/([\d.]+)\s*(g|ml)/i);
+    const isMl = /ml/i.test(servRaw) || /\bml\b/i.test(p.quantity || "");
+    return {
+        name: [p.brands ? String(p.brands).split(",")[0].trim() : "", p.product_name || ""]
+            .filter(Boolean).join(" ").trim() || "Scanned product",
+        kcal: Math.round(kcal), p: Math.round(prot * 10) / 10,
+        c: carb == null ? 0 : Math.round(carb * 10) / 10, f: fat == null ? 0 : Math.round(fat * 10) / 10,
+        serv: m ? Math.round(Number(m[1])) : 100,
+        unit: isMl ? "ml" : "g",
+        servLabel: /bar/i.test(p.product_name || "") ? "bar" : m ? "serving" : "portion",
+        from: "the food database",
+    };
+}
+async function lookupBarcode(code, fetcher) {
+    const c = cleanBarcode(code);
+    if (c.length < 8 || c.length > 14)
+        throw new Error("That is not a barcode.");
+    const get = fetcher || ((u) => fetch(u));
+    const r = await get(OFF_URL + c + ".json?fields=product_name,brands,quantity,serving_size,nutriments");
+    if (!r || !r.ok)
+        throw new Error("Couldn't reach the food database.");
+    const j = await r.json();
+    if (!j || j.status !== 1 || !j.product)
+        throw new Error("That barcode isn't in the database.");
+    const f = offFood(j.product);
+    if (!f)
+        throw new Error("That product is in the database but has no nutrition on it.");
+    return { ...f, barcode: c };
+}
 const LABEL_PROMPT = `You are reading a food nutrition information panel from a photograph.
 
 Return ONLY a JSON object. No markdown fences, no explanation, no preamble.
 
+Before anything else: the photo may be of a wrapper rather than a flat label, so the panel can be
+sideways, upside down, curved or creased. Read it whichever way up it is. Panels sold across Europe
+often repeat every heading in two or three languages — Energi/Energy, Fedt/Fett/Fat,
+Protein, Kulhydrat/Karbohydrater/Carbohydrates — and that is one panel, not several.
+
 Keys:
   "name": product name if legible on the pack, otherwise a short plain description of the food. String.
+  "barcode": the digits under the barcode if any are legible, as a string of digits only, else null.
+      Read them carefully; one wrong digit is a different product entirely.
   "per100": { "kcal": number, "protein": number, "carbs": number, "fat": number }
       These MUST be the per 100g or per 100ml column, not the per-serving column.
+      A wrapper usually prints both, side by side, with the per-100 column first and the serving
+      column headed "per portion", "1 portion" or "per bar". Take the first column and put the
+      serving column's size in "serving".
       If the panel only gives per-serving values, convert them to per 100 using the stated serving size.
       Use the kcal figure, never the kJ figure. If only kJ is shown, divide by 4.184.
       Use total Carbohydrate, not "of which sugars". Use total Fat, not "of which saturates".
@@ -6251,6 +6309,33 @@ function ScanLabel({ st, save, today, close, setSheet }) {
     const [big, setBig] = useState(false);
     const [form, setForm] = useState({ name: "", kcal: "", p: "", c: "", f: "", serv: 100, servLabel: "portion", unit: "g" });
     const file = useRef(null);
+    const [found, setFound] = useState(""); // where these numbers came from
+    const [code, setCode] = useState(""); // a barcode typed in by hand
+    const fill = (f, from) => {
+        setForm({ name: f.name, kcal: String(f.kcal), p: String(f.p), c: String(f.c), f: String(f.f),
+            serv: f.serv, servLabel: f.servLabel, unit: f.unit });
+        setFound(from);
+        setRes({ confidence: "high", notes: "" });
+        setStage("check");
+    };
+    /* Typing the digits beats the camera on a creased wrapper more often than
+       you would think, and it is the same lookup either way. */
+    const byCode = async (raw) => {
+        const c = cleanBarcode(raw);
+        if (c.length < 8) {
+            setNote("A barcode is at least eight digits.");
+            return;
+        }
+        setNote("");
+        setStage("reading");
+        try {
+            fill(await lookupBarcode(c), "the food database");
+        }
+        catch (e) {
+            setNote(e.message || String(e));
+            setStage("start");
+        }
+    };
     const take = async (e) => {
         const f = e.target.files?.[0];
         if (!f)
@@ -6275,6 +6360,15 @@ function ScanLabel({ st, save, today, close, setSheet }) {
                 { type: "text", text: LABEL_PROMPT },
             ], 1000, "cheap");
             const j = looseJson(txt);
+            /* If it could read the barcode, the database beats anything read off a
+               creased wrapper, and it gets the product's proper name. */
+            if (j && j.barcode && cleanBarcode(j.barcode).length >= 8) {
+                try {
+                    fill(await lookupBarcode(j.barcode), "the food database, from the barcode");
+                    return;
+                }
+                catch { /* not in it, or no signal — carry on with what was read */ }
+            }
             if (!j)
                 throw new Error("The reply didn't make sense.");
             setRes(j);
@@ -6340,13 +6434,17 @@ function ScanLabel({ st, save, today, close, setSheet }) {
     })();
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Scan a label", sub: stage === "check" ? "Check these against the pack" : "Point it at the nutrition table", close: close }),
-        React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
         stage === "start" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Photograph the nutrition table"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, "The grid on the back with Energy, Fat, Carbohydrate and Protein down the side. Not the barcode \u2014 there's no product database behind this, so a barcode number tells me nothing on its own."),
                 note && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginBottom: 12 } }, note),
-                React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Open the camera")),
+                React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Open the camera"),
+                React.createElement("div", { className: "il-fld", style: { marginTop: 10 } },
+                    React.createElement("input", { className: "il-in il-n", style: { textAlign: "left", flex: 1 }, inputMode: "numeric", placeholder: "or type the barcode digits", value: code, onChange: (e) => setCode(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                            byCode(code); } }),
+                    React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: cleanBarcode(code).length < 8, onClick: () => byCode(code) }, "Look it up")),
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "The digits under the barcode. Most branded food is in a free public database, which is quicker and steadier than reading a creased wrapper.")),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Getting a clean read"),
                 ["Fill the frame with the table. Closer beats straighter.",
@@ -6361,6 +6459,11 @@ function ScanLabel({ st, save, today, close, setSheet }) {
                 React.createElement("img", { src: shot, alt: "", style: { width: "100%", borderRadius: 12, display: "block", opacity: 0.45 } })),
             React.createElement("div", { className: "il-empty" }, "Reading the label\u2026")),
         stage === "check" && React.createElement(React.Fragment, null,
+            found && (React.createElement("div", { className: "il-note", style: { fontSize: 12, padding: "0 14px 8px", color: "var(--grn)" } },
+                "Numbers from ",
+                found,
+                ". Worth a glance against the pack \u2014 a database entry can be out of date.")),
+            React.createElement("input", { ref: file, type: "file", accept: "image/*", style: { display: "none" }, onChange: take }),
             shot && React.createElement("div", { style: { padding: "12px 12px 0" } },
                 React.createElement("img", { src: shot, alt: "", onClick: () => setBig(!big), style: { width: "100%", borderRadius: 12, display: "block", maxHeight: big ? "none" : 240, objectFit: big ? "contain" : "cover" } }),
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 6 } },
@@ -8310,6 +8413,29 @@ ${JSON.stringify(snapshot(), null, 1)}
 let API_KEY = null;
 const setApiKey = (k) => { API_KEY = k || null; };
 /* ============ FOOD ON SCALES ============ */
+/* What is left in the day, handed to the plate reader so it can say something
+   useful while the food is still in front of you rather than after. */
+function gapNote(st, today) {
+    const P = st.profile || {};
+    const f = (st.foods || []).find((x) => x.date === today);
+    const had = (f && f.entries || []).reduce((a2, e) => ({
+        k: a2.k + (e.kcal || 0), p: a2.p + (e.p || 0), c: a2.c + (e.c || 0), f: a2.f + (e.f || 0),
+    }), { k: 0, p: 0, c: 0, f: 0 });
+    const kt = (P.proteinTarget || 0) * 4 + (P.carbTarget || 0) * 4 + (P.fatTarget || 0) * 9;
+    if (!kt)
+        return "";
+    return `
+
+=== WHERE THEIR DAY IS, BEFORE THIS PLATE ===
+Logged so far: ${Math.round(had.k)} calories, ${Math.round(had.p)}g protein.
+Targets: ${Math.round(kt)} calories, ${P.proteinTarget}g protein, ${P.carbTarget}g carbs, ${P.fatTarget}g fat.
+Left: ${Math.max(0, Math.round(kt - had.k))} calories and ${Math.max(0, Math.round((P.proteinTarget || 0) - had.p))}g protein.
+
+Add one more field to the JSON: "advice" — one sentence on what to do about THIS plate given that,
+while they can still act on it. Name the change and the amount: another hundred grams of the chicken,
+half the rice, a pot of skyr after. If the plate already fits the day, say so plainly rather than
+inventing a change. If they have not logged anything today, leave "advice" out.`;
+}
 const SCALE_PROMPT = `You are looking at a photograph of food, usually sitting on a kitchen scale.
 
 Return ONLY a JSON object. No markdown fences, no preamble.
@@ -8423,7 +8549,7 @@ function ScalePhoto({ st, save, today, close }) {
         try {
             const txt = await callClaude([
                 { type: "image", source: { type: "base64", media_type: mediaTypeOf(url), data: url.split(",")[1] } },
-                { type: "text", text: SCALE_PROMPT },
+                { type: "text", text: SCALE_PROMPT + gapNote(st, today) },
             ], 1200, "cheap");
             const j = looseJson(txt);
             if (!j || !Array.isArray(j.items) || !j.items.length)
@@ -8494,7 +8620,10 @@ function ScalePhoto({ st, save, today, close }) {
                         "scale said ",
                         res.scaleReading,
                         res.scaleUnit || "g")),
-                res.notes && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, color: "#B9CBEC" } }, res.notes))),
+                res.notes && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, color: "#B9CBEC" } }, res.notes),
+                res.advice && (React.createElement("div", { style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 5 } }, "While you can still do something about it"),
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 14.5, lineHeight: 1.45 } }, res.advice))))),
             rows.map((r, i) => (React.createElement("div", { key: i, className: "il-card", style: { opacity: r.on ? 1 : 0.45 } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                     React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1, marginRight: 8 }, value: r.name, onChange: (e) => setRows(rows.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
@@ -12215,7 +12344,7 @@ Return ONLY JSON, no fences:
   "asks": ["up to 2 questions"]
 }`;
 /* pull evenly spaced frames out of a video, in the browser */
-function videoFrames(file, n = 6, maxW = 900) {
+function videoFrames(file, n = 6, maxW = 900, maxSec = 45) {
     return new Promise((ok, no) => {
         const url = URL.createObjectURL(file);
         const v = document.createElement("video");
@@ -12231,9 +12360,11 @@ function videoFrames(file, n = 6, maxW = 900) {
                 URL.revokeObjectURL(url);
                 return no(new Error("Couldn't read how long that video is."));
             }
-            if (dur > 45) {
+            if (dur > maxSec) {
                 URL.revokeObjectURL(url);
-                return no(new Error("That's over 45 seconds. A single set is plenty — trim it and try again."));
+                return no(new Error(maxSec > 60
+                    ? `That's over ${Math.round(maxSec / 60)} minutes. Trim it to the cooking part and try again.`
+                    : "That's over 45 seconds. A single set is plenty — trim it and try again."));
             }
             const times = Array.from({ length: n }, (_, i) => (dur * (i + .5)) / n);
             let i = 0;
@@ -15002,6 +15133,14 @@ nutrition table is split the same way. Read the 2-portion column and set "serves
 photo makes clear they want otherwise. Take the nutrition from the matching panel. Do not mix a
 2-portion ingredient list with 4-portion nutrition — say in "unsure" which column you used.
 
+WHEN THE PHOTOS ARE FRAMES FROM A VIDEO
+They are stills taken at even intervals through a cooking clip, in order. Read the on-screen text as
+much as the pictures: these videos usually caption each ingredient as it goes in. Work out the
+amounts from what is written on screen. If an amount is never shown — only said aloud, which you
+cannot hear — put your best estimate in and say in "unsure" which ones you estimated and that they
+were not on screen. Never present an estimate as though it were printed.
+A video rarely gives a nutrition panel. Estimate the macros from the ingredients and say so.
+
 Return ONLY JSON, no fences. "recipes" is a list — one entry per distinct recipe in the photos, in
 the order they appear. Most of the time it has one entry.
 {
@@ -15040,6 +15179,8 @@ but "chicken flattened" becomes "Flatten the chicken". Never merge two of the ca
 function AddRecipe({ st, save, a, today, close, setSheet }) {
     const pool = [...FOODS, ...(st.myFoods || [])];
     const [imgs, setImgs] = useState([]);
+    const [fromVideo, setFromVideo] = useState(false);
+    const vidRef = useRef(null);
     const [stage, setStage] = useState("in");
     const [res, setRes] = useState(null);
     const [err, setErr] = useState("");
@@ -15063,6 +15204,25 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             setErr("Couldn't read one of those.");
         }
     };
+    /* A recipe video is a card that arrives a frame at a time. Ten stills across
+       the clip catch each ingredient as it is captioned on screen. */
+    const addClip = async (e) => {
+        const f = (e.target.files || [])[0];
+        e.target.value = "";
+        if (!f)
+            return;
+        setErr("");
+        try {
+            const frames = await videoFrames(f, 10, 1000, 240);
+            if (!frames.length)
+                throw new Error("Nothing came out of that video.");
+            setImgs(frames.slice(0, 10));
+            setFromVideo(true);
+        }
+        catch (x) {
+            setErr(x.message || String(x));
+        }
+    };
     const go = async () => {
         if (!imgs.length)
             return;
@@ -15071,7 +15231,9 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
         try {
             const content = [
                 ...imgs.map((u) => ({ type: "image", source: { type: "base64", media_type: mediaTypeOf(u), data: u.split(",")[1] } })),
-                { type: "text", text: `${READ_RECIPE}${imgs.length > 1 ? "\n\nThe photos are pages of the same recipe, in order." : ""}` },
+                { type: "text", text: `${READ_RECIPE}${fromVideo
+                        ? "\n\nThese are frames taken at even intervals through a cooking video, in order."
+                        : imgs.length > 1 ? "\n\nThe photos are pages of the same recipe, in order." : ""}` },
             ];
             const txt = await callClaude(content, 3000, "mid");
             const j = looseJson(txt);
@@ -15151,7 +15313,9 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
                 React.createElement("div", { className: "il-note", style: { color: "#A8D8BC", marginTop: 10 } }, "Meal-kit books like Slimming World put the nutrition on its own page in a table. Photograph both \u2014 the recipe card and that table \u2014 and she'll match the recipe number to the right row.")),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: add }),
-                React.createElement("button", { className: "il-btn g", disabled: imgs.length >= 4, onClick: () => fileRef.current?.click() }, imgs.length >= 4 ? "Four is the most she can read at once"
+                React.createElement("input", { type: "file", accept: "video/*", ref: vidRef, style: { display: "none" }, onChange: addClip }),
+                React.createElement("button", { className: "il-btn g", onClick: () => vidRef.current?.click() }, fromVideo ? `Use a different video · ${imgs.length} frames` : "Read it off a video"),
+                React.createElement("button", { className: "il-btn g", disabled: imgs.length >= 4 && !fromVideo, onClick: () => { setFromVideo(false); fileRef.current?.click(); } }, imgs.length >= 4 ? "Four is the most she can read at once"
                     : imgs.length ? `Add another page · ${imgs.length} of 4` : "Photograph the recipe")),
             imgs.length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
@@ -21358,7 +21522,7 @@ function MeasChart({ meas }) {
         React.createElement("div", { className: "il-scroll", style: { padding: "10px 0 0" } }, SITES.map((s) => React.createElement("button", { key: s.id, className: "il-chip" + (site === s.id ? " on" : ""), onClick: () => setSite(s.id) }, s.label)))));
 }
 /* ---------------- PROGRESS ---------------- */
-function Progress({ a, setSheet }) {
+function Progress({ st, a, today, setSheet }) {
     const [view, setView] = useState("lift");
     const [grp, setGrp] = useState("all");
     const [q, setQ] = useState("");
@@ -21368,6 +21532,23 @@ function Progress({ a, setSheet }) {
         .filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase()))
         .sort((x, y) => sort === "change" ? ((y.change ?? -999) - (x.change ?? -999)) : x.name.localeCompare(y.name));
     return (React.createElement(React.Fragment, null,
+        (() => {
+            const w = weekPicture(st, a, today);
+            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "week" }) },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "This week"),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+                    React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: w.sessions >= w.target ? "var(--grn)" : "var(--txt)" } },
+                        w.sessions,
+                        React.createElement("span", { style: { fontSize: 20, color: "var(--faint)" } },
+                            "/",
+                            w.target)),
+                    React.createElement("div", { className: "il-hatch" + (w.sessions >= w.target ? " grn" : "") }, Array.from({ length: Math.max(w.target, w.sessions) }, (_, i) => (React.createElement("i", { key: i, className: i < w.sessions ? "on" : "" }))))),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 10 } }, weekLine(w))));
+        })(),
+        React.createElement("div", { style: { padding: "0 12px 4px" } },
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "askme" }) }, "Ask about your own training")),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["lift", "By exercise"], ["when", "What helps"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (view === k ? " on" : ""), onClick: () => setView(k) }, l)))),
         view === "lift" && (React.createElement(React.Fragment, null,
             React.createElement("div", { style: { padding: "12px 12px 0" } },
@@ -21912,6 +22093,213 @@ const ALLQ = CHAPTERS.flatMap((c) => c.qs.map((q) => ({ ...q, chapter: c.id, cha
 const has = (v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
 const answered = (P) => ALLQ.filter((q) => has(P[q.k])).length;
 /* ---- the priority engine ---- */
+/* ============ THE MORNING READ ============
+   Facts first, worded second. Everything below is arithmetic on the log, so
+   two people looking at the same data get the same read, and the sentence
+   the coach writes can be checked against it. */
+/* ============ ASKING YOUR OWN LOG ============
+   Two years of sessions will not fit in a prompt. Read the question, work
+   out which slice of the log it is about, and send that. If nothing in the
+   question matches anything logged, say so rather than sending everything
+   and hoping. */
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december"];
+/* which exercises, months and foods the question is about */
+function askScope(st, q, a) {
+    const t = String(q || "").toLowerCase();
+    /* Exercise names lead with the kit — "Dumbbell bench press" — so matching the
+       first word finds nothing for "benching". Score every word of every name
+       against the question instead, as a stem, and take what he has actually
+       logged over what he has not. */
+    const words = t.replace(/[^a-z ]+/g, " ").split(" ").filter((w) => w.length > 3);
+    const exs = EX.map((e) => {
+        const n = e.name.toLowerCase();
+        if (t.includes(n))
+            return { e, score: 100 };
+        const parts = n.split(/[^a-z]+/).filter((x) => x.length > 3);
+        let score = 0;
+        parts.forEach((pt) => {
+            words.forEach((w) => {
+                if (w === pt)
+                    score += 10;
+                else if (w.startsWith(pt) && w.length - pt.length <= 3)
+                    score += 8; // benching → bench
+                else if (pt.startsWith(w) && pt.length - w.length <= 3)
+                    score += 6; // curl → curls
+            });
+        });
+        if (!score)
+            return null;
+        /* what he has done beats what he has not, and a plain name beats a variant */
+        const logged = ((a || {}).byEx || {})[e.id];
+        return { e, score: score + (logged ? Math.min(12, logged.length) : 0) - e.name.length / 12 };
+    }).filter(Boolean).sort((x, y) => y.score - x.score).slice(0, 4).map((x) => x.e);
+    const months = MONTHS.map((m, i) => (t.includes(m) ? i : -1)).filter((x) => x >= 0);
+    const wantsFood = /\b(eat|ate|food|protein|carbs|calor|meal|diet)\b/.test(t);
+    const wantsWeight = /\b(weigh|weight|heavier|lighter|lost|gained|stone|kg)\b/.test(t);
+    const wantsMissed = /\b(skip|skipped|miss|missed|stopped|gap)\b/.test(t);
+    return { exs, months, wantsFood, wantsWeight, wantsMissed };
+}
+/* the slice itself, small enough to send and specific enough to answer from */
+function historyDigest(st, a, q) {
+    const sc = askScope(st, q, a);
+    const inMonth = (date) => !sc.months.length || sc.months.includes(new Date(date + "T12:00:00").getMonth());
+    const out = { asked: q };
+    if (sc.exs.length) {
+        out.exercises = sc.exs.map((e) => {
+            const hist = (a.byEx || {})[e.id] || [];
+            const rows = hist.filter((h) => inMonth(h.date)).slice(-40);
+            return {
+                name: e.name, sessions: hist.length,
+                best: hist.length ? Math.max(...hist.map((h) => Math.round(h.top))) : null,
+                sets: rows.map((h) => ({ date: h.date, top: Math.round(h.top),
+                    best: h.best ? (h.best.w + "kg x " + h.best.reps) : null })),
+            };
+        });
+    }
+    const fin = (st.sessions || []).filter((x) => x.finished && inMonth(x.date));
+    out.sessions = { total: (st.sessions || []).filter((x) => x.finished).length, inRange: fin.length,
+        recent: fin.slice(-25).map((x) => ({ date: x.date, name: x.routineName || "session",
+            sets: (x.exercises || []).reduce((n, e) => n + (e.sets || []).filter((s2) => !s2.warm).length, 0) })) };
+    if (sc.wantsMissed) {
+        /* the gaps, which is what "how often have I skipped" actually asks */
+        const dates = fin.map((x) => x.date).sort();
+        const gaps = [];
+        for (let i = 1; i < dates.length; i++) {
+            const n = Math.round((new Date(dates[i] + "T12:00:00") - new Date(dates[i - 1] + "T12:00:00")) / 864e5);
+            if (n >= 4)
+                gaps.push({ from: dates[i - 1], to: dates[i], days: n });
+        }
+        out.gaps = gaps.slice(-12);
+    }
+    if (sc.wantsFood) {
+        const days = (st.foods || []).filter((f) => (f.entries || []).length && inMonth(f.date)).slice(-30);
+        out.food = { target: (st.profile || {}).proteinTarget || null,
+            days: days.map((f) => ({ date: f.date,
+                kcal: Math.round(f.entries.reduce((x, e) => x + (e.kcal || 0), 0)),
+                p: Math.round(f.entries.reduce((x, e) => x + (e.p || 0), 0)) })) };
+    }
+    if (sc.wantsWeight || sc.months.length) {
+        out.weights = (st.weights || []).filter((w) => inMonth(w.date)).slice(-40)
+            .map((w) => ({ date: w.date, kg: w.kg }));
+    }
+    /* did we actually find anything to answer from? */
+    const hasEx = (out.exercises || []).some((e) => e.sets.length);
+    out.empty = !hasEx && !out.sessions.inRange && !(out.food && out.food.days.length) && !(out.weights || []).length;
+    return out;
+}
+/* ============ THE WEEK IN ONE PICTURE ============ */
+function weekPicture(st, a, today) {
+    const start = weekStart(today);
+    const P = st.profile || {};
+    const fin = (st.sessions || []).filter((x) => x.finished && x.date >= start);
+    const sets = fin.reduce((n, s2) => n + (s2.exercises || []).reduce((m, e) => m + (e.sets || []).filter((q) => !q.warm).length, 0), 0);
+    const vol = fin.reduce((n, s2) => n + sessVol(s2), 0);
+    const days = (st.foods || []).filter((f) => f.date >= start && (f.entries || []).length);
+    const hit = days.filter((f) => f.entries.reduce((x, e) => x + (e.p || 0), 0) >= (P.proteinTarget || 0) * 0.9).length;
+    const ws = (st.weights || []).filter((w) => w.date >= start).map((w) => w.kg);
+    const prev = (st.weights || []).filter((w) => w.date < start).slice(-3).map((w) => w.kg);
+    const wNow = ws.length ? ws[ws.length - 1] : null;
+    const wWas = prev.length ? prev.reduce((x, y) => x + y, 0) / prev.length : null;
+    const target = Number(P.daysWk) || 3;
+    return {
+        start, sessions: fin.length, target, sets, volume: Math.round(vol),
+        foodDays: days.length, proteinHit: hit,
+        weight: wNow, weightWas: wWas != null ? Math.round(wWas * 10) / 10 : null,
+        weightMove: wNow != null && wWas != null ? Math.round((wNow - wWas) * 10) / 10 : null,
+        names: fin.map((x) => x.routineName || "session"),
+    };
+}
+/* one honest sentence about the week, written by the app */
+function weekLine(w) {
+    if (!w.sessions && !w.foodDays)
+        return "Nothing logged this week.";
+    const bits = [];
+    bits.push(w.sessions >= w.target
+        ? (w.sessions + " sessions, which is the week done.")
+        : (w.sessions + " of " + w.target + " sessions."));
+    if (w.sets)
+        bits.push(w.sets + " working sets.");
+    if (w.foodDays)
+        bits.push("Protein hit on " + w.proteinHit + " of the " + w.foodDays + " days you logged.");
+    if (w.weightMove != null && Math.abs(w.weightMove) >= 0.3) {
+        bits.push("Weight " + (w.weightMove > 0 ? "up" : "down") + " " + Math.abs(w.weightMove) + "kg on the last few readings.");
+    }
+    return bits.join(" ");
+}
+function morningFacts(st, a, today) {
+    const P = st.profile || {};
+    const d = (n) => iso(new Date(new Date(today + "T12:00:00").getTime() - n * 864e5));
+    /* training */
+    const done = (st.sessions || []).filter((x) => x.finished);
+    const last = [...done].reverse().find((x) => (x.exercises || []).length) || null;
+    const daysSince = last ? Math.round((new Date(today + "T12:00:00") - new Date(last.date + "T12:00:00")) / 864e5) : null;
+    const wkStart = weekStart(today);
+    const thisWeek = done.filter((x) => x.date >= wkStart).length;
+    const target = Number(P.daysWk) || 3;
+    /* food — the last three full days, today excluded, it has barely started */
+    const prot = [1, 2, 3].map((n) => {
+        const f = (st.foods || []).find((x) => x.date === d(n));
+        if (!f || !(f.entries || []).length)
+            return null;
+        return Math.round(f.entries.reduce((x, e) => x + (e.p || 0), 0));
+    });
+    const logged = prot.filter((x) => x != null);
+    const shortOn = logged.filter((x) => x < (P.proteinTarget || 0) * 0.85).length;
+    /* sleep and how they felt, from the last check-in */
+    const chk = [...done].reverse().map((x) => x.checkin).find(Boolean) || null;
+    /* weight */
+    const ws = [...(st.weights || [])].sort((x, y) => x.date.localeCompare(y.date));
+    const recent = ws.slice(-8).map((x) => x.kg);
+    const wMove = recent.length >= 4
+        ? Math.round((recent.slice(-3).reduce((x, y) => x + y, 0) / 3
+            - recent.slice(0, 3).reduce((x, y) => x + y, 0) / 3) * 10) / 10
+        : null;
+    /* what is due */
+    const prog = programState(st, today);
+    const nextUp = prog && prog.next && prog.next.routine ? prog.next.routine.name : null;
+    const restDay = daysSince === 0;
+    return {
+        lastName: last ? (last.routineName || "a session") : null, daysSince, restDay,
+        thisWeek, target, behind: thisWeek < target && new Date(today + "T12:00:00").getDay() >= 4,
+        proteinTarget: P.proteinTarget || null, protein: prot, shortOn, loggedDays: logged.length,
+        sleep: chk ? chk.sleep ?? null : null, feel: chk ? chk.feel ?? null : null,
+        sore: chk ? chk.sore || null : null, readiness: chk ? readinessScore(chk) : null,
+        weightMove: wMove, weighDays: ws.length ? Math.round((new Date(today + "T12:00:00") - new Date(ws[ws.length - 1].date + "T12:00:00")) / 864e5) : null,
+        nextUp, goal: P.goal || "muscle",
+    };
+}
+/* The app own version, used when there is no key or the coach cannot be
+   reached. Deliberately plain: two or three things that are true today. */
+function morningLine(f) {
+    const bits = [];
+    if (f.daysSince === 0)
+        bits.push(`You trained today already.`);
+    else if (f.daysSince === 1)
+        bits.push(`${f.lastName} yesterday.`);
+    else if (f.daysSince != null && f.daysSince <= 4)
+        bits.push(`Last session was ${f.daysSince} days ago.`);
+    else if (f.daysSince != null)
+        bits.push(`Nothing logged for ${f.daysSince} days.`);
+    else
+        bits.push("Nothing logged yet.");
+    if (f.sleep != null && f.sleep < 6.5)
+        bits.push(`You slept ${f.sleep} hours.`);
+    if (f.shortOn >= 2 && f.proteinTarget)
+        bits.push(`Protein short ${f.shortOn} of the last ${f.loggedDays} days.`);
+    else if (f.loggedDays === 0)
+        bits.push("Nothing logged for food this week.");
+    if (f.behind)
+        bits.push(`${f.thisWeek} of ${f.target} sessions with the week most of the way gone.`);
+    /* one thing to do, chosen by what is most out of place */
+    const call = f.daysSince === 0 ? "Eat properly and leave it there."
+        : f.sleep != null && f.sleep < 6 ? "Train if you want to, but keep it short and leave the heavy work."
+            : f.shortOn >= 2 ? "Get the protein in early today rather than chasing it tonight."
+                : f.nextUp ? `${f.nextUp} is next up.`
+                    : f.daysSince != null && f.daysSince >= 3 ? "A session today would put the week right."
+                        : "Carry on as you are.";
+    return { text: bits.join(" "), call };
+}
 function coachRead(st, a) {
     const P = st.profile, T = targets(P, a.maint || estMaint(P));
     const out = [];
@@ -22046,6 +22434,21 @@ function You({ st, save, a, today, setSheet, go }) {
     const doneIds = acts.filter((x) => x.status === "done").map((x) => x.id);
     const prev = acts.filter((x) => (Date.now() - new Date(x.date).getTime()) / 864e5 > 5);
     return (React.createElement(React.Fragment, null,
+        (() => {
+            /* The one thing on this screen you did not have to ask for. Mornings
+               only — by the afternoon you know how the day is going. */
+            if (new Date().getHours() >= 12)
+                return null;
+            const f = morningFacts(st, a, today);
+            const own = morningLine(f);
+            const said = (st.morning || {}).date === today ? st.morning : null;
+            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer", borderLeft: "3px solid var(--tint)" }, onClick: () => setSheet({ t: "morning" }) },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
+                    React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "This morning"),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
+                React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.5 } }, said ? said.read : own.text),
+                React.createElement("div", { className: "il-dh", style: { fontSize: 14, marginTop: 10, color: "var(--tint)" } }, said && said.call ? said.call : own.call)));
+        })(),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "records" }) }, "All my measurements"),
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "sides" }) }, "Left and right"),
@@ -22812,6 +23215,9 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "sides" && React.createElement(SidesSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "meas" && React.createElement(MeasSheet, { st, save, close, setSheet }),
             sheet.t === "photos" && React.createElement(Photos, { st, save, close }),
+            sheet.t === "askme" && React.createElement(AskHistory, { st, save, a, today, close, setSheet }),
+            sheet.t === "week" && React.createElement(WeekPicture, { st, a, today, close, setSheet }),
+            sheet.t === "morning" && React.createElement(MorningSheet, { st, save, a, today, close, setSheet }),
             sheet.t === "targets" && React.createElement(TargetSheet, { st, save, a, close, setSheet }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
@@ -24819,6 +25225,7 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
                 React.createElement("div", { className: "il-n", style: { fontSize: 13.5 } }, Math.round(f.kcal * f.serv / 100)),
                 React.createElement("div", { className: "il-sub", style: { fontSize: 10.5 } }, f.servLabel)))))),
         React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("button", { className: "il-btn", style: { marginBottom: 8 }, onClick: () => setScan(true) }, "Scan the barcode or the label"),
             React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed"),
             React.createElement("button", { className: "il-btn g", style: { marginTop: 8 }, onClick: () => setScan(true) }, "Scan the label instead")));
 }
@@ -25131,6 +25538,182 @@ const fmtHtu = (cm, u) => { if (u.ht !== "ftin")
     return `${Math.round(cm)} cm`; const t = cm * INCH, f = Math.floor(t / 12); return `${f}ft ${Math.round(t - f * 12)}in`; };
 /* Where the daily numbers come from, and how to disagree with them. They were
    worked out from your profile and there was nowhere to change them. */
+/* The read in full, with the facts it was built from underneath it. If the
+   coach has written a version it sits on top; the app's own is always there,
+   so the screen works with no key and no signal. */
+/* Ask your own log a question. What makes it work is the digest: the few
+   hundred lines that bear on what was asked, rather than everything. */
+function AskHistory({ st, save, a, today, close, setSheet }) {
+    const [q, setQ] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [chat, setChat] = useState([]);
+    const [err, setErr] = useState("");
+    const ask = async (preset) => {
+        const text = String(preset || q).trim();
+        if (!text || busy)
+            return;
+        setQ("");
+        setErr("");
+        setBusy(true);
+        setChat((c) => [...c, { me: true, text }]);
+        const dig = historyDigest(st, a, text);
+        if (dig.empty) {
+            setChat((c) => [...c, { text: "There's nothing in your log about that. Either it hasn't been logged, or I've misread which part of it you meant — try naming the exercise or the month." }]);
+            setBusy(false);
+            return;
+        }
+        try {
+            const out = await callClaude(`${COACH_BRIEF}
+
+They have asked a question about their own training history. Answer it from the data below and
+nothing else. Give the actual numbers and dates. If the data does not answer the question, say what
+is missing rather than guessing — never fill a gap with a plausible number.
+Three or four sentences. No JSON.
+
+=== WHAT THEY ASKED ===
+${text}
+
+=== THEIR LOG, THE PART THAT BEARS ON IT ===
+${JSON.stringify(dig)}`, 900, "mid");
+            setChat((c) => [...c, { text: String(out || "").trim() }]);
+        }
+        catch (e) {
+            setErr(e.message || String(e));
+        }
+        setBusy(false);
+    };
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Ask about your own training", sub: "It answers from your log, not from the internet", close: close }),
+        chat.length === 0 && (React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 13.5, marginBottom: 12 } },
+                "Everything you have logged is here \u2014 ",
+                (st.sessions || []).filter((x) => x.finished).length,
+                " sessions,",
+                " ",
+                (st.weights || []).length,
+                " weigh-ins, ",
+                (st.foods || []).length,
+                " days of food. Ask it anything about your own numbers and it will answer from those rather than from what usually happens."),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, ["What was I benching in June?", "How often have I skipped legs?",
+                "What did I eat the week my weight dropped?", "Which exercise has moved most?",
+                "How much have I trained this month?"].map((x) => (React.createElement("button", { key: x, className: "il-chip", onClick: () => ask(x) }, x)))))),
+        chat.map((m, i) => (React.createElement("div", { key: i, className: "il-card", style: { borderLeft: m.me ? "3px solid var(--tint)" : undefined } }, m.me ? React.createElement("div", { className: "il-dh", style: { fontSize: 14.5 } }, m.text)
+            : React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" } }, m.text)))),
+        busy && React.createElement("div", { className: "il-empty" }, "Reading your log\u2026"),
+        err && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, padding: "0 14px", color: "var(--red)" } }, err),
+        React.createElement("div", { style: { padding: "8px 12px 0" } },
+            React.createElement("div", { className: "il-fld" },
+                React.createElement("input", { className: "il-in", style: { textAlign: "left", flex: 1 }, placeholder: "Ask about your own training\u2026", value: q, enterKeyHint: "send", onChange: (e) => setQ(e.target.value), onKeyDown: (e) => { if (e.key === "Enter")
+                        ask(); } }),
+                React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: busy || !q.trim(), onClick: () => ask() }, "Ask"))));
+}
+/* The week on one screen, and as text you can send somebody. */
+function WeekPicture({ st, a, today, close, setSheet }) {
+    const w = weekPicture(st, a, today);
+    const line = weekLine(w);
+    const [copied, setCopied] = useState(false);
+    const asText = [
+        `Week of ${dlong(w.start)}`,
+        `${w.sessions} of ${w.target} sessions${w.names.length ? " — " + w.names.join(", ") : ""}`,
+        `${w.sets} working sets`,
+        w.foodDays ? `Protein hit ${w.proteinHit} of ${w.foodDays} days logged` : "No food logged",
+        w.weight != null ? `Weight ${fmtBW(w.weight)}${w.weightMove != null ? ` (${w.weightMove > 0 ? "+" : ""}${w.weightMove}kg)` : ""}` : "No weigh-in",
+    ].join("\n");
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Your week", sub: dlong(w.start) + " onwards", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 14 } },
+                React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: w.sessions >= w.target ? "var(--grn)" : "var(--txt)" } },
+                    w.sessions,
+                    React.createElement("span", { style: { fontSize: 20, color: "var(--faint)" } },
+                        "/",
+                        w.target)),
+                React.createElement("div", { className: "il-hatch" + (w.sessions >= w.target ? " grn" : "") }, Array.from({ length: Math.max(w.target, w.sessions) }, (_, i) => (React.createElement("i", { key: i, className: i < w.sessions ? "on" : "" }))))),
+            React.createElement("div", { style: { fontSize: 15, lineHeight: 1.55 } }, line)),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "The numbers"),
+            [["Sessions", w.names.length ? w.names.join(", ") : "none"],
+                ["Working sets", w.sets || "—"],
+                ["Volume", w.volume ? VOL(w.volume).toLocaleString() + " " + VOLU() : "—"],
+                ["Food logged", w.foodDays ? `${w.foodDays} day${w.foodDays === 1 ? "" : "s"}` : "none"],
+                ["Protein hit", w.foodDays ? `${w.proteinHit} of ${w.foodDays}` : "—"],
+                ["Weight", w.weight != null ? fmtBW(w.weight) : "not weighed"],
+                ["Against last week", w.weightMove != null ? `${w.weightMove > 0 ? "+" : ""}${w.weightMove}kg` : "—"]].map(([k, v], i) => (React.createElement("div", { key: k, className: "il-row", style: { padding: "9px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                React.createElement("span", { className: "il-sub", style: { margin: 0 } }, k),
+                React.createElement("span", { className: "il-n", style: { fontSize: 13.5, flexShrink: 0, textAlign: "right", maxWidth: "60%" } }, v))))),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn g", onClick: async () => {
+                    try {
+                        await navigator.clipboard.writeText(asText);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                    }
+                    catch {
+                        setCopied(false);
+                    }
+                } }, copied ? "Copied \u2713" : "Copy it to send someone"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ctalk", seed: `Here's my week: ${line} What should I change next week?` }) }, "Ask the coach about it")));
+}
+function MorningSheet({ st, save, a, today, close, setSheet }) {
+    const f = morningFacts(st, a, today);
+    const own = morningLine(f);
+    const cached = (st.morning || {}).date === today ? st.morning : null;
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState("");
+    const askHim = async () => {
+        setBusy(true);
+        setErr("");
+        try {
+            const txt = await callClaude(`${COACH_BRIEF}
+
+It is the morning. Give them the read on today before they have asked anything: three or four
+sentences, then one line on what to actually do. Talk about what is in front of them, not about
+training in general. If the honest answer is "carry on, nothing to see", say that — do not invent a
+problem to sound useful.
+
+Here is everything, worked out from their log. Do not contradict it:
+${JSON.stringify(f, null, 1)}
+
+Return ONLY JSON: { "read": "the three or four sentences", "call": "the one line" }`, 700, "mid");
+            const j = looseJson(txt);
+            if (!j || !j.read)
+                throw new Error("Nothing usable came back.");
+            save({ ...st, morning: { date: today, read: String(j.read).trim(), call: String(j.call || "").trim(), at: Date.now() } });
+        }
+        catch (e) {
+            setErr(e.message || String(e));
+        }
+        setBusy(false);
+    };
+    const Row = ({ k, v }) => (React.createElement("div", { className: "il-row", style: { padding: "8px 0", borderTop: "1px solid var(--line)" } },
+        React.createElement("span", { className: "il-sub", style: { margin: 0 } }, k),
+        React.createElement("span", { className: "il-n", style: { fontSize: 13, flexShrink: 0 } }, v)));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "This morning", sub: "Everything it knows, before you ask", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-dh", style: { fontSize: 15, marginBottom: 8 } }, "Where you are"),
+            React.createElement("div", { style: { fontSize: 15, lineHeight: 1.55 } }, cached ? cached.read : own.text),
+            React.createElement("div", { style: { marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 5 } }, "Today"),
+                React.createElement("div", { className: "il-dh", style: { fontSize: 16, lineHeight: 1.4 } }, cached && cached.call ? cached.call : own.call)),
+            cached && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 12 } }, "Written by your coach this morning from the numbers below."))),
+        !cached && (React.createElement("div", { style: { padding: "0 12px 4px" } },
+            React.createElement("button", { className: "il-btn", disabled: busy, onClick: askHim }, busy ? "He's reading it…" : "Have the coach put it in his own words"),
+            err && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--red)" } }, err))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "What that came from"),
+            React.createElement(Row, { k: "Last session", v: f.lastName ? `${f.lastName}, ${f.daysSince === 0 ? "today" : f.daysSince === 1 ? "yesterday" : f.daysSince + " days ago"}` : "none logged" }),
+            React.createElement(Row, { k: "This week", v: `${f.thisWeek} of ${f.target}` }),
+            f.sleep != null && React.createElement(Row, { k: "Slept", v: `${f.sleep} hours` }),
+            f.readiness != null && React.createElement(Row, { k: "Felt", v: `${f.readiness} out of 100` }),
+            f.proteinTarget && React.createElement(Row, { k: "Protein, last 3 days", v: f.loggedDays ? f.protein.filter((x) => x != null).join(" · ") + `g against ${f.proteinTarget}` : "nothing logged" }),
+            f.weightMove != null && React.createElement(Row, { k: "Weight", v: `${f.weightMove > 0 ? "+" : ""}${f.weightMove}kg over the last few weigh-ins` }),
+            f.weighDays != null && React.createElement(Row, { k: "Last weighed", v: f.weighDays === 0 ? "today" : `${f.weighDays} days ago` }),
+            f.nextUp && React.createElement(Row, { k: "Next up", v: f.nextUp })),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ctalk", seed: `Given where I am this morning — ${own.text} — what should I actually do today?` }) }, "Ask him about today"),
+            f.nextUp && React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "program" }) }, "Open the programme")));
+}
 function TargetSheet({ st, save, a, close, setSheet }) {
     const P = st.profile;
     const auto = targets(P, a.maint || estMaint(P));
