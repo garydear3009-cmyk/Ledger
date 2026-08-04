@@ -5257,7 +5257,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v271 · 4 Aug";
+const APP_VERSION = "v272 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -15281,10 +15281,11 @@ function CookMode({ st, save, sheet, close, setSheet }) {
                     } }, "Done \u2014 log it")) : (React.createElement("button", { className: "go", onClick: () => { setTimer(null); setRan(false); setN(n + 1); } }, "Next"))),
             React.createElement("div", { className: "il-dots" }, steps.map((_, i) => (React.createElement("i", { key: i, className: i === n ? "on" : i < n ? "done" : "" })))),
             React.createElement("div", { style: { display: "flex", gap: 7, justifyContent: "center", paddingTop: 10, flexWrap: "wrap" } }, [1, 2, 4, 6].map((v) => (React.createElement("button", { key: v, className: "il-chip" + (serves === v ? " on" : ""), onClick: () => setServes(v) }, v === 1 ? "just me" : `${v} people`)))),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, textAlign: "center", marginTop: 8 } },
-                "Amounts are scaled from the card's ",
-                rec.serves,
-                ". The screen stays awake while you're in here.")));
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, textAlign: "center", marginTop: 8 } }, serves === rec.serves
+                ? "As the card wrote it. The screen stays awake whil"
+                : serves > rec.serves
+                    ? `Scaled up from the card's ${rec.serves}: liquids scale with the amounts above, but browning and simmer times stretch — go by look and temperature, not the clock. The screen stays awake whil`
+                    : `Scaled down from the card's ${rec.serves}: things cook a little quicker in a less crowded pan — start checking early. The screen stays awake while you're in here.`)));
 }
 function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
     const found0 = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]).find((r) => r.n === sheet.name);
@@ -15305,7 +15306,9 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
     const saved = (st.savedRecipes || []).includes(base.n);
     const photos = (st.recipePhotos || {})[base.n] || [];
     const cm = cupboardMatch(st, base);
-    const per = base.m;
+    const pool2 = [...FOODS, ...(st.myFoods || [])];
+    const perChecked = base ? perServing(base, pool2) : null;
+    const per = (perChecked && perChecked.per) || base.m || [0, 0, 0, 0];
     const amount = (a2, u) => {
         const v = a2 * k;
         if (u === "g" || u === "ml")
@@ -15413,7 +15416,18 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 React.createElement("div", { className: "il-mini" },
                     React.createElement("div", { className: "v" }, per[3]),
                     React.createElement("div", { className: "l" }, "fat"))),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } }, "per serving")),
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, textAlign: "center" } },
+                "per serving \u00B7 the whole pot is about ",
+                per[0] * Math.max(1, Number(base.serves) || 1),
+                " cal, serves ",
+                base.serves),
+            perChecked && perChecked.disagree && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                "Worth knowing: the ingredients add up to about ",
+                perChecked.calcPer[0],
+                " cal a serving, not the",
+                " ",
+                perChecked.printed[0],
+                " printed. The printed figure is shown; your eyes on the plate decide."))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                 React.createElement("div", { className: "il-lbl" }, "How many are you cooking for?"),
@@ -15538,7 +15552,7 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 ate !== 1 ? ` Logging ${Math.round(per[0] * ate)} cal, ${Math.round(per[1] * ate)}g protein.` : "")),
         React.createElement("input", { type: "file", accept: "image/*", ref: fileRef, style: { display: "none" }, onChange: addPhoto }),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "cookmode", name: base.n }) },
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "cookmode", name: base.n, serves }) },
                 "Cook it",
                 (base.method || []).length ? ` · ${base.method.length} steps` : ""),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rtweak", name: base.n }) }, "Nutritionist view"),
@@ -15780,6 +15794,25 @@ function lineMacros(line, pool) {
     if (!g)
         return { food, g: 0, sure: false, m: null };
     return { food, g, sure, m: { kcal: (food.kcal * g) / 100, p: (food.p * g) / 100, c: (food.c * g) / 100, f: (food.f * g) / 100 } };
+}
+/* The card's printed per-serving figures, cross-checked against what the
+   ingredients actually add up to. When the two disagree badly the printed
+   number is usually a whole-pot total that was filed as a serving — trust
+   the ingredients and say so. */
+function perServing(rec, pool) {
+    const printed = rec.m || null;
+    const calc = recipeFromIngredients(rec, pool);
+    if (!printed)
+        return calc ? { per: calc.per, from: "ingredients", printed: null } : null;
+    /* The printed figures stay the ones shown: the ingredient maths misprices
+       count-style lines ("2 eggs", "toast") badly enough that overriding would
+       wreck good recipes. The check only speaks when every line priced cleanly
+       in grams and the gap is still enormous — then it says so, beside the
+       printed number, and swaps nothing. */
+    const clean = calc && calc.missed === 0 && !calc.rough;
+    const off = clean ? Math.abs(calc.per[0] - printed[0]) / Math.max(1, calc.per[0]) : 0;
+    return { per: printed, from: "card", printed,
+        disagree: clean && off > 0.5, calcPer: clean ? calc.per : null };
 }
 /* the whole card, from its ingredients, per serving */
 function recipeFromIngredients(rec, pool) {
