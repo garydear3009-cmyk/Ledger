@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v289 · 4 Aug";
+const APP_VERSION = "v290 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -23098,6 +23098,203 @@ function applyShot(st, kind, v, unit, today, date) {
 }
 /* One place, once a night. Photograph whichever screens are due, it reads them,
    you check the numbers, and the full read-back is the button underneath. */
+/* ---- v290: one JSON file instead of four screenshots -----------------------
+   Health Auto Export (App Store, one-off) shares Apple Health as JSON.
+   importHealthJson maps its metrics onto the SAME writer the screenshots
+   use — applyShot — so a file and a photograph can never disagree about
+   where a number lives. Everything it does not recognise is counted and
+   named, never silently dropped. */
+const HAE_KJ = 4.184;
+function haeDay(d) {
+    const m = String(d || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : null;
+}
+function importHealthJson(st, parsed, today) {
+    const root = (parsed && (parsed.data || parsed)) || {};
+    const metrics = Array.isArray(root.metrics) ? root.metrics : [];
+    const workouts = Array.isArray(root.workouts) ? root.workouts : [];
+    const byDay = {};
+    const day = (d) => (byDay[d] = byDay[d] || { steps: 0, active: 0, basal: 0, exer: 0, stand: 0,
+        sleep: 0, w: null, lb: null, fat: null, any: {} });
+    const ignored = {};
+    metrics.forEach((mt) => {
+        const name = String(mt.name || "").toLowerCase();
+        const units = String(mt.units || "").toLowerCase();
+        const rows = Array.isArray(mt.data) ? mt.data : [];
+        rows.forEach((r) => {
+            const d = haeDay(r.date);
+            if (!d)
+                return;
+            const q = Number(r.qty != null ? r.qty : r.asleep);
+            if (!isFinite(q))
+                return;
+            const g = day(d);
+            if (name === "weight_body_mass") {
+                if (units === "lb")
+                    g.lb = q;
+                else
+                    g.w = q;
+                g.any.weight = 1;
+            }
+            else if (name === "body_fat_percentage") {
+                g.fat = q <= 1 ? q * 100 : q;
+                g.any.weight = 1;
+            }
+            else if (name === "active_energy") {
+                g.active += units === "kj" ? q / HAE_KJ : q;
+                g.any.act = 1;
+            }
+            else if (name === "basal_energy_burned") {
+                g.basal += units === "kj" ? q / HAE_KJ : q;
+            }
+            else if (name === "step_count") {
+                g.steps += q;
+                g.any.act = 1;
+            }
+            else if (name === "apple_exercise_time") {
+                g.exer += q;
+                g.any.act = 1;
+            }
+            else if (name === "apple_stand_hour") {
+                g.stand += q;
+                g.any.act = 1;
+            }
+            else if (name === "sleep_analysis") {
+                g.sleep += q;
+                g.any.sleep = 1;
+            }
+            else if (name.startsWith("dietary_") || name === "carbohydrates" || name === "total_fat" ||
+                name === "protein" || name === "fiber") {
+                ignored.food = (ignored.food || 0) + 1;
+            }
+            else {
+                ignored[name] = (ignored[name] || 0) + 1;
+            }
+        });
+    });
+    if (workouts.length)
+        ignored.workouts = workouts.length;
+    /* feed the day groups through the screenshot writer */
+    const noAt = (rows) => JSON.stringify((rows || []).map((r) => ({ ...r, at: 0 })));
+    const before = { w: JSON.stringify(st.weights || []), t: noAt(st.tracker),
+        s: JSON.stringify(st.sleepLog || []) };
+    let next = { ...st };
+    const dates = Object.keys(byDay).sort();
+    const counts = { weight: 0, activity: 0, sleep: 0 };
+    dates.forEach((d) => {
+        const g = byDay[d];
+        if (g.any.weight && (g.w || g.lb)) {
+            next = applyShot(next, "scale", { weightKg: g.w, weightLb: g.w ? null : g.lb,
+                fatPct: g.fat }, "", today, d);
+            counts.weight++;
+        }
+        if (g.any.act) {
+            next = applyShot(next, "rings", { steps: Math.round(g.steps) || null,
+                moveKcal: Math.round(g.active) || null,
+                totalKcal: g.active && g.basal ? Math.round(g.active + g.basal) : null,
+                exerciseMin: Math.round(g.exer) || null,
+                standHrs: Math.min(24, Math.round(g.stand)) || null }, "", today, d);
+            counts.activity++;
+        }
+        if (g.any.sleep && g.sleep > 0) {
+            const hours = Math.min(24, Math.round(g.sleep * 10) / 10);
+            next.sleepLog = [{ date: d, hours }, ...(next.sleepLog || []).filter((x) => x.date !== d)]
+                .sort((x, y) => y.date.localeCompare(x.date)).slice(0, 200);
+            counts.sleep++;
+        }
+    });
+    /* the import is one event, not one shotLog line per day */
+    next.shotLog = (st.shotLog || []);
+    if (dates.length)
+        next.shotLog = [{ kind: "import", date: today, at: Date.now(), keys: dates.length },
+            ...next.shotLog].slice(0, 200);
+    const changed = { weight: JSON.stringify(next.weights || []) !== before.w,
+        activity: noAt(next.tracker) !== before.t,
+        sleep: JSON.stringify(next.sleepLog || []) !== before.s };
+    const span = dates.length ? dates[0] + " \u2013 " + dates[dates.length - 1] : null;
+    return { st: next, report: { counts, changed, span, days: dates.length, ignored,
+            nothingNew: dates.length > 0 && !changed.weight && !changed.activity && !changed.sleep } };
+}
+/* last night's imported sleep, for the pre-session check-in */
+function lastSleep(st, today) {
+    const log = st.sleepLog || [];
+    const hit = log.find((x) => x.date === today) || log.find((x) => x.date < today);
+    return hit && today <= addDays(hit.date, 1) ? hit.hours : null;
+}
+function AppleImport({ st, save, today, close }) {
+    const fileRef = useRef(null);
+    const [prev, setPrev] = useState(null);
+    const [err, setErr] = useState("");
+    const [saved, setSaved] = useState(false);
+    const read = (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!f)
+            return;
+        setErr("");
+        setSaved(false);
+        const r = new FileReader();
+        r.onerror = () => setErr("Couldn't read that file.");
+        r.onload = () => {
+            let parsed;
+            try {
+                parsed = JSON.parse(String(r.result));
+            }
+            catch (_) {
+                setErr("That isn't JSON. In Health Auto Export set the format to JSON, not CSV.");
+                return;
+            }
+            const out = importHealthJson(st, parsed, today);
+            if (!out.report.days) {
+                setErr("No health data found in it \u2014 check the data types are ticked in the export.");
+                return;
+            }
+            setPrev(out);
+        };
+        r.readAsText(f);
+    };
+    const ign = prev ? Object.entries(prev.report.ignored) : [];
+    return (React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Import from Apple Health", sub: "One JSON file replaces the screenshots", close: close }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, marginBottom: 6 } }, "The five-minute setup, once"),
+            React.createElement("div", { className: "il-sub", style: { margin: 0, lineHeight: 1.55 } },
+                "1. App Store: Health Auto Export \u2014 JSON+CSV (a one-off purchase).",
+                React.createElement("br", null),
+                "2. In it, pick the data: Weight, Body Fat, Active Energy, Steps, Exercise Time, Stand Hours, Sleep.",
+                React.createElement("br", null),
+                "3. Format JSON, period Last 30 Days, then Share \u2192 Save to Files.",
+                React.createElement("br", null),
+                "4. Come back here and pick the file. Import as often as you like \u2014 the same day twice changes nothing.")),
+        React.createElement("input", { type: "file", accept: ".json,application/json", ref: fileRef, style: { display: "none" }, onChange: read }),
+        React.createElement("button", { className: "il-btn", style: { width: "100%" }, onClick: () => fileRef.current && fileRef.current.click() }, "Pick the export file"),
+        err && React.createElement("div", { className: "il-card", style: { borderColor: "var(--gold)", marginTop: 10 } },
+            React.createElement("div", { className: "il-sub", style: { margin: 0 } }, err)),
+        prev && !saved && React.createElement("div", { className: "il-card lead", style: { marginTop: 10 } },
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500, marginBottom: 6 } },
+                "What's in it",
+                prev.report.span && React.createElement("span", { className: "il-sub il-n", style: { marginLeft: 8 } }, prev.report.span)),
+            React.createElement("div", { className: "il-sub", style: { margin: 0, lineHeight: 1.55 } },
+                "Weigh-ins: " + prev.report.counts.weight + " days",
+                React.createElement("br", null),
+                "Activity (steps, energy, exercise, stand): " + prev.report.counts.activity + " days",
+                React.createElement("br", null),
+                "Sleep: " + prev.report.counts.sleep + " nights",
+                prev.report.nothingNew && React.createElement(React.Fragment, null,
+                    React.createElement("br", null),
+                    "All of it is already in \u2014 nothing will change.")),
+            ign.length > 0 && React.createElement("div", { className: "il-sub", style: { margin: "8px 0 0", opacity: 0.8 } },
+                "Left alone: ",
+                ign.map(([k, n]) => k === "food" ? "food entries (this app owns your food)"
+                    : k === "workouts" ? "workouts (your sessions live here)" : k).join(" \u00B7 ")),
+            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 12 }, onClick: () => {
+                    save(prev.st);
+                    setSaved(true);
+                } }, "Bring it in")),
+        saved && React.createElement("div", { className: "il-card", style: { marginTop: 10, borderColor: "#1E4630", background: "#10281A" } },
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } }, "In. \u2713"),
+            React.createElement("div", { className: "il-sub", style: { margin: "4px 0 0" } }, "The weigh-ins, rings and sleep now read exactly what the phone measured. The screenshot buttons still work whenever you want them."))));
+}
 function Nightly({ st, save, a, today, close, setSheet }) {
     const [busy, setBusy] = useState("");
     const [found, setFound] = useState(null);
@@ -23168,6 +23365,10 @@ function Nightly({ st, save, a, today, close, setSheet }) {
     };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Screenshots from your other apps", sub: "Withings \u00B7 Renpho \u00B7 Apple Fitness \u00B7 Google Fit", close: close }),
+        React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 500 } }, "The faster way"),
+            React.createElement("div", { className: "il-sub", style: { margin: "3px 0 8px" } }, "One JSON file from Health Auto Export carries the scales, the rings and your sleep \u2014 exact numbers, no photography. Tape stays here."),
+            React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "appleimport" }) }, "Import a Health Auto Export file")),
         React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: read }),
         SHOTS.map((spec) => {
             const d = shotDue(st, spec.id, today);
@@ -25529,6 +25730,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "targets" && React.createElement(TargetSheet, { st, save, a, close, setSheet }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
+            sheet.t === "appleimport" && React.createElement(AppleImport, { st, save, today, close }),
             !NO_DONE.includes(sheet.t) && !(vp && vp.open) && !typing &&
                 React.createElement(DoneBar, { close: close, back: BACK_ONLY.includes(sheet.t), label: BACK_ONLY.includes(sheet.t) ? "Back" : DONE_LABEL[sheet.t] || "Done" }))));
 }
@@ -26205,7 +26407,7 @@ function plannedSession(st, a, routine) {
 function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
     const rt = st.routines.find((r) => r.id === sheet.id);
     const [intent, setIntent] = useState(rt.intent);
-    const [chk, setChk] = useState({ sleep: st.profile.sleep ?? 7, feel: 3, sore: "none" });
+    const [chk, setChk] = useState({ sleep: lastSleep(st, today) ?? st.profile.sleep ?? 7, feel: 3, sore: "none" });
     const [warmUp, setWarmUp] = useState(true);
     const ar = autoreg(st, a, chk);
     const lastW = (exId) => {
