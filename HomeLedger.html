@@ -87,6 +87,32 @@ const CSS = `
    screen. */
 .il-shell{max-width:460px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:calc(146px + env(safe-area-inset-bottom));background:var(--bg);scroll-padding-bottom:180px;}
 .il-d{font-family:'Outfit',sans-serif;letter-spacing:-.015em;}
+/* The first thing you see. A wash that moves with the hour rather than a
+   second theme — the colours are the app's own, just turned up.
+   NOT .il-hero: that name is already the app's big-number style (Outfit 700
+   italic, tight tracking) and it repainted every sentence in here. */
+.il-welc{position:relative;overflow:hidden;border-radius:20px;margin:10px 12px 0;padding:20px 18px 18px;
+  background:radial-gradient(120% 140% at 12% 0%,var(--h1) 0%,transparent 62%),
+             radial-gradient(120% 130% at 100% 10%,var(--h2) 0%,transparent 58%),var(--card);
+  border:1px solid var(--line);}
+/* the greeting is the one italic thing here — Outfit has no true italic, so a
+   synthetic slant over a whole sentence turns to mush at reading sizes */
+.il-welc-hi{font-family:'Outfit',sans-serif;font-weight:700;font-style:italic;letter-spacing:-.02em;
+  font-size:29px;line-height:1.05;margin:0 0 6px;font-style:italic;}
+.il-welc-when{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:600;
+  font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:12px;}
+.il-welc-said{font-family:'Inter',system-ui,sans-serif;font-style:normal;font-weight:450;
+  font-size:15px;line-height:1.45;letter-spacing:0;color:var(--txt);}
+/* Seven tiles that fill from the bottom as the week happens. */
+.il-sky{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:16px;}
+.il-welc-day{position:relative;height:54px;border-radius:9px;background:var(--c2);
+  border:1px solid var(--line);overflow:hidden;}
+.il-welc-day.now{border-color:var(--txt);}
+.il-welc-fill{position:absolute;left:0;right:0;bottom:0;border-radius:0 0 8px 8px;
+  transition:height .5s cubic-bezier(.2,.7,.3,1);}
+@media (prefers-reduced-motion:reduce){.il-welc-fill{transition:none;}}
+.il-welc-dayl{font-family:'Inter',system-ui,sans-serif;font-style:normal;text-align:center;
+  font-size:10px;color:var(--faint);margin-top:5px;letter-spacing:.04em;}
 /* ---- v236: a display voice for headings and hero numbers ---- */
 .il-dh{font-family:'Outfit',sans-serif;font-weight:700;font-style:italic;letter-spacing:-.02em;}
 /* The one number a screen is actually about. Everything else sits around it. */
@@ -3113,7 +3139,7 @@ function findMeals({ meal, minP, maxKcal, maxMin, avoid, have, useHave, bestFor 
     const out = [];
     RECIPES.filter((r) => r.meal === meal)
         .filter((r) => r.mins <= maxMin)
-        .filter((r) => !r.tags.some((t) => avoid.includes(t)))
+        .filter((r) => !(r.tags || []).some((t) => avoid.includes(t)))
         .filter((r) => !bestFor || bestFor === "any" || r.bestFor === bestFor || r.bestFor === "any")
         .forEach((r) => {
         let mult = 1, m = rcpMacros(r, 1);
@@ -5338,7 +5364,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v277 · 4 Aug";
+const APP_VERSION = "v281 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -7049,7 +7075,7 @@ const MODELS = {
     deep: "claude-opus-5",
 };
 let MODEL_PREF = "mid";
-async function callClaude(content, maxTokens = 1000, tier = "mid") {
+async function callClaude(content, maxTokens = 1000, tier = "mid", retried = false) {
     let step = "building the request";
     try {
         const payload = JSON.stringify({
@@ -7078,9 +7104,20 @@ async function callClaude(content, maxTokens = 1000, tier = "mid") {
         }
         const data = await r.json();
         step = "unpacking it";
-        const out = (data.content || []).map((c) => (typeof c === "string" ? c : c.text || "")).join("");
-        if (!out)
-            throw new Error("The coach sent back an empty reply.");
+        /* Only text blocks carry the answer. A reply can come back with none —
+           most often when the budget ran out before he started writing — so say
+           which it was rather than "empty", and ask again with more room. */
+        const blocks = Array.isArray(data.content) ? data.content : [];
+        const out = blocks.filter((c) => typeof c === "string" || (c.type || "text") === "text")
+            .map((c) => (typeof c === "string" ? c : c.text || "")).join("");
+        if (!out) {
+            if (!retried && maxTokens < 16000)
+                return callClaude(content, Math.min(maxTokens * 2, 16000), tier, true);
+            const kinds = blocks.map((c) => (typeof c === "string" ? "text" : c.type || "?")).join(", ");
+            const why = data.stop_reason === "max_tokens" ? "he ran out of room mid-answer"
+                : data.stop_reason ? `he stopped: ${data.stop_reason}` : "no reason given";
+            throw new Error(`The coach sent back nothing to read — ${why}${kinds ? ` (${kinds})` : ""}.`);
+        }
         return out;
     }
     catch (e) {
@@ -14930,6 +14967,9 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
     const mine = st.myRecipes || [];
     const all = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...mine]);
     const saved = st.savedRecipes || [];
+    /* the same dinner photographed twice under two names — worth a nudge, not a
+       nag, so it only appears when there is something to look at */
+    const dubs = useMemo(() => recipeDoubles(all, st.dupOk || []), [all, st.dupOk]);
     const list = all.filter((r) => {
         if (!ruleCheck(st, r).ok)
             return false; // what you won't eat
@@ -14942,7 +14982,7 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
             return false;
         if (meal && r.meal !== meal)
             return false;
-        if (tags.length && !tags.every((t) => r.tags.includes(t)))
+        if (tags.length && !tags.every((t) => (r.tags || []).includes(t)))
             return false;
         if (maxMins && r.mins > maxMins)
             return false;
@@ -15019,7 +15059,11 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "myratings" }) },
                 "What I thought",
                 Object.keys(st.ratings || {}).length ? ` · ${Object.keys(st.ratings || {}).length}` : ""),
-            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "inspo" }) }, "Can't decide?")),
+            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "inspo" }) }, "Can't decide?"),
+            dubs.length > 0 && (React.createElement("button", { className: "il-chip", style: { borderColor: "var(--gold)", color: "var(--gold)" }, onClick: () => setSheet({ t: "recdups" }) },
+                dubs.length,
+                " possible double",
+                dubs.length === 1 ? "" : "s"))),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "grid", gap: 8 } },
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "addrec" }) }, "Add from a photo"),
@@ -15174,7 +15218,7 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
                         "f",
                         r.serves > 1 ? ` · serves ${r.serves}` : ""),
                     React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" } },
-                        r.tags.filter((t) => RTAGS[t]).slice(0, 3).map((t) => (React.createElement("span", { key: t, className: "il-chip", style: { pointerEvents: "none", fontSize: 11, padding: "3px 8px" } }, RTAGS[t]))),
+                        (r.tags || []).filter((t) => RTAGS[t]).slice(0, 3).map((t) => (React.createElement("span", { key: t, className: "il-chip", style: { pointerEvents: "none", fontSize: 11, padding: "3px 8px" } }, RTAGS[t]))),
                         m && m.pct >= 70 && (React.createElement("span", { className: "il-chip", style: { pointerEvents: "none", fontSize: 11, padding: "3px 8px",
                                 background: m.pct === 100 ? "#10281A" : "#241F12", color: m.pct === 100 ? "#6FDC9B" : "#E5C87E" } }, m.pct === 100 ? "You have it all" : `Missing ${m.missing.length}`))))));
         }));
@@ -17016,6 +17060,82 @@ const subOf = (item) => {
     return hit ? hit[0] : null;
 };
 /* You own four paprikas. Worth knowing before you buy a fifth. */
+/* Photograph enough cards and the same dinner arrives twice under two names.
+   Three ways of spotting it, in order of how sure we are:
+     the same name once you strip the decoration,
+     nearly the same name (one is the other plus a word or two),
+     and a different name over almost exactly the same ingredients.
+   A pair that matches by name but disagrees on the numbers is worth more than
+   a tidy-up — one of the two cards is wrong. */
+const RNOISE = /\b(the|a|an|my|our|with|and|of|in|for|quick|easy|simple|proper|best|homemade|home|made|style|slimming|world|sw|syn|free|light|healthy|low|fat|cal|calorie|recipe|dish|leftover|version)\b/g;
+const recKey = (n) => String(n || "").toLowerCase()
+    .replace(/\(.*?\)/g, " ").replace(/[^a-z0-9 ]/g, " ")
+    .replace(RNOISE, " ").replace(/\s+/g, " ").trim()
+    .split(" ").filter(Boolean).map((w) => w.replace(/(ies)$/, "y").replace(/s$/, ""))
+    .sort().join(" ");
+const ingSet = (r) => new Set((r.ing || []).map((x) => dupKey(Array.isArray(x) ? x[2] : x)).filter(Boolean));
+const overlap = (A, B) => {
+    if (!A.size || !B.size)
+        return 0;
+    let both = 0;
+    A.forEach((x) => { if (B.has(x))
+        both++; });
+    return both / Math.max(A.size, B.size);
+};
+const perServ = (r) => {
+    const m = r.m || [], sv = Math.max(1, +r.serves || 1);
+    return m.length ? m.map((x) => (+x || 0) / sv) : null;
+};
+const numbersDiffer = (x, y) => {
+    const A = perServ(x), B = perServ(y);
+    if (!A || !B)
+        return false;
+    const kc = Math.max(A[0], B[0]);
+    if (kc && Math.abs(A[0] - B[0]) / kc > 0.15)
+        return true;
+    const pr = Math.max(A[1] || 0, B[1] || 0);
+    return !!pr && Math.abs((A[1] || 0) - (B[1] || 0)) / pr > 0.2;
+};
+function recipeDoubles(list, okd) {
+    const skip = new Set(okd || []);
+    const rs = (list || []).filter((r) => r && r.n);
+    const out = [];
+    for (let i = 0; i < rs.length; i++) {
+        for (let j = i + 1; j < rs.length; j++) {
+            const A = rs[i], B = rs[j];
+            /* The shipped book is deliberate: fajitas and a fajita bowl are two
+               dinners, not a mistake. Only a card of his own can be a double. */
+            if (!A.mine && !B.mine)
+                continue;
+            const kA = recKey(A.n), kB = recKey(B.n);
+            const ov = overlap(ingSet(A), ingSet(B));
+            let why = null, sure = 0;
+            if (kA && kA === kB) {
+                why = "the same name";
+                sure = 3;
+            }
+            /* a name that contains the other is weak on its own — "chilli" and
+               "chilli jacket potato" — so it has to be cooking the same things too */
+            else if (kA && kB && (kA.includes(kB) || kB.includes(kA)) && ov >= 0.7) {
+                why = "nearly the same name, and much the same ingredients";
+                sure = 2;
+            }
+            else if (ov >= 0.85) {
+                why = "almost the same ingredients";
+                sure = 1;
+            }
+            if (!why)
+                continue;
+            const id = doubleId(A, B);
+            if (skip.has(id))
+                continue;
+            const clash = sure >= 2 && numbersDiffer(A, B);
+            out.push({ id, a: A, b: B, why, sure, clash });
+        }
+    }
+    return out.sort((x, y) => (y.clash - x.clash) || (y.sure - x.sure));
+}
+const doubleId = (a, b) => [String(a.n), String(b.n)].sort().join(" ~ ");
 const dupKey = (name) => String(name).toLowerCase()
     .replace(/\b(ground|whole|dried|extra|green|hot|medium|sweet|mild|powder|seasoning|granulated|granules|jeera|flakes?|seeds?|pods?|sticks?|leaves|leaf|fresh)\b/g, "")
     .replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
@@ -20923,6 +21043,45 @@ function nameTaken(st, to, from) {
     return renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])])
         .some((r) => r.n !== from && r.n.toLowerCase() === want);
 }
+/* Two cards for one dinner. Shown side by side, because the only person who
+   can say whether they are the same dish is the one who cooks them. */
+function RecipeDoubles({ st, save, a, today, close, setSheet }) {
+    const mine = (st.myRecipes || []).map((r) => ({ ...r, mine: true }));
+    const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...mine]);
+    const pairs = recipeDoubles(book, st.dupOk || []);
+    const notSame = (id) => save({ ...st, dupOk: [...(st.dupOk || []), id] });
+    const drop = (name) => save(deleteRecipe(st, name));
+    const card = (r, other) => (React.createElement("div", { className: "il-card", style: { marginBottom: 0 } },
+        React.createElement("div", { className: "il-row" },
+            React.createElement("div", { style: { minWidth: 0 } },
+                React.createElement("div", { style: { fontSize: 14.5, fontWeight: 600 } }, r.n),
+                React.createElement("div", { className: "il-sub il-n" },
+                    r.serves ? `serves ${r.serves}` : "",
+                    r.m && r.m[0] ? ` · ${Math.round(r.m[0] / Math.max(1, r.serves || 1))} cal` : "",
+                    r.m && r.m[1] ? ` · P${Math.round(r.m[1] / Math.max(1, r.serves || 1))}` : "",
+                    r.mine ? " · yours" : " · from the book"))),
+        React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", marginTop: 10 } },
+            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "recipe", name: r.n }) }, "Open it"),
+            r.mine && React.createElement("button", { className: "il-chip", onClick: () => drop(r.n) }, "Delete this one"))));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Two cards, one dinner?", sub: pairs.length ? `${pairs.length} to look at` : "Nothing to sort out", close: close }),
+        pairs.length === 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note" }, "Nothing looks doubled up. If you photograph the same dish twice under different names, it will show up here."))),
+        pairs.map((pr) => (React.createElement("div", { key: pr.id, className: "il-card", style: { borderLeft: `3px solid ${pr.clash ? "var(--gold)" : "var(--line)"}` } },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, pr.clash ? "Same dish, different numbers" : "Possibly the same dish"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginBottom: 10 } }, pr.clash
+                ? `They have ${pr.why}, but the calories per serving disagree. Either one is a lighter version — worth renaming — or one of them is wrong.`
+                : `They have ${pr.why}.`),
+            React.createElement("div", { style: { display: "grid", gap: 8 } },
+                card(pr.a, pr.b),
+                card(pr.b, pr.a)),
+            React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => notSame(pr.id) }, "They're different \u2014 stop asking")))),
+        (st.dupOk || []).length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, dupOk: [] }) },
+                "Show the ",
+                (st.dupOk || []).length,
+                " I said were different"))));
+}
 /* Everything keyed by a recipe name has to go with it, or the app keeps a
    rating, a photo and a place in next week's plan for something that no longer
    exists. The mirror image of renameRecipe. */
@@ -23827,6 +23986,77 @@ function coachRead(st, a) {
         push(1, "good", "Nothing needs fixing", "Sleep, protein and volume are all where they should be. Keep doing exactly this and let the weights climb.", "Carry on");
     return out.sort((x, y) => y.sev - x.sev);
 }
+/* The screen he opens on. Its whole job is to say hello and show him where he
+   stands — the working screens are underneath. Bright by earning it: the week
+   fills in with colour as he does the work, rather than being decorated. */
+function Welcome({ st, a, today, setSheet }) {
+    const P = st.profile || {};
+    const now = new Date();
+    const h = now.getHours();
+    const part = h < 12 ? "Morning" : h < 18 ? "Afternoon" : "Evening";
+    const name = (P.name || "").trim().split(/\s+/)[0];
+    /* the wash moves through the day using the app's own accents */
+    const wash = h < 11 ? ["rgba(255,180,67,.30)", "rgba(255,107,74,.20)"]
+        : h < 17 ? ["rgba(91,141,239,.30)", "rgba(62,207,142,.18)"]
+            : ["rgba(180,124,255,.30)", "rgba(255,93,143,.18)"];
+    const dlongDay = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    /* the week, Monday first, filling from the bottom */
+    const ws = weekStart(today);
+    const sess = liveSessions(st).filter((x) => x.finished !== false && (x.exercises || []).length);
+    const week = [0, 1, 2, 3, 4, 5, 6].map((n) => {
+        const d = addDays(ws, n);
+        const trained = sess.some((x) => x.date === d);
+        const f = (st.foods || []).find((x) => x.date === d);
+        const meals = f ? (f.entries || []).length : 0;
+        const ate = meals >= 3 ? 1 : meals > 0 ? 0.5 : 0;
+        return { d, trained, ate, ahead: d > today, today: d === today,
+            letter: "MTWTFSS"[n], pct: Math.min(1, (trained ? 0.68 : 0) + ate * 0.32) };
+    });
+    const doneWk = week.filter((x) => x.trained).length;
+    const wantWk = Math.min(6, Math.max(2, Number(P.daysWk) || 4));
+    /* one true sentence, and it changes as the day goes on */
+    const line = (() => {
+        const f = morningFacts(st, a, today);
+        if (h < 12) {
+            const said = (st.morning || {}).date === today ? st.morning : null;
+            return said ? said.read : morningLine(f).text;
+        }
+        const day = (st.foods || []).find((x) => x.date === today);
+        const kcal = day ? Math.round((day.entries || []).reduce((x, e) => x + (e.kcal || 0), 0)) : 0;
+        const prot = day ? Math.round((day.entries || []).reduce((x, e) => x + (e.p || 0), 0)) : 0;
+        const T = targets(P, a.maint || estMaint(P));
+        const bits = [];
+        if (f.daysSince === 0)
+            bits.push(`${f.lastName === "a session" ? "You trained" : f.lastName} today.`);
+        else if (doneWk >= wantWk)
+            bits.push(`${doneWk} sessions in the bag this week.`);
+        else if (f.nextUp)
+            bits.push(`${f.nextUp} is next.`);
+        if (T && Number.isFinite(T.protein) && T.protein > 0) {
+            const left = Math.round(T.protein - prot);
+            bits.push(left > 0 ? `${left}g of protein still to find.` : `Protein done — ${prot}g.`);
+        }
+        else if (kcal)
+            bits.push(`${kcal} calories logged.`);
+        return bits.join(" ") || "Nothing logged yet today.";
+    })();
+    return (React.createElement("div", { className: "il-welc", style: { "--h1": wash[0], "--h2": wash[1], cursor: "pointer" }, onClick: () => setSheet(h < 12 ? { t: "morning" } : { t: "week" }) },
+        React.createElement("div", { className: "il-welc-when" }, dlongDay),
+        React.createElement("h1", { className: "il-welc-hi" },
+            part,
+            name ? `, ${name}` : ""),
+        React.createElement("div", { className: "il-welc-said" }, line),
+        React.createElement("div", { className: "il-sky" },
+            week.map((x) => (React.createElement("div", { key: x.d, className: "il-welc-day" + (x.today ? " now" : "") },
+                React.createElement("div", { className: "il-welc-fill", style: { height: `${Math.round(x.pct * 100)}%`,
+                        background: x.trained ? "linear-gradient(180deg,var(--t-train),rgba(255,107,74,.55))"
+                            : "linear-gradient(180deg,var(--grn),rgba(62,207,142,.45))",
+                        opacity: x.ahead ? .35 : 1 } })))),
+            week.map((x) => React.createElement("div", { key: "l" + x.d, className: "il-welc-dayl" }, x.letter))),
+        React.createElement("div", { className: "il-welc-said", style: { fontSize: 12.5, marginTop: 12, color: "var(--dim)" } }, doneWk === 0 ? `Nothing this week yet — ${wantWk} is the plan.`
+            : doneWk >= wantWk ? `${doneWk} of ${wantWk} sessions. That's the week done.`
+                : `${doneWk} of ${wantWk} sessions this week.`)));
+}
 function You({ st, save, a, today, setSheet, go }) {
     const P = st.profile;
     const done = answered(P), pct = Math.round((done / ALLQ.length) * 100);
@@ -23841,21 +24071,7 @@ function You({ st, save, a, today, setSheet, go }) {
     const doneIds = acts.filter((x) => x.status === "done").map((x) => x.id);
     const prev = acts.filter((x) => (Date.now() - new Date(x.date).getTime()) / 864e5 > 5);
     return (React.createElement(React.Fragment, null,
-        (() => {
-            /* The one thing on this screen you did not have to ask for. Mornings
-               only — by the afternoon you know how the day is going. */
-            if (new Date().getHours() >= 12)
-                return null;
-            const f = morningFacts(st, a, today);
-            const own = morningLine(f);
-            const said = (st.morning || {}).date === today ? st.morning : null;
-            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer", borderLeft: "3px solid var(--tint)" }, onClick: () => setSheet({ t: "morning" }) },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
-                    React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "This morning"),
-                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
-                React.createElement("div", { style: { fontSize: 14.5, lineHeight: 1.5 } }, said ? said.read : own.text),
-                React.createElement("div", { className: "il-dh", style: { fontSize: 14, marginTop: 10, color: "var(--tint)" } }, said && said.call ? said.call : own.call)));
-        })(),
+        React.createElement(Welcome, { st, a, today, setSheet }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "records" }) }, "All my measurements"),
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "sides" }) }, "Left and right"),
@@ -24457,6 +24673,8 @@ function Guide({ st, close, go }) {
 function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go }) {
     /* any input or textarea anywhere in the open sheet */
     const [typing, setTyping] = useState(false);
+    /* whatever the last sheet parked for Done is not this sheet's business */
+    useEffect(() => { setCommit(null); return () => setCommit(null); }, [sheet.t]);
     const watchFocus = (e) => {
         const t = e.target && e.target.tagName;
         if (t === "INPUT" || t === "TEXTAREA")
@@ -24608,6 +24826,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "planner" && React.createElement(Planner, { st, save, a, today, close, setSheet }),
             sheet.t === "shopping" && React.createElement(Shopping, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "recipes" && React.createElement(RecipeBook, { st, save, a, today, close, setSheet, sheet }),
+            sheet.t === "recdups" && React.createElement(RecipeDoubles, { st, save, a, today, close, setSheet }),
             sheet.t === "recipe" && React.createElement(RecipeSheet, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "ntalk" && React.createElement(NutChat, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "quickday" && React.createElement(QuickDay, { st, save, a, today, close, setSheet }),
@@ -24720,11 +24939,28 @@ function SH({ title, sub, close }) {
             sub && React.createElement("div", { style: { fontSize: 12.5, color: "var(--dim)", marginTop: 3 } }, sub)),
         React.createElement("button", { className: "il-x", onClick: close }, "\u00D7"));
 }
+/* A sheet with something half-finished in it — a quick add typed but not
+   added — parks the finishing move here. Done then does it rather than
+   throwing the typing away, which is what it used to do. */
+let SHEET_COMMIT = null;
+const setCommit = (fn) => { SHEET_COMMIT = fn || null; };
 /* Everything saves as you go, so this is really "I'm finished" — but a
    button you can reach with your thumb beats an × in the top corner.  */
 function DoneBar({ close, label = "Done", back }) {
+    const pending = !back && SHEET_COMMIT;
     return (React.createElement("div", { className: "il-done" },
-        React.createElement("button", { className: "il-btn" + (back ? " g" : ""), onClick: close }, label)));
+        React.createElement("button", { className: "il-btn" + (back ? " g" : ""), onClick: () => {
+                const fn = SHEET_COMMIT;
+                SHEET_COMMIT = null;
+                if (fn) {
+                    try {
+                        fn();
+                        return;
+                    }
+                    catch (e) { /* fall through and close */ }
+                }
+                close();
+            } }, pending ? "Add it and finish" : label)));
 }
 function ExProgress({ sheet, a, close, setSheet }) {
     const r = a.review.find((x) => x.id === sheet.id);
@@ -24977,7 +25213,7 @@ function BlockPlan({ st, save, a, today, close, setSheet }) {
                 + "\n\n=== WHAT THEY ASKED FOR ===\n" + want
                 + "\n\n=== EXERCISES THEY CAN DO ===\n" + owned
                 + "\n\n=== WHAT YOU KNOW ABOUT THEM ===\n"
-                + reviewDossier({ ...st, sessions: liveSessions(st) }, a), 5000, "deep");
+                + reviewDossier({ ...st, sessions: liveSessions(st) }, a), 9000, "deep");
             const j = looseJson(txt);
             if (!j || !Array.isArray(j.days) || !j.days.length)
                 throw new Error("Nothing usable came back. Try again.");
@@ -26362,56 +26598,20 @@ ${desc.trim()}`, 1200, "cheap");
     const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["recipe", "A recipe"],
         ["photo", "Photograph it"], ["search", "Search"],
         ["scan", "Scan a label"], ["mine", "Mine"]];
+    /* Typed but not added: Done used to close the sheet and throw it away, so
+       it is handed the finishing move instead. */
+    const quickReady = !!what.trim() && !!(k || p || c || f2);
+    const addQuick = () => {
+        const P2 = +p || 0, C2 = +c || 0, F3 = +f2 || 0;
+        put([{ name: what.trim(), kcal: +k || Math.round(P2 * 4 + C2 * 4 + F3 * 9), p: P2, c: C2, f: F3 }]);
+    };
+    useEffect(() => {
+        setCommit(tab === "quick" && quickReady ? addQuick : null);
+        return () => setCommit(null);
+    });
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}${onDate === today ? "" : " · " + dtiny(onDate)}`, close: close }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l)))),
-        React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { margin: "0 0 8px" } }, "When"),
-            React.createElement("input", { className: "il-in il-n", type: "time", value: at, style: { fontSize: 26, padding: "12px 14px", width: 172, textAlign: "center" }, onChange: (e) => { if (e.target.value)
-                    setAt(e.target.value); } }),
-            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which day"),
-            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" } },
-                [[today, "Today"], [addDays(today, -1), "Yesterday"], [addDays(today, -2), dtiny(addDays(today, -2))]]
-                    .map(([d, l]) => (React.createElement("button", { key: d, className: "il-chip" + (onDate === d ? " on" : ""), onClick: () => setOnDate(d) }, l))),
-                React.createElement("input", { className: "il-in il-n", type: "date", max: today, value: onDate, style: { width: 150, padding: "7px 10px", fontSize: 13 }, onChange: (e) => { if (e.target.value && e.target.value <= today)
-                        setOnDate(e.target.value); } })),
-            onDate !== today && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
-                "Going onto ",
-                dlong(onDate),
-                ", not today.")),
-            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which meal"),
-            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
-                MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + (theMeal === m ? " on" : ""), onClick: () => setMeal(m) }, m))),
-                meal && (React.createElement("button", { className: "il-chip", onClick: () => setMeal(null) }, "Follow the clock"))),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, meal
-                ? `Logging this as ${meal} whatever the time says.`
-                : "The clock picks the meal — change it here if that's wrong.")),
-        (() => {
-            /* The breakfasts you actually have, rather than a search box for the
-               fourteenth time. Two months, most often first. */
-            const usual = mealSuggest(st, theMeal, today);
-            if (!usual.length)
-                return null;
-            return (React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
-                    React.createElement("div", { className: "il-lbl" },
-                        "Your usual ",
-                        theMeal.toLowerCase()),
-                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, "last two months")),
-                usual.map((u, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "9px 0", cursor: "pointer",
-                        borderTop: i ? "1px solid var(--line)" : 0 }, onClick: () => put([{ name: u.name, kcal: u.kcal, p: u.p, c: u.c, f: u.f }]) },
-                    React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
-                        React.createElement("span", { style: { fontSize: 20, flexShrink: 0 } }, foodIcon(u.name)),
-                        React.createElement("span", { style: { minWidth: 0 } },
-                            React.createElement("span", { style: { display: "block", fontSize: 14 } }, u.name),
-                            React.createElement("span", { className: "il-sub il-n", style: { display: "block", margin: "2px 0 0" } },
-                                Math.round(u.kcal),
-                                " cal \u00B7 P",
-                                Math.round(u.p),
-                                " \u00B7 ",
-                                u.elsewhere ? "recent, elsewhere" : `${u.n} time${u.n === 1 ? "" : "s"}`))),
-                    React.createElement("span", { className: "il-chip", style: { flexShrink: 0 } }, "Add"))))));
-        })(),
         tab === "quick" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Straight off the packet"),
             React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, value: what, placeholder: "What was it?", onChange: (e) => setWhat(e.target.value) }),
@@ -26419,10 +26619,7 @@ ${desc.trim()}`, 1200, "cheap");
                 React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 4 } }, l),
                 React.createElement("input", { className: "il-in", inputMode: "numeric", value: v, onChange: (e) => fn(e.target.value), placeholder: "0" }))))),
             React.createElement("div", { className: "il-note", style: { fontSize: 12, margin: "8px 0 12px" } }, "Leave the calories blank and they'll be worked out from the macros at 4/4/9."),
-            React.createElement("button", { className: "il-btn", disabled: !what.trim() || (!k && !p && !c && !f2), onClick: () => {
-                    const P2 = +p || 0, C2 = +c || 0, F3 = +f2 || 0;
-                    put([{ name: what.trim(), kcal: +k || Math.round(P2 * 4 + C2 * 4 + F3 * 9), p: P2, c: C2, f: F3 }]);
-                } }, "Add it"))),
+            React.createElement("button", { className: "il-btn", disabled: !quickReady, onClick: addQuick }, "Add it"))),
         tab === "describe" && (React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "In your own words"),
@@ -26472,7 +26669,54 @@ ${desc.trim()}`, 1200, "cheap");
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Things you've built yourself \u2014 a dish you make often, or a recipe out of the book."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "dish", date: onDate }); } }, "My dishes"),
-                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "recipes" }); } }, "Cook something from the book")))));
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "recipes" }); } }, "Cook something from the book")))),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { margin: "0 0 8px" } }, "When"),
+            React.createElement("input", { className: "il-in il-n", type: "time", value: at, style: { fontSize: 26, padding: "12px 14px", width: 172, textAlign: "center" }, onChange: (e) => { if (e.target.value)
+                    setAt(e.target.value); } }),
+            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which day"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" } },
+                [[today, "Today"], [addDays(today, -1), "Yesterday"], [addDays(today, -2), dtiny(addDays(today, -2))]]
+                    .map(([d, l]) => (React.createElement("button", { key: d, className: "il-chip" + (onDate === d ? " on" : ""), onClick: () => setOnDate(d) }, l))),
+                React.createElement("input", { className: "il-in il-n", type: "date", max: today, value: onDate, style: { width: 150, padding: "7px 10px", fontSize: 13 }, onChange: (e) => { if (e.target.value && e.target.value <= today)
+                        setOnDate(e.target.value); } })),
+            onDate !== today && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                "Going onto ",
+                dlong(onDate),
+                ", not today.")),
+            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which meal"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
+                MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + (theMeal === m ? " on" : ""), onClick: () => setMeal(m) }, m))),
+                meal && (React.createElement("button", { className: "il-chip", onClick: () => setMeal(null) }, "Follow the clock"))),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8 } }, meal
+                ? `Logging this as ${meal} whatever the time says.`
+                : "The clock picks the meal — change it here if that's wrong.")),
+        (() => {
+            /* The breakfasts you actually have, rather than a search box for the
+               fourteenth time. Two months, most often first. */
+            const usual = mealSuggest(st, theMeal, today);
+            if (!usual.length)
+                return null;
+            return (React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
+                    React.createElement("div", { className: "il-lbl" },
+                        "Your usual ",
+                        theMeal.toLowerCase()),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, "last two months")),
+                usual.map((u, i) => (React.createElement("div", { key: i, className: "il-row", style: { padding: "9px 0", cursor: "pointer",
+                        borderTop: i ? "1px solid var(--line)" : 0 }, onClick: () => put([{ name: u.name, kcal: u.kcal, p: u.p, c: u.c, f: u.f }]) },
+                    React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
+                        React.createElement("span", { style: { fontSize: 20, flexShrink: 0 } }, foodIcon(u.name)),
+                        React.createElement("span", { style: { minWidth: 0 } },
+                            React.createElement("span", { style: { display: "block", fontSize: 14 } }, u.name),
+                            React.createElement("span", { className: "il-sub il-n", style: { display: "block", margin: "2px 0 0" } },
+                                Math.round(u.kcal),
+                                " cal \u00B7 P",
+                                Math.round(u.p),
+                                " \u00B7 ",
+                                u.elsewhere ? "recent, elsewhere" : `${u.n} time${u.n === 1 ? "" : "s"}`))),
+                    React.createElement("span", { className: "il-chip", style: { flexShrink: 0 } }, "Add"))))));
+        })());
 }
 function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
     /* v271: the Add-food day chooser was only honoured by Quick add — this
