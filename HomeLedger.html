@@ -5333,12 +5333,12 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v275 · 4 Aug";
+const APP_VERSION = "v276 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
     const [tab, setTab] = useState("you");
-    const [sub, setSub] = useState("train"); // which half of the Train tab
+    const [sub, setSub] = useState("body"); // the Train tab opens on the body — his call
     const [st, setSt] = useState(null);
     /* sheets stack, so closing one hands you back to whatever opened it
        rather than dropping you out to the tab underneath */
@@ -8644,6 +8644,7 @@ ${JSON.stringify(snapshot(), null, 1)}
             setCopied("select");
         }
     };
+    const [reviewing, setReviewing] = useState(false); // the list folds away by default
     const addBug = () => {
         if (!note.trim())
             return;
@@ -8653,6 +8654,7 @@ ${JSON.stringify(snapshot(), null, 1)}
         setWhere("");
         setPri("mid");
         setShot(null);
+        setReviewing(false);
     };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Notes for the next update", sub: "Bugs, annoyances and ideas, all in one place", close: close }),
@@ -8733,31 +8735,38 @@ ${JSON.stringify(snapshot(), null, 1)}
             React.createElement("button", { className: "il-btn", disabled: !note.trim(), onClick: addBug }, "Add to the list"),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Ten seconds each. The time and whatever the app was doing get attached on their own. Screenshots stay in the app \u2014 when you send me the report, mention that one has a picture and I'll ask for it.")),
         bugs.length > 0 && (React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
-                React.createElement("div", { className: "il-lbl" },
-                    bugs.length,
-                    " on the list"),
-                React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, bugs: [] }) }, "Clear")),
-            [["bug", "Broken", "t3"], ["friction", "Annoying", "t2"], ["idea", "Ideas", "t1"]].map(([k, label, cls]) => {
-                const group = bugs.filter((b) => (b.kind || "bug") === k);
-                if (!group.length)
-                    return null;
-                return React.createElement("div", { key: k },
-                    React.createElement("div", { style: { margin: "12px 0 4px" } },
-                        React.createElement("span", { className: "il-tag " + cls },
-                            label.toUpperCase(),
-                            " \u00B7 ",
-                            group.length)),
-                    group.map((b) => (React.createElement("div", { key: b.id, style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
-                        React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
-                            React.createElement("span", { style: { fontSize: 13, fontWeight: 500, minWidth: 0 } }, b.where || "Somewhere"),
-                            React.createElement("span", { style: { display: "flex", gap: 7, alignItems: "center", flexShrink: 0 } },
-                                b.pri === "high" && React.createElement("span", { className: "il-tag t3" }, "WANT"),
-                                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, short(b.at)),
-                                React.createElement("button", { className: "il-x", style: { width: 30, height: 30, fontSize: 16 }, onClick: () => save({ ...st, bugs: bugs.filter((x) => x.id !== b.id) }) }, "\u00D7"))),
-                        React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, b.note),
-                        b.shot && React.createElement("img", { src: b.shot, alt: "", style: { width: "100%", borderRadius: 9, display: "block", marginTop: 8 } })))));
-            }))),
+            React.createElement("div", { className: "il-row" },
+                React.createElement("div", null,
+                    React.createElement("div", { className: "il-lbl" },
+                        bugs.length,
+                        " on the list"),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 3 } }, ["bug", "friction", "idea"].map((k) => {
+                        const n = bugs.filter((b) => b.kind === k).length;
+                        return n ? `${n} ${k === "bug" ? "broken" : k === "friction" ? "annoying" : n === 1 ? "idea" : "ideas"}` : null;
+                    }).filter(Boolean).join(" · ") || "all noted")),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
+                    React.createElement("button", { className: "il-chip", onClick: () => setReviewing(!reviewing) }, reviewing ? "Fold away" : "Review"),
+                    React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, bugs: [] }) }, "Clear"))))),
+        bugs.length > 0 && reviewing && (React.createElement("div", { className: "il-card" }, [["bug", "Broken", "t3"], ["friction", "Annoying", "t2"], ["idea", "Ideas", "t1"]].map(([k, label, cls]) => {
+            const group = bugs.filter((b) => (b.kind || "bug") === k);
+            if (!group.length)
+                return null;
+            return React.createElement("div", { key: k },
+                React.createElement("div", { style: { margin: "12px 0 4px" } },
+                    React.createElement("span", { className: "il-tag " + cls },
+                        label.toUpperCase(),
+                        " \u00B7 ",
+                        group.length)),
+                group.map((b) => (React.createElement("div", { key: b.id, style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
+                        React.createElement("span", { style: { fontSize: 13, fontWeight: 500, minWidth: 0 } }, b.where || "Somewhere"),
+                        React.createElement("span", { style: { display: "flex", gap: 7, alignItems: "center", flexShrink: 0 } },
+                            b.pri === "high" && React.createElement("span", { className: "il-tag t3" }, "WANT"),
+                            React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, short(b.at)),
+                            React.createElement("button", { className: "il-x", style: { width: 30, height: 30, fontSize: 16 }, onClick: () => save({ ...st, bugs: bugs.filter((x) => x.id !== b.id) }) }, "\u00D7"))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, b.note),
+                    b.shot && React.createElement("img", { src: b.shot, alt: "", style: { width: "100%", borderRadius: 9, display: "block", marginTop: 8 } })))));
+        }))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Crashes caught on their own"),
@@ -24442,6 +24451,17 @@ function Guide({ st, close, go }) {
             React.createElement("div", { className: "il-note", style: { lineHeight: 1.6 } }, "Log the session while you are doing it, not afterwards from memory. And log food roughly rather than not at all \u2014 a rough number you can correct beats a gap, and anything you guessed is flagged as a guess so the weekly review knows not to trust it.")));
 }
 function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go }) {
+    /* any input or textarea anywhere in the open sheet */
+    const [typing, setTyping] = useState(false);
+    const watchFocus = (e) => {
+        const t = e.target && e.target.tagName;
+        if (t === "INPUT" || t === "TEXTAREA")
+            setTyping(true);
+    };
+    const watchBlur = () => setTimeout(() => {
+        const t = document.activeElement && document.activeElement.tagName;
+        setTyping(t === "INPUT" || t === "TEXTAREA");
+    }, 60);
     const close = () => back();
     const box = useRef(null);
     /* The scrolling container is reused between sheets, so opening a recipe from
@@ -24499,7 +24519,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
     const wrap = vp ? { top: vp.top, height: vp.h, bottom: "auto" } : undefined;
     const inner = vp ? { maxHeight: `calc(${vp.h}px - env(safe-area-inset-top) - 6px)` } : undefined;
     return (React.createElement("div", { className: "il-sheet", style: wrap, onClick: close },
-        React.createElement("div", { className: "il-si", ref: box, style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) => e.stopPropagation() },
+        React.createElement("div", { className: "il-si", ref: box, style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) = onFocusCapture = { watchFocus }, onBlurCapture: watchBlur },
+            " e.stopPropagation()}>",
             depth > 1 && (React.createElement("button", { onClick: close, style: { position: "sticky", top: 17, zIndex: 4, display: "flex", alignItems: "center",
                     gap: 6, background: "var(--bg)", border: 0, color: "var(--acc)", font: "inherit", fontSize: 13.5,
                     padding: "6px 16px 0", cursor: "pointer", width: "100%", textAlign: "left" } },
@@ -24618,7 +24639,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "targets" && React.createElement(TargetSheet, { st, save, a, close, setSheet }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
-            !NO_DONE.includes(sheet.t) && !(vp && vp.open) &&
+            !NO_DONE.includes(sheet.t) && !(vp && vp.open) && !typing &&
                 React.createElement(DoneBar, { close: close, back: BACK_ONLY.includes(sheet.t), label: BACK_ONLY.includes(sheet.t) ? "Back" : DONE_LABEL[sheet.t] || "Done" }))));
 }
 /* plain number input that allows an empty box — a controlled Number() input
