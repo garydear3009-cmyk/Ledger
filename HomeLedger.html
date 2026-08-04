@@ -5257,7 +5257,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v272 · 4 Aug";
+const APP_VERSION = "v273 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -23357,6 +23357,57 @@ function weekFood(st, today) {
    Two months of that meal, deduped by name. Ranked by how often first and
    how recently second, because the thing you have four times a week beats
    the thing you had once on Tuesday. */
+/* Whether a thing belongs at a meal it has never been logged at. A Crunchie
+   suits Snacks; a breakfast cereal does not — and history always beats the
+   guess: anything actually logged at a meal is welcome back at it. */
+function mealFit(name, meal, everAtMeal) {
+    if (everAtMeal)
+        return true;
+    const f = FOODS.find((x) => x.name.toLowerCase() === String(name || "").toLowerCase());
+    if (!f)
+        return false; // a custom entry earns its place by being logged there
+    if (f.cat === 10)
+        return false; // supplements are not a meal
+    if (meal === "Snacks")
+        return [4, 7, 8, 9, 13].includes(f.cat); // fruit, nuts, sweets, drinks, fast food
+    if (meal === "Breakfast")
+        return [1, 2, 3, 4].includes(f.cat); // dairy, grains, bakery, fruit
+    return true; // lunch and dinner take anything
+}
+/* the usuals for this meal, topped up with recent things from anywhere that
+   would suit it — so a Crunchie logged at Lunch is still offered at Snacks */
+function mealSuggest(st, meal, today, days = 60) {
+    const here = mealUsuals(st, meal, today, days);
+    if (here.length >= 12)
+        return here;
+    const seen = new Set(here.map((x) => x.name.toLowerCase()));
+    const pool = {};
+    (st.foods || []).filter((f) => f.date <= today).slice(-90).forEach((f) => {
+        (f.entries || []).forEach((e) => {
+            const key = String(e.name || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+            const k = key.toLowerCase();
+            if (!k || seen.has(k))
+                return;
+            const at = pool[k] || (pool[k] = { name: key, n: 0, last: "", kcal: e.kcal || 0, p: e.p || 0,
+                c: e.c || 0, f: e.f || 0, meals: new Set() });
+            at.n++;
+            at.meals.add(e.meal || "Snacks");
+            if (f.date > at.last) {
+                at.last = f.date;
+                at.kcal = e.kcal || 0;
+                at.p = e.p || 0;
+                at.c = e.c || 0;
+                at.f = e.f || 0;
+            }
+        });
+    });
+    const extra = Object.values(pool)
+        .filter((x) => mealFit(x.name, meal, x.meals.has(meal)))
+        .sort((a, b) => b.n - a.n || b.last.localeCompare(a.last))
+        .slice(0, 12 - here.length)
+        .map((x) => ({ ...x, n: 0, elsewhere: true })); // n:0 — never at THIS meal yet
+    return [...here, ...extra];
+}
 function mealUsuals(st, meal, today, days = 60) {
     const from = iso(new Date(new Date(today + "T12:00:00").getTime() - days * 864e5));
     const seen = {};
@@ -26230,7 +26281,7 @@ ${desc.trim()}`, 1200, "cheap");
         (() => {
             /* The breakfasts you actually have, rather than a search box for the
                fourteenth time. Two months, most often first. */
-            const usual = mealUsuals(st, theMeal, today);
+            const usual = mealSuggest(st, theMeal, today);
             if (!usual.length)
                 return null;
             return (React.createElement("div", { className: "il-card" },
@@ -26250,9 +26301,7 @@ ${desc.trim()}`, 1200, "cheap");
                                 " cal \u00B7 P",
                                 Math.round(u.p),
                                 " \u00B7 ",
-                                u.n,
-                                " time",
-                                u.n === 1 ? "" : "s"))),
+                                u.elsewhere ? "recent, elsewhere" : `${u.n} time${u.n === 1 ? "" : "s"}`))),
                     React.createElement("span", { className: "il-chip", style: { flexShrink: 0 } }, "Add"))))));
         })(),
         tab === "quick" && (React.createElement("div", { className: "il-card" },
