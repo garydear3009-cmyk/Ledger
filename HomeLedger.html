@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v265 · 4 Aug";
+const APP_VERSION = "v266 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -21870,8 +21870,30 @@ Rules:
 - Only include keys you can actually SEE. Leave everything else out. Do not guess a number.
 - A measurement showing 0.0 has not been taken. Leave it out rather than recording a zero.
 - "kind" is what the screenshot IS, not what was asked for. Say unknown if it is neither.
+- Telling rings from burn: "rings" is Apple Fitness — three coloured concentric rings, and a Move,
+  Exercise and Stand figure. "burn" is Google Fit or Fitbit — a single calories-out total with no
+  rings. An Apple screen that also shows a calorie total is still "rings".
 - Weight: give whichever unit is on screen. Stones and pounds go in weightLb as total pounds.
 - Do not convert anything else. Read what is there.`;
+/* The reader's own label for a screenshot is a guess, and an Apple Fitness
+   Summary screen showing a calorie total gets called "burn" often enough that
+   the rings card sat on "never" while the numbers were going in under Google
+   Fit. The values are the ground truth: only Apple Fitness gives an Exercise
+   minute count and a Stand hour count, only a scale gives body fat, only a tape
+   gives a thigh. Trust those over the label. */
+const RING_KEYS = ["moveKcal", "moveGoal", "exerciseMin", "standHrs"];
+function shotKind(v, said) {
+    const has = (k) => v && v[k] != null && v[k] !== "";
+    if (SITES.some((x) => has(x.id)) || has("abdomen"))
+        return "tape";
+    if (has("weightKg") || has("weightLb") || has("musclePct") || has("fatPct"))
+        return "scale";
+    if (RING_KEYS.some(has))
+        return "rings"; // Move, Exercise or Stand means the rings
+    if (has("totalKcal") || has("steps"))
+        return said === "rings" ? "rings" : "burn";
+    return said || "unknown";
+}
 /* where each reading lands */
 /* A screenshot can legitimately be a few days old — you photograph Sunday's
    rings on Monday. It cannot be two years old, and it cannot be tomorrow.
@@ -21986,10 +22008,11 @@ function Nightly({ st, save, a, today, close, setSheet }) {
             const v = { ...j.values, ...(edited[n] || {}) };
             Object.keys(v).forEach((k) => { if (v[k] === "" || v[k] == null)
                 delete v[k]; });
-            if (!Object.keys(v).length || j.kind === "unknown")
+            if (!Object.keys(v).length || shotKind(v, j.kind) === "unknown")
                 return;
             const when = dateFix[n] || shotDate(j.date, today).date;
-            next = applyShot(next, j.kind, v, j.unit, today, when);
+            /* what the numbers say it is, not what the reader called it */
+            next = applyShot(next, shotKind(v, j.kind), v, j.unit, today, when);
         });
         if (next !== st)
             save(next);
