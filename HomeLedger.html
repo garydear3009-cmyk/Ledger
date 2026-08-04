@@ -5257,7 +5257,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v270 · 4 Aug";
+const APP_VERSION = "v271 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6424,7 +6424,11 @@ function DishBuilder({ st, save, close, editId, seed }) {
             React.createElement("button", { className: "il-btn", disabled: !d.name || !d.items.length, onClick: () => { const rest = (st.dishes || []).filter((x) => x.id !== d.id); save({ ...st, dishes: [...rest, d] }); close(); } }, existing ? "Save changes" : "Save dish"),
             existing && React.createElement("button", { className: "il-btn dz", onClick: () => { save({ ...st, dishes: (st.dishes || []).filter((x) => x.id !== d.id) }); close(); } }, "Delete dish")));
 }
-function LogDish({ st, save, today, close, dishId }) {
+function LogDish({ st, save, today, sheet, close, dishId }) {
+    /* v271: the Add-food day chooser was only honoured by Quick add — this
+       sheet wrote to today whatever was picked. It logs to the day it was
+       opened for now. */
+    const tgt = (sheet && sheet.date && sheet.date <= today) ? sheet.date : today;
     const pool = [...FOODS, ...(st.myFoods || [])];
     const d = (st.dishes || []).find((x) => x.id === dishId);
     const [n, setN] = useState(1);
@@ -6434,9 +6438,9 @@ function LogDish({ st, save, today, close, dishId }) {
     const m = dishMacros(d, pool, n);
     const add = () => {
         const foods = [...st.foods];
-        let i = foods.findIndex((x) => x.date === today);
+        let i = foods.findIndex((x) => x.date === tgt);
         if (i < 0) {
-            foods.push({ date: today, entries: [] });
+            foods.push({ date: tgt, entries: [] });
             i = foods.length - 1;
         }
         foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(),
@@ -6701,7 +6705,11 @@ Keys:
 If the photo does not show a nutrition panel at all, or you cannot read the numbers,
 set confidence to "low", set every value in per100 to null, and explain in notes.
 Never guess a number you cannot see. A null is far better than a wrong figure.`;
-function ScanLabel({ st, save, today, close, setSheet }) {
+function ScanLabel({ st, save, today, sheet, close, setSheet }) {
+    /* v271: the Add-food day chooser was only honoured by Quick add — this
+       sheet wrote to today whatever was picked. It logs to the day it was
+       opened for now. */
+    const tgt = (sheet && sheet.date && sheet.date <= today) ? sheet.date : today;
     const [howMuch, setHowMuch] = useState("serving");
     const [stage, setStage] = useState("start"); // start | reading | check
     const [shot, setShot] = useState(null);
@@ -6816,9 +6824,9 @@ function ScanLabel({ st, save, today, close, setSheet }) {
             c: Math.round(food.c * mult), f: Math.round(food.f * mult),
         };
         const foods = [...(st.foods || [])];
-        let i = foods.findIndex((x) => x.date === today);
+        let i = foods.findIndex((x) => x.date === tgt);
         if (i < 0) {
-            foods.push({ date: today, entries: [] });
+            foods.push({ date: tgt, entries: [] });
             i = foods.length - 1;
         }
         foods[i] = { ...foods[i], entries: [...foods[i].entries, entry] };
@@ -15234,6 +15242,19 @@ function CookMode({ st, save, sheet, close, setSheet }) {
             React.createElement("div", { className: "no" },
                 "Step ",
                 n + 1),
+            (() => {
+                /* A microwave pack swapped in for boiled rice makes the step's timings
+                   wrong. Where the step mentions a packet-shaped swap, say plainly
+                   whose instructions win. */
+                const sw = (rec.yourSwaps || []).find((x) => /pack|pouch|microwav|sachet|tin\b|jar\b/i.test(x.to) &&
+                    String(step).toLowerCase().includes(x.to.toLowerCase()));
+                return sw ? (React.createElement("div", { className: "il-note", style: { fontSize: 13, color: "var(--ck-ochre)", margin: "0 0 10px" } },
+                    "You use ",
+                    sw.to,
+                    " \u2014 follow the packet's timings here, not the step's. It was written for ",
+                    sw.from,
+                    ".")) : null;
+            })(),
             React.createElement("div", { className: "txt" }, step),
             mine.length > 0 && (React.createElement("div", { className: "ing" }, mine.map((x, i) => (React.createElement("div", { key: i },
                 React.createElement("b", null,
@@ -15450,14 +15471,20 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                                                 save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "recipe"));
                                                 setSub(null);
                                                 setFix(null);
-                                            } }, "Just in this recipe"),
+                                            } }, "For this recipe, every time"),
+                                        React.createElement("button", { className: "il-btn g", disabled: !sub.name.trim(), onClick: () => {
+                                                save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "once"));
+                                                setSub(null);
+                                                setFix(null);
+                                            } }, "Just today's cook"),
                                         React.createElement("button", { className: "il-btn g", disabled: !sub.name.trim(), onClick: () => {
                                                 save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "global"));
                                                 setSub(null);
                                                 setFix(null);
                                             } },
-                                            "In every recipe that uses ",
-                                            sub.ing.toLowerCase()),
+                                            "Never use ",
+                                            sub.ing.toLowerCase(),
+                                            " \u2014 always this"),
                                         React.createElement("button", { className: "il-btn g", onClick: () => setSub(null) }, "Cancel"))));
                             }
                             return (React.createElement("button", { className: "il-btn g sm", onClick: () => setSub({ ing: i[2], amount: "", unit: i[1] || "", name: "" }) }, "Use something else instead"));
@@ -16557,6 +16584,10 @@ function mySwapFor(st, recName, ingName) {
     if (!k)
         return null;
     /* this recipe's own swap wins over the standing one */
+    /* a swap for just today's cook: stamped, and ignored from tomorrow */
+    const once = ((m.oneOff || {})[recName] || {})[k];
+    if (once && once.on === iso(new Date()))
+        return { ...once, scope: "once" };
     const mine = ((m.byRecipe || {})[recName] || {})[k];
     if (mine)
         return { ...mine, scope: "recipe" };
@@ -16566,6 +16597,11 @@ function mySwapFor(st, recName, ingName) {
 function setMySwap(st, recName, ingName, to, scope) {
     const m = st.mySwaps || {};
     const k = swapKey(ingName);
+    if (scope === "once") {
+        const oneOff = { ...(m.oneOff || {}) };
+        oneOff[recName] = { ...(oneOff[recName] || {}), [k]: { ...to, on: iso(new Date()) } };
+        return { ...st, mySwaps: { ...m, oneOff } };
+    }
     if (scope === "global") {
         return { ...st, mySwaps: { ...m, global: { ...(m.global || {}), [k]: to } } };
     }
@@ -16583,7 +16619,12 @@ function clearMySwap(st, recName, ingName) {
         byRecipe[recName] = { ...byRecipe[recName] };
         delete byRecipe[recName][k];
     }
-    return { ...st, mySwaps: { global, byRecipe } };
+    const oneOff = { ...(m.oneOff || {}) };
+    if (oneOff[recName]) {
+        oneOff[recName] = { ...oneOff[recName] };
+        delete oneOff[recName][k];
+    }
+    return { ...st, mySwaps: { global, byRecipe, oneOff } };
 }
 /* the ingredient list with your substitutions made */
 function swapIngredients(st, rec) {
@@ -16624,7 +16665,30 @@ function recipeAsYouMakeIt(st, rec) {
         return rec;
     const ruled = applySwaps(st, rec);
     const { ing, done } = swapIngredients(st, ruled);
-    return done.length ? { ...ruled, ing, yourSwaps: done } : ruled;
+    if (!done.length)
+        return ruled;
+    /* the steps talk about the old ingredient by name; say the new one */
+    const method = (ruled.method || []).map((m) => {
+        let out = String(m);
+        done.forEach(({ from, to }) => {
+            const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            /* the card says "brown rice"; the step says "the rice". Try the full
+               name first, then "the <last word>", which is how recipes refer back. */
+            const full = new RegExp(esc(from), "i");
+            if (full.test(out)) {
+                out = out.replace(full, to);
+                return;
+            }
+            const noun = from.trim().split(/\s+/).pop();
+            if (noun && noun.length > 3) {
+                const short = new RegExp("\\bthe " + esc(noun) + "\\b", "i");
+                if (short.test(out))
+                    out = out.replace(short, "the " + to);
+            }
+        });
+        return out;
+    });
+    return { ...ruled, ing, method, yourSwaps: done };
 }
 const RULE_GROUPS = [
     ["Meat and fish", ["no_fish", "no_shellfish", "no_pork", "no_lamb", "no_beef", "no_offal", "breast_not_thigh"]],
@@ -22778,7 +22842,7 @@ function Fuel({ st, save, a, today, setSheet }) {
                             React.createElement("button", { className: "il-qty", onClick: () => setQty(e.id, (e.qty || 1) + 0.5), "aria-label": "More" }, "+"),
                             React.createElement("button", { className: "il-x", style: { marginLeft: 4 }, onClick: () => del(e.id) }, "\u00D7")))))))))),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } },
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scan" }) }, "Scan a label"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scan", date: showing }) }, "Scan a label"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scalephoto" }) }, "Photograph my food"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "menu" }) }, "I'm out, read me the menu")),
         (() => {
@@ -24297,7 +24361,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "log" && React.createElement(Log, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "info" && React.createElement(ExerciseSheet, { sheet, st, save, a, close, setSheet }),
             sheet.t === "addfood" && React.createElement(AddFood, { st, save, a, today, close, setSheet, sheet }),
-            sheet.t === "food" && React.createElement(FoodSheet, { st, save, today, close, setSheet, foodId: sheet.foodId }),
+            sheet.t === "food" && React.createElement(FoodSheet, { st, save, today, sheet, close, setSheet, foodId: sheet.foodId }),
             sheet.t === "fuelling" && React.createElement(Fuelling, { st, a, today, close }),
             sheet.t === "supps" && React.createElement(SuppNote, { st, a, close }),
             sheet.t === "coach" && React.createElement(MacroCoach, { st, save, a, close }),
@@ -24306,8 +24370,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "units" && React.createElement(UnitsSheet, { st, save, close }),
             sheet.t === "intake" && React.createElement(Intake, { st, save, close }),
             sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, editId: sheet.id, seed: sheet.seed }),
-            sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, close, dishId: sheet.id }),
-            sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, close, setSheet }),
+            sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }),
+            sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, sheet, close, setSheet }),
             sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, close }),
             sheet.t === "importwo" && React.createElement(ImportWorkouts, { st, save, close }),
             sheet.t === "importcsv" && React.createElement(ImportData, { st, save, close }),
@@ -26110,11 +26174,9 @@ ${desc.trim()}`, 1200, "cheap");
         React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}${onDate === today ? "" : " · " + dtiny(onDate)}`, close: close }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l)))),
         React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "When"),
-            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
-                [clockOf(new Date(now.getTime() - 3 * 3600e3)), clockOf(new Date(now.getTime() - 3600e3)), clockOf(now)]
-                    .map((t) => (React.createElement("button", { key: t, className: "il-chip" + (at === t ? " on" : ""), onClick: () => setAt(t) }, t))),
-                React.createElement("input", { className: "il-in", style: { width: 92, padding: "6px 8px", fontSize: 14 }, value: at, onChange: (e) => setAt(e.target.value), placeholder: "19:30" })),
+            React.createElement("div", { className: "il-lbl", style: { margin: "0 0 8px" } }, "When"),
+            React.createElement("input", { className: "il-in il-n", type: "time", value: at, style: { fontSize: 26, padding: "12px 14px", width: 172, textAlign: "center" }, onChange: (e) => { if (e.target.value)
+                    setAt(e.target.value); } }),
             React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which day"),
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" } },
                 [[today, "Today"], [addDays(today, -1), "Yesterday"], [addDays(today, -2), dtiny(addDays(today, -2))]]
@@ -26204,17 +26266,21 @@ ${desc.trim()}`, 1200, "cheap");
                 "The food table has ",
                 FOODS.length,
                 " things in it, with portions you can pick by eye."),
-            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "food" }); } }, "Search the food table"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "food", date: onDate }); } }, "Search the food table"))),
         tab === "scan" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Photograph the nutrition label and the numbers come off it. Works on anything with a panel on the back."),
-            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scan" }); } }, "Scan a label"))),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scan", date: onDate }); } }, "Scan a label"))),
         tab === "mine" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Things you've built yourself \u2014 a dish you make often, or a recipe out of the book."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "dish" }); } }, "My dishes"),
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "dish", date: onDate }); } }, "My dishes"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "recipes" }); } }, "Cook something from the book")))));
 }
-function FoodSheet({ st, save, today, close, setSheet, foodId }) {
+function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
+    /* v271: the Add-food day chooser was only honoured by Quick add — this
+       sheet wrote to today whatever was picked. It logs to the day it was
+       opened for now. */
+    const tgt = (sheet && sheet.date && sheet.date <= today) ? sheet.date : today;
     const [q, setQ] = useState("");
     const [cat, setCat] = useState(-1);
     const [meal, setMeal] = useState(() => { const h = new Date().getHours(); return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks"; });
@@ -26266,9 +26332,9 @@ function FoodSheet({ st, save, today, close, setSheet, foodId }) {
     const add = (food, g) => {
         const m = scale(food, g);
         const foods = [...st.foods];
-        let i = foods.findIndex((x) => x.date === today);
+        let i = foods.findIndex((x) => x.date === tgt);
         if (i < 0) {
-            foods.push({ date: today, entries: [] });
+            foods.push({ date: tgt, entries: [] });
             i = foods.length - 1;
         }
         foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(), name: `${food.name} (${AMT(food, g)})`, meal, fid: food.id, g, ...m }] };
