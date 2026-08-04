@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v285 · 4 Aug";
+const APP_VERSION = "v286 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5951,6 +5951,11 @@ function HomeLedgerInner() {
                 React.createElement(Ico, { d: ICONS[k] }),
                 TITLE[k])))),
             React.createElement(AskBar, { st, setSheet, tab: view }),
+            (() => {
+                const lv = ((st && st.sessions) || []).find((x) => x.startedAt && !x.finished && Date.now() - x.startedAt < 6 * 3600 * 1000);
+                return lv && !(tab === "train" && sub === "train") ?
+                    React.createElement(WorkoutPill, { s: lv, onGo: () => { FOCUS_UI.min = false; setTab("train"); setSub("train"); } }) : null;
+            })(),
             sheet && React.createElement(Sheet, { sheet, setSheet, st, save, a, today, health, go, depth: stack.length, back: () => setStack((s) => s.slice(0, -1)) }))));
 }
 /* ---------------- TRAIN ---------------- */
@@ -25430,11 +25435,6 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "targets" && React.createElement(TargetSheet, { st, save, a, close, setSheet }),
             sheet.t === "profile" && React.createElement(ProfileSheet, { st, save, close }),
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
-            (() => {
-                const lv = (st.sessions || []).find((x) => x.startedAt && !x.finished && Date.now() - x.startedAt < 6 * 3600 * 1000);
-                return lv && !(tab === "train" && sub === "train") ?
-                    React.createElement(WorkoutPill, { s: lv, onGo: () => { FOCUS_UI.min = false; setTab("train"); setSub("train"); } }) : null;
-            })(),
             !NO_DONE.includes(sheet.t) && !(vp && vp.open) && !typing &&
                 React.createElement(DoneBar, { close: close, back: BACK_ONLY.includes(sheet.t), label: BACK_ONLY.includes(sheet.t) ? "Back" : DONE_LABEL[sheet.t] || "Done" }))));
 }
