@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v263 · 4 Aug";
+const APP_VERSION = "v265 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -14804,6 +14804,12 @@ function RecipeBook({ st, save, a, today, close, setSheet }) {
     const toggleTag = (t) => setTags((x) => x.includes(t) ? x.filter((y) => y !== t) : [...x, t]);
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Recipes", sub: `${list.length} of ${all.length}`, close: close }),
+        React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7, flexWrap: "wrap" } },
+            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "addrec" }) }, "+ Photograph a recipe"),
+            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "myratings" }) },
+                "What I thought",
+                Object.keys(st.ratings || {}).length ? ` · ${Object.keys(st.ratings || {}).length}` : ""),
+            React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "inspo" }) }, "Can't decide?")),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "grid", gap: 8 } },
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "addrec" }) }, "Add from a photo"),
@@ -22468,7 +22474,7 @@ function Fuel({ st, save, a, today, setSheet }) {
     };
     const sug = suggestFoods({ p: P.proteinTarget - t.p, c: P.carbTarget - t.c, f: P.fatTarget - t.f }, st);
     return (React.createElement(React.Fragment, null,
-        isToday && (React.createElement("button", { className: "il-fab", onClick: () => setSheet({ t: "addfood" }), "aria-label": "Add food" }, "+")),
+        React.createElement("button", { className: "il-fab", onClick: () => setSheet({ t: "addfood", date: showing }), "aria-label": "Add food" }, "+"),
         (() => {
             /* The week, four rows of seven. Tap a day and everything below shows
                that day instead. */
@@ -22507,7 +22513,22 @@ function Fuel({ st, save, a, today, setSheet }) {
                 React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Carry on where you left off" : "Ask her anything, or tell her what you ate" }),
                 React.createElement(Row, { to: { t: "meals" }, title: "What should I eat?", sub: "Round the time and the macros you have left" }),
                 React.createElement(Row, { to: { t: "inspo" }, title: "What shall I cook?", sub: "A few questions and she'll pick three" }),
-                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` })));
+                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
+                React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: (() => {
+                        const n = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
+                        return n ? `${n} meals planned` : "And the shopping writes itself";
+                    })() }),
+                React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: (() => {
+                        const sh = shopLines(st, weekStart(today));
+                        const n = sh.need.length + sh.ranOut.length + sh.added.length;
+                        return n ? `${n} thing${n === 1 ? "" : "s"} on it` : "Nothing on it yet";
+                    })() }),
+                React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: (() => {
+                        const c = (st.cupboard || []).length;
+                        const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
+                        return c ? `${c} in it${soon ? `, ${soon} going off soon` : ""}` : "Tell me what you've got in";
+                    })() }),
+                React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" })));
         })(),
         React.createElement(FuelCard, { st, save, a, today, setSheet }),
         (() => {
@@ -22547,8 +22568,7 @@ function Fuel({ st, save, a, today, setSheet }) {
                             React.createElement("i", { style: { width: pct + "%", background: over ? "var(--gold)" : colour } }))));
                 })));
         })(),
-        React.createElement("div", { style: { padding: "0 12px", marginTop: 16 } },
-            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "addfood" }) }, "Add something I've eaten")),
+        React.createElement("div", { style: { padding: "0 12px", marginTop: 16 } }),
         React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
             React.createElement("span", { className: "il-lbl" }, isToday ? "Today" : dlong(showing)),
             !isToday && (React.createElement("button", { className: "il-chip", style: { marginRight: 8 }, onClick: () => setDay(today) }, "Back to today")),
@@ -22655,29 +22675,8 @@ function Fuel({ st, save, a, today, setSheet }) {
                 sug.fresh.length > 0 && React.createElement(React.Fragment, null,
                     React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 0", color: "var(--dim)" } }, sug.mine.length ? "Or something new" : "Worth a look"),
                     sug.fresh.map((c, i) => React.createElement(Row, { key: "f" + i, c: c }))),
-                React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "food" }) }, "More suggestions \u2192"),
+                React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "meals" }) }, "More suggestions \u2192"),
                 React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Tap any of them to pick your own portion before logging it.")));
-        })(),
-        React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 8px" } }, "Cooking and shopping"),
-        (() => {
-            const Row = ({ to, title, sub }) => (React.createElement("button", { className: "il-mrow", onClick: () => setSheet(to) },
-                React.createElement("span", { style: { minWidth: 0 } },
-                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, title),
-                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
-            const planned = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
-            const shop = shopLines(st, weekStart(today));
-            const shopN = shop.need.length + shop.ranOut.length + shop.added.length;
-            const cup = (st.cupboard || []).length;
-            const soon = (st.cupboard || []).filter((c) => { const d = daysLeft(c.exp); return d != null && d <= 3; }).length;
-            const rated = Object.keys(st.ratings || {}).length;
-            return (React.createElement("div", { className: "il-menu" },
-                React.createElement(Row, { to: { t: "addrec" }, title: "Photograph a recipe", sub: "A card, a page from a book, or your own handwriting" }),
-                React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: planned ? `${planned} meals planned` : "And the shopping writes itself" }),
-                React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: shopN ? `${shopN} thing${shopN === 1 ? "" : "s"} on it` : "Nothing on it yet" }),
-                React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" }),
-                React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: cup ? `${cup} thing${cup === 1 ? "" : "s"} in${soon ? ` · ${soon} need using` : ""}` : "Photograph a shelf to start" }),
-                React.createElement(Row, { to: { t: "myratings" }, title: "What I thought", sub: rated ? `${rated} rated` : "Rate meals after you cook them" })));
         })(),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", onClick: () => setTips(!tips), style: { cursor: "pointer" } },
@@ -24134,7 +24133,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "exprog" && React.createElement(ExProgress, { sheet, a, close, setSheet }),
             sheet.t === "log" && React.createElement(Log, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "info" && React.createElement(ExerciseSheet, { sheet, st, save, a, close, setSheet }),
-            sheet.t === "addfood" && React.createElement(AddFood, { st, save, a, today, close, setSheet }),
+            sheet.t === "addfood" && React.createElement(AddFood, { st, save, a, today, close, setSheet, sheet }),
             sheet.t === "food" && React.createElement(FoodSheet, { st, save, today, close, setSheet, foodId: sheet.foodId }),
             sheet.t === "fuelling" && React.createElement(Fuelling, { st, a, today, close }),
             sheet.t === "supps" && React.createElement(SuppNote, { st, a, close }),
@@ -25862,7 +25861,7 @@ function MacroCoach({ st, save, a, close }) {
 }
 /* One way in, with everything behind it. Tabs rather than five separate
    routes you have to already know about. */
-function AddFood({ st, save, a, today, close, setSheet }) {
+function AddFood({ st, save, a, today, close, setSheet, sheet }) {
     const now = new Date();
     const [tab, setTab] = useState("quick");
     const clockOf = (d) => hhmm(d.getHours(), d.getMinutes());
@@ -25878,17 +25877,31 @@ function AddFood({ st, save, a, today, close, setSheet }) {
     const [found, setFound] = useState(null);
     const mealFor = (t) => {
         const h = parseInt(String(t).slice(0, 2), 10);
+        /* the small hours belong to the night before, not to breakfast */
+        if (h < 4)
+            return "Snacks";
         return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
     };
     /* null means "follow the clock". Pick one and it stays picked, even if you
        then change the time — you have said what this was. */
     const [meal, setMeal] = useState(null);
+    /* Which day it goes on. Between midnight and four in the morning the day has
+       turned over but the evening has not ended, so yesterday is the better
+       guess — you can still say otherwise. */
+    const [onDate, setOnDate] = useState(() => {
+        if (sheet && sheet.date && sheet.date <= today)
+            return sheet.date; // opened from a day you were viewing
+        const h = new Date().getHours();
+        return h < 4 ? addDays(today, -1) : today;
+    });
     const theMeal = meal || mealFor(at);
     const put = (rows) => {
         const foods = [...(st.foods || [])];
-        let i = foods.findIndex((x) => x.date === today);
+        /* onDate, not today — a snack at half past midnight belongs to the night
+           before, and you should not have to remember it tomorrow */
+        let i = foods.findIndex((x) => x.date === onDate);
         if (i < 0) {
-            foods.push({ date: today, entries: [] });
+            foods.push({ date: onDate, entries: [] });
             i = foods.length - 1;
         }
         const add = rows.map((r) => ({ id: "u" + Date.now() + Math.random(), name: r.name,
@@ -25931,7 +25944,7 @@ ${desc.trim()}`, 1200, "cheap");
     const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["search", "Search"],
         ["scan", "Scan a label"], ["mine", "Mine"]];
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}`, close: close }),
+        React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}${onDate === today ? "" : " · " + dtiny(onDate)}`, close: close }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l)))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "When"),
@@ -25939,6 +25952,16 @@ ${desc.trim()}`, 1200, "cheap");
                 [clockOf(new Date(now.getTime() - 3 * 3600e3)), clockOf(new Date(now.getTime() - 3600e3)), clockOf(now)]
                     .map((t) => (React.createElement("button", { key: t, className: "il-chip" + (at === t ? " on" : ""), onClick: () => setAt(t) }, t))),
                 React.createElement("input", { className: "il-in", style: { width: 92, padding: "6px 8px", fontSize: 14 }, value: at, onChange: (e) => setAt(e.target.value), placeholder: "19:30" })),
+            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which day"),
+            React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" } },
+                [[today, "Today"], [addDays(today, -1), "Yesterday"], [addDays(today, -2), dtiny(addDays(today, -2))]]
+                    .map(([d, l]) => (React.createElement("button", { key: d, className: "il-chip" + (onDate === d ? " on" : ""), onClick: () => setOnDate(d) }, l))),
+                React.createElement("input", { className: "il-in il-n", type: "date", max: today, value: onDate, style: { width: 150, padding: "7px 10px", fontSize: 13 }, onChange: (e) => { if (e.target.value && e.target.value <= today)
+                        setOnDate(e.target.value); } })),
+            onDate !== today && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
+                "Going onto ",
+                dlong(onDate),
+                ", not today.")),
             React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which meal"),
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
                 MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + (theMeal === m ? " on" : ""), onClick: () => setMeal(m) }, m))),
