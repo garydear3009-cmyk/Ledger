@@ -562,6 +562,21 @@ const KIT = [
     { id: "none", label: "Nothing (bodyweight)", always: true }, { id: "db", label: "Dumbbells" },
     { id: "bench", label: "Bench" }, { id: "bar", label: "Pull-up bar" }, { id: "dip", label: "Dip bars" },
     { id: "band", label: "Resistance bands" }, { id: "kb", label: "Kettlebell" }, { id: "wheel", label: "Ab wheel" },
+    /* a doorway or wall pulley: cable feel at home — even resistance through
+       the whole stroke, where a band ramps at the end */
+    { id: "pulley", label: "Pulley system" },
+];
+const PULLEY_RAW = [
+    ["Pulley lat pulldown", ["pulley"], "pulldown", ["lats"], ["bi", "trap"], 8, 12, 0, ["Sit or kneel under the anchor, lean back a touch", "Pull the handle to the top of the chest, elbows down and in", "Let it rise slowly — the stack keeps pulling all the way up"]],
+    ["Pulley row", ["pulley"], "row", ["lats", "trap"], ["bi", "rdelt"], 8, 12, 0, ["Anchor low, sit tall with a flat back", "Pull to the lower ribs, squeeze the shoulder blades together", "Let the arms go long before the next pull"]],
+    ["Pulley face pull", ["pulley"], "facepull", ["rdelt", "trap"], ["fore"], 12, 20, 0, ["Anchor at face height, rope in both hands", "Pull towards the bridge of the nose, elbows high and wide", "Finish with the knuckles by the ears"]],
+    ["Pulley chest press", ["pulley"], "press", ["chest"], ["fdelt", "tri"], 8, 12, 0, ["Anchor at chest height, face away, one foot forward", "Press both handles forward until the arms are long", "Let them come back level with the chest, not behind it"]],
+    ["Pulley chest fly", ["pulley"], "fly", ["chest"], ["fdelt"], 10, 15, 0, ["Anchor at chest height, face away, slight bend in the elbows", "Sweep the hands together in a wide arc", "Open back up until you feel the stretch across the chest"]],
+    ["Pulley triceps pushdown", ["pulley"], "extension", ["tri"], ["fore"], 10, 15, 0, ["Anchor high, elbows pinned to the ribs", "Press the handle down until the arms are straight", "Only the forearms move — the elbows stay put"]],
+    ["Pulley curl", ["pulley"], "curl", ["bi"], ["fore"], 10, 15, 0, ["Anchor low, elbows at the ribs", "Curl to the shoulders without swinging", "Lower slowly — the cable fights you the whole way down"]],
+    ["Pulley lateral raise", ["pulley"], "raise", ["sdelt"], ["trap"], 12, 20, 0, ["Anchor low, stand side-on, handle in the far hand", "Raise the arm out to shoulder height, soft elbow", "The cable keeps tension at the bottom where a dumbbell has none"]],
+    ["Pulley crunch", ["pulley"], "crunch", ["abs"], [], 10, 15, 0, ["Anchor high, kneel holding the rope by your temples", "Curl the ribs towards the hips — the hips stay still", "Let the cable pull you tall again slowly"]],
+    ["Pulley wood chop", ["pulley"], "rotation", ["obl"], ["abs", "sdelt"], 10, 15, 0, ["Anchor high, stand side-on, both hands on the handle", "Pull down and across to the far hip, arms long", "Turn from the trunk, not the arms — let the hips follow"]],
 ];
 /* ---------------- exercises ----------------
    [name, kit, move, primary, secondary, lo, hi, perSide, cues] */
@@ -869,6 +884,58 @@ const P3SEQ = {
     "Overhead carry": [[[0, 1.632, 0, 0, 1.512, 0, 0, 1.212, 0, 0, 0.832, 0, -0.22, 1.392, 0, 0.22, 1.392, 0, -0.22, 1.689, 0.042, 0.22, 1.689, 0.042, -0.22, 1.968, 0.061, 0.22, 1.968, 0.061, -0.12, 0.812, 0, 0.12, 0.812, 0, -0.12, 0.41, 0.085, 0.12, 0.404, -0.043, -0.12, 0.001, 0.071, 0.12, 0, -0.114], [0, 1.638, 0, 0, 1.518, 0, 0, 1.218, 0, 0, 0.838, 0, -0.22, 1.398, 0, 0.22, 1.398, 0, -0.22, 1.696, 0.031, 0.22, 1.696, 0.031, -0.22, 1.976, 0.051, 0.22, 1.976, 0.051, -0.12, 0.818, 0, 0.12, 0.818, 0, -0.12, 0.408, 0.021, 0.12, 0.408, 0.021, -0.12, 0, -0.014, 0.12, 0, -0.014], [0, 1.632, 0, 0, 1.512, 0, 0, 1.212, 0, 0, 0.832, 0, -0.22, 1.392, 0, 0.22, 1.392, 0, -0.22, 1.689, 0.042, 0.22, 1.689, 0.042, -0.22, 1.968, 0.061, 0.22, 1.968, 0.061, -0.12, 0.812, 0, 0.12, 0.812, 0, -0.12, 0.404, -0.043, 0.12, 0.41, 0.085, -0.12, 0, -0.114, 0.12, 0.001, 0.071], [0, 1.638, 0, 0, 1.518, 0, 0, 1.218, 0, 0, 0.838, 0, -0.22, 1.398, 0, 0.22, 1.398, 0, -0.22, 1.696, 0.031, 0.22, 1.696, 0.031, -0.22, 1.976, 0.051, 0.22, 1.976, 0.051, -0.12, 0.818, 0, 0.12, 0.818, 0, -0.12, 0.408, 0.021, 0.12, 0.408, 0.021, -0.12, 0, -0.014, 0.12, 0, -0.014]], [0.55, 0.3, 0.55, 0.3]],
     "Front rack carry": [[[0, 1.632, 0, 0, 1.512, 0, 0, 1.212, 0, 0, 0.832, 0, -0.22, 1.392, 0, 0.22, 1.392, 0, -0.22, 1.219, 0.246, 0.22, 1.219, 0.246, -0.22, 1.462, 0.386, 0.22, 1.462, 0.386, -0.12, 0.812, 0, 0.12, 0.812, 0, -0.12, 0.41, 0.085, 0.12, 0.404, -0.043, -0.12, 0.001, 0.071, 0.12, 0, -0.114], [0, 1.638, 0, 0, 1.518, 0, 0, 1.218, 0, 0, 0.838, 0, -0.22, 1.398, 0, 0.22, 1.398, 0, -0.22, 1.213, 0.236, 0.22, 1.213, 0.236, -0.22, 1.456, 0.376, 0.22, 1.456, 0.376, -0.12, 0.818, 0, 0.12, 0.818, 0, -0.12, 0.408, 0.021, 0.12, 0.408, 0.021, -0.12, 0, -0.014, 0.12, 0, -0.014], [0, 1.632, 0, 0, 1.512, 0, 0, 1.212, 0, 0, 0.832, 0, -0.22, 1.392, 0, 0.22, 1.392, 0, -0.22, 1.219, 0.246, 0.22, 1.219, 0.246, -0.22, 1.462, 0.386, 0.22, 1.462, 0.386, -0.12, 0.812, 0, 0.12, 0.812, 0, -0.12, 0.404, -0.043, 0.12, 0.41, 0.085, -0.12, 0, -0.114, 0.12, 0.001, 0.071], [0, 1.638, 0, 0, 1.518, 0, 0, 1.218, 0, 0, 0.838, 0, -0.22, 1.398, 0, 0.22, 1.398, 0, -0.22, 1.213, 0.236, 0.22, 1.213, 0.236, -0.22, 1.456, 0.376, 0.22, 1.456, 0.376, -0.12, 0.818, 0, 0.12, 0.818, 0, -0.12, 0.408, 0.021, 0.12, 0.408, 0.021, -0.12, 0, -0.014, 0.12, 0, -0.014]], [0.55, 0.3, 0.55, 0.3]]
 };
+/* ============ HOW A REP ACTUALLY MOVES ============
+   The shape of one repetition: drive up, hold the squeeze for a beat,
+   lower under control (slower than the lift), settle for a beat at the
+   bottom. Returns where between the two poses (0..1) you are at cycle
+   position x (0..1). */
+const REP_PHASES = { up: 0.34, squeeze: 0.07, down: 0.52, reset: 0.07 };
+function repShape(x) {
+    const p = REP_PHASES;
+    const easeOut = (u) => 1 - (1 - u) * (1 - u); // fast off the bottom, decelerating
+    const easeIn2 = (u) => u * u * (3 - 2 * u); // smooth both ends on the way down
+    x = ((x % 1) + 1) % 1;
+    if (x < p.up)
+        return easeOut(x / p.up);
+    if (x < p.up + p.squeeze)
+        return 1; // the squeeze at the top
+    if (x < p.up + p.squeeze + p.down)
+        return 1 - easeIn2((x - p.up - p.squeeze) / p.down); // lowered, not dropped
+    return 0; // settled at the bottom
+}
+/* The far end of a limb trails the near end by a few hundredths of a
+   cycle. Shoulders and hips lead, elbows and knees follow, hands and
+   ankles arrive last — that trailing is most of what separates a body
+   from a machine. */
+const LAG3 = {
+    tier1: ["elL", "elR", "knL", "knR"],
+    tier2: ["hnL", "hnR", "anL", "anR"],
+    frac: 0.022,
+};
+/* No two reps the same: a couple of percent on the clock and a touch on
+   the range. Seeded, so the wobble is stable for a given exercise rather
+   than a shimmer. */
+function repJitter(seed) {
+    let h = (seed * 2654435761) >>> 0;
+    const r = () => { h = (h * 1664525 + 1013904223) >>> 0; return h / 4294967296; };
+    return { dur: 0.965 + r() * 0.07, amp: 0.985 + r() * 0.015 };
+}
+/* Breathing is a slow chest rise; balance is a slight upper-body sway.
+   Both live above the hips so the feet never slide, and neither happens
+   to a body lying on the floor. */
+const BREATH3 = { rate: 0.23, rise: 0.0045, swayRate: 0.11, sway: 0.006,
+    chest: ["hd", "nk", "sp", "shL", "shR"],
+    upper: ["hd", "nk", "sp", "shL", "shR", "elL", "elR", "hnL", "hnR"] };
+/* A pulley curl is a band curl with a different thing in the hand — the body
+   is identical. Borrowing the cousin's pose keeps all ten animated, under
+   the v267 motion, without a page of hand-set coordinates. */
+const P3_ALIAS = {
+    "Pulley lat pulldown": "Band pulldown", "Pulley row": "Band row",
+    "Pulley face pull": "Band face pull", "Pulley chest press": "Band chest press",
+    "Pulley chest fly": "Band chest fly", "Pulley triceps pushdown": "Band triceps pushdown",
+    "Pulley curl": "Band curl", "Pulley lateral raise": "Band lateral raise",
+    "Pulley crunch": "Weighted crunch", "Pulley wood chop": "Pallof press",
+};
 const P3 = Object.fromEntries(Object.entries(P3RAW).map(([n, [a, b, h, note, lying, seated]]) => {
     const un = (arr) => Object.fromEntries(J3.map((k, i) => [k, [arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]]]));
     const q = P3SEQ[n];
@@ -884,6 +951,8 @@ const P3 = Object.fromEntries(Object.entries(P3RAW).map(([n, [a, b, h, note, lyi
     return [n, { a: un(a), b: un(b), hot: h, note, lying: !!lying, seated: !!seated,
             seq: q ? q[0].map(un) : null, segs: q ? q[1] : null, mid, span }];
 }));
+Object.entries(P3_ALIAS).forEach(([n, from]) => { if (!P3[n] && P3[from])
+    P3[n] = P3[from]; });
 /* ============ 3D EXERCISE ANIMATION ============
    Drag to turn, pinch to zoom. Falls back to the flat drawing if the 3D
    library can't load, so nothing ever ends up blank.                  */
@@ -1094,6 +1163,7 @@ function Form3D({ ex, h = 260, controls = true }) {
         };
         const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
         let rotY = .42, rotX = .10, rotYT = .42, rotXT = .10, zoom = 1, camD = 3.2, t = 0, last = performance.now();
+        let wall = 0, rep = 0, jit = repJitter(1); // which rep we are on, and its wobble
         const ptrs = new Map();
         let pinch0 = 0, zoom0 = 1, moved = 0;
         const cv = rnd.domElement;
@@ -1136,28 +1206,53 @@ function Form3D({ ex, h = 260, controls = true }) {
             raf = requestAnimationFrame(loop);
             const dt = Math.min(.06, (now - last) / 1000);
             last = now;
-            /* A sequence runs forwards and loops. A two-frame lift still goes out
-               quickly and back slowly, the way a rep actually feels. */
-            const cyc = pose.seq ? 4.6 : 2.8;
-            if (api.current.playing)
-                t = (t + dt * api.current.speed / cyc) % 1;
-            const ease = (x) => (x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
-            const P = {};
-            if (pose.seq) {
-                const w = pose.segs, total = w.reduce((x, y) => x + y, 0);
-                let u = t * total, i = 0;
-                while (u > w[i]) {
-                    u -= w[i];
-                    i = (i + 1) % w.length;
-                }
-                const A = pose.seq[i], B = pose.seq[(i + 1) % pose.seq.length];
-                const e3 = ease(u / w[i]);
-                J3.forEach((k) => { P[k] = mix(A[k], B[k], e3); });
+            wall += dt;
+            const cyc = (pose.seq ? 4.6 : 2.8) * jit.dur;
+            if (api.current.playing) {
+                const t2 = t + dt * api.current.speed / cyc;
+                if (t2 >= 1) {
+                    rep++;
+                    jit = repJitter(rep + 1);
+                } // a new rep, its own wobble
+                t = t2 % 1;
             }
-            else {
-                const q2 = t < .38 ? t / .38 : 1 - ((t - .38) / .62);
-                const e2 = ease(q2);
-                J3.forEach((k) => { P[k] = mix(pose.a[k], pose.b[k], e2); });
+            const ease = (x) => (x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+            /* the whole pose at one moment in the cycle — evaluated more than once
+               per frame so the far ends of the limbs can trail */
+            const evalAt = (tt) => {
+                tt = ((tt % 1) + 1) % 1;
+                const out = {};
+                if (pose.seq) {
+                    const w = pose.segs, total = w.reduce((x, y) => x + y, 0);
+                    let u = tt * total, i = 0;
+                    while (u > w[i]) {
+                        u -= w[i];
+                        i = (i + 1) % w.length;
+                    }
+                    const A = pose.seq[i], B = pose.seq[(i + 1) % pose.seq.length];
+                    const e3 = ease(u / w[i]);
+                    J3.forEach((k) => { out[k] = mix(A[k], B[k], e3); });
+                }
+                else {
+                    const e2 = repShape(tt) * jit.amp;
+                    J3.forEach((k) => { out[k] = mix(pose.a[k], pose.b[k], e2); });
+                }
+                return out;
+            };
+            const P = evalAt(t);
+            /* elbows and knees a beat behind the shoulders and hips, hands and
+               ankles a beat behind them */
+            const L1 = evalAt(t - LAG3.frac), L2 = evalAt(t - 2 * LAG3.frac);
+            LAG3.tier1.forEach((k) => { P[k] = L1[k]; });
+            LAG3.tier2.forEach((k) => { P[k] = L2[k]; });
+            /* breathing and balance, above the hips only, never on the floor */
+            if (!pose.lying) {
+                const br = Math.sin(2 * Math.PI * BREATH3.rate * wall) * BREATH3.rise;
+                BREATH3.chest.forEach((k) => { P[k] = [P[k][0], P[k][1] + br, P[k][2]]; });
+                if (!pose.seated && !pose.seq) {
+                    const sw = Math.sin(2 * Math.PI * BREATH3.swayRate * wall) * BREATH3.sway;
+                    BREATH3.upper.forEach((k) => { P[k] = [P[k][0] + sw, P[k][1], P[k][2]]; });
+                }
             }
             const hotSet = new Set();
             if (api.current.muscles)
@@ -1261,6 +1356,13 @@ const MUS = [
 ].map(([id, anat, plain, region, lo, hi]) => ({ id, anat, plain, region, lo, hi }));
 const MUSBY = Object.fromEntries(MUS.map((m) => [m.id, m]));
 const REGIONS = [["chest", "Chest"], ["shoulder", "Shoulders"], ["back", "Back"], ["arm", "Arms"], ["core", "Core"], ["leg", "Legs"]];
+const ANAT_ALIAS = {
+    "Pulley lat pulldown": "Band pulldown", "Pulley row": "Band row",
+    "Pulley face pull": "Band face pull", "Pulley chest press": "Band chest press",
+    "Pulley chest fly": "Band chest fly", "Pulley triceps pushdown": "Band triceps pushdown",
+    "Pulley curl": "Band curl", "Pulley lateral raise": "Band lateral raise",
+    "Pulley crunch": "Weighted crunch", "Pulley wood chop": "Pallof press",
+};
 const ANAT = Object.fromEntries([
     ["Farmer's carry", { "fore_flex": 1, "trap_up": 1, "trap_mid": 0.5, "obl_ext": 0.5, "transverse": 0.5, "erector": 0.5 }],
     ["Suitcase carry, one side", { "obl_ext": 1, "transverse": 0.75, "fore_flex": 0.75, "trap_up": 0.5, "glute_med": 0.5, "erector": 0.5 }],
@@ -1464,6 +1566,8 @@ const ANAT = Object.fromEntries([
     ["Renegade row", { "lat": 1, "rhomboid": 0.5, "trap_mid": 0.5, "transverse": 0.5, "obl_ext": 0.5, "delt_post": 0.25, "bi_long": 0.25 }],
     ["Farmer's march", { "trap_up": 1, "fore_flex": 1, "obl_ext": 0.5, "transverse": 0.5, "fore_ext": 0.25 }]
 ]);
+Object.entries(ANAT_ALIAS).forEach(([n, f]) => { if (!ANAT[n] && ANAT[f])
+    ANAT[n] = ANAT[f]; });
 const anatOf = (ex) => (ex && ANAT[ex.name]) || {};
 /* the app tracks left and right separately; the guidance is the same, so
    point both at one description and mirror the marker */
@@ -1496,6 +1600,7 @@ const MET_BY_MOVE = {
     farmer: 4.5, getup: 5, twist: 3.5, bearcrawl: 5, stepup: 5.5, hold: 2.5,
 };
 const groupOf = (ex) => ex.aerobic ? "aerobic" : ex.cardio ? "cardio" : (Object.keys(GROUPS).find((g) => GROUPS[g].m.length && ex.primary.some((m) => GROUPS[g].m.includes(m))) || "core");
+RAW.push(...PULLEY_RAW);
 const EX = [
     ...RAW.map(([name, kit, move, primary, secondary, lo, hi, perSide, cues], i) => ({
         id: "x" + i, name, kit, move, primary, secondary, lo, hi, cues, perSide: !!perSide,
@@ -5152,7 +5257,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v266 · 4 Aug";
+const APP_VERSION = "v269 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -17547,32 +17652,53 @@ function Supplements({ st, save, a, today, setSheet }) {
             React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
                 React.createElement("span", { className: "il-lbl" }, "Today, in order"),
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, left === 0 ? "all done" : `${left} to go`)),
+            (() => {
+                /* Two tubs, one supplement: both vitamin D products carry the same
+                   warning underneath, but nothing joined them up. Count the daily
+                   list by what each tub actually IS and flag any doubles. */
+                const counts = {};
+                mine.forEach((x) => { const k = suppKnown(x); if (k)
+                    (counts[k.name] = counts[k.name] || []).push(x.name); });
+                const doubled = Object.entries(counts).filter(([, v]) => v.length > 1);
+                if (!doubled.length)
+                    return null;
+                return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red, #E5484D)", marginBottom: 8 } },
+                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 6, color: "var(--red, #E5484D)" } }, "Two of the same thing"),
+                    doubled.map(([what, names], i) => (React.createElement("div", { key: i, className: "il-note", style: { fontSize: 12.5, marginBottom: i < doubled.length - 1 ? 8 : 0 } },
+                        names.join(" and "),
+                        " are both ",
+                        what.toLowerCase(),
+                        " \u2014 one dose is the point, two is a mistake. Swipe one off the list.")))));
+            })(),
             fastingSuppNote(st) && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)", marginBottom: 8 } },
                 React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, fastingSuppNote(st)))),
             SUPP_SLOTS.filter(([k]) => bySlot[k]).map(([k, label]) => (React.createElement("div", { key: k, className: "il-card", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 8 } }, k === "breakfast" ? firstMealLabel(st) : label),
                 bySlot[k].map(({ x, why, avoid }, i) => {
                     const on = done.includes(x.name);
-                    return (React.createElement("div", { key: i, className: "il-row", style: { padding: "7px 0", alignItems: "flex-start",
-                            borderTop: i ? "1px solid var(--line)" : 0, opacity: on ? 0.45 : 1 }, onClick: () => save({ ...st, ...toggleTick(st, today, x.name) }) },
-                        React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10 } },
-                            React.createElement("span", { style: { width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
-                                    border: on ? "none" : "1.5px solid var(--line)", background: on ? "var(--grn)" : "transparent",
-                                    color: "#0B0B0D", fontSize: 12, fontWeight: 700, textAlign: "center", lineHeight: "18px" } }, on ? "\u2713" : ""),
-                            React.createElement("div", { style: { minWidth: 0 } },
-                                React.createElement("div", { style: { fontSize: 14, textDecoration: on ? "line-through" : "none" } },
-                                    x.name,
-                                    x.dose ? ` · ${x.dose}` : ""),
-                                (() => {
-                                    /* what the evidence says, on the row, so the main page
-                                       answers "is this one worth taking" without a tap */
-                                    const b = suppBadge(x);
-                                    return (React.createElement("span", { style: { display: "inline-block", fontSize: 9.5, fontWeight: 600,
-                                            letterSpacing: ".05em", textTransform: "uppercase", marginTop: 4,
-                                            background: b.bg, color: b.fg, padding: "2px 7px", borderRadius: 5 } }, b.word));
-                                })(),
-                                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 2 } }, why),
-                                avoid && (React.createElement("div", { style: { fontSize: 11.5, marginTop: 4, color: "var(--red)", lineHeight: 1.45 } }, avoid))))));
+                    return (React.createElement(SwipeDelete, { key: i, inCard: true, onDelete: () => save({ ...st,
+                            supps: (st.supps || []).filter((y) => y.name !== x.name),
+                            suppOff: (st.suppOff || []).filter((y) => y !== x.name) }) },
+                        React.createElement("div", { className: "il-row", style: { padding: "7px 0", alignItems: "flex-start",
+                                borderTop: i ? "1px solid var(--line)" : 0, opacity: on ? 0.45 : 1 }, onClick: () => save({ ...st, ...toggleTick(st, today, x.name) }) },
+                            React.createElement("div", { style: { minWidth: 0, display: "flex", gap: 10 } },
+                                React.createElement("span", { style: { width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1,
+                                        border: on ? "none" : "1.5px solid var(--line)", background: on ? "var(--grn)" : "transparent",
+                                        color: "#0B0B0D", fontSize: 12, fontWeight: 700, textAlign: "center", lineHeight: "18px" } }, on ? "\u2713" : ""),
+                                React.createElement("div", { style: { minWidth: 0 } },
+                                    React.createElement("div", { style: { fontSize: 14, textDecoration: on ? "line-through" : "none" } },
+                                        x.name,
+                                        x.dose ? ` · ${x.dose}` : ""),
+                                    (() => {
+                                        /* what the evidence says, on the row, so the main page
+                                           answers "is this one worth taking" without a tap */
+                                        const b = suppBadge(x);
+                                        return (React.createElement("span", { style: { display: "inline-block", fontSize: 9.5, fontWeight: 600,
+                                                letterSpacing: ".05em", textTransform: "uppercase", marginTop: 4,
+                                                background: b.bg, color: b.fg, padding: "2px 7px", borderRadius: 5 } }, b.word));
+                                    })(),
+                                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 2 } }, why),
+                                    avoid && (React.createElement("div", { style: { fontSize: 11.5, marginTop: 4, color: "var(--red)", lineHeight: 1.45 } }, avoid)))))));
                 })))),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 4px" } }, "Ticks clear themselves overnight. The order is worked out from what each one is, so it updates on its own when you add something.")),
         shelf.length > 0 && (React.createElement(React.Fragment, null,
@@ -17582,16 +17708,19 @@ function Supplements({ st, save, a, today, setSheet }) {
             React.createElement("div", { className: "il-note", style: { fontSize: 12, margin: "0 16px 8px" } }, "Everything else you own. Still yours, still explained when you tap one \u2014 just not on today's list. Anything marked worth taking is one tap from being on it."),
             shelf.map((s, i) => {
                 const b = suppBadge(s);
-                return (React.createElement("div", { key: i, className: "il-rt" },
-                    React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
-                        React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15, flex: 1 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) }, s.name),
-                        React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
-                                background: b.bg, color: b.fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginLeft: 8 } }, b.word)),
-                    React.createElement("div", { className: "il-row" },
-                        React.createElement("span", { className: "il-sub", style: { margin: 0, minWidth: 0 } },
-                            s.what || "?",
-                            s.dose ? ` · ${s.dose}` : ""),
-                        React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily"))));
+                return (React.createElement(SwipeDelete, { key: i, onDelete: () => save({ ...st,
+                        supps: (st.supps || []).filter((y) => y.name !== s.name),
+                        suppOff: (st.suppOff || []).filter((y) => y !== s.name) }) },
+                    React.createElement("div", { className: "il-rt" },
+                        React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
+                            React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15, flex: 1 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) }, s.name),
+                            React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
+                                    background: b.bg, color: b.fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginLeft: 8 } }, b.word)),
+                        React.createElement("div", { className: "il-row" },
+                            React.createElement("span", { className: "il-sub", style: { margin: 0, minWidth: 0 } },
+                                s.what || "?",
+                                s.dose ? ` · ${s.dose}` : ""),
+                            React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily")))));
             }))),
         React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
             React.createElement("span", { className: "il-lbl" }, "RECOMMENDED FOR YOU"),
@@ -22553,7 +22682,6 @@ function Fuel({ st, save, a, today, setSheet }) {
                     })() }),
                 React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" })));
         })(),
-        React.createElement(FuelCard, { st, save, a, today, setSheet }),
         (() => {
             /* what is left, at a glance, before anything else on the screen */
             const bars = [
@@ -22589,7 +22717,10 @@ function Fuel({ st, save, a, today, setSheet }) {
                                 target ? ` · ${Math.max(0, target - got)} left` : "")),
                         React.createElement("div", { className: "il-bar" },
                             React.createElement("i", { style: { width: pct + "%", background: over ? "var(--gold)" : colour } }))));
-                })));
+                }),
+                React.createElement("div", { style: { display: "flex", gap: 7, marginTop: 14 } },
+                    React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => setSheet({ t: "meals" }) }, "What should I eat?"),
+                    React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => setSheet({ t: "fuel" }) }, "The detail"))));
         })(),
         React.createElement("div", { style: { padding: "0 12px", marginTop: 16 } }),
         React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
