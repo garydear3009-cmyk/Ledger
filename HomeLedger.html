@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v290 · 4 Aug";
+const APP_VERSION = "v292 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -26542,16 +26542,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                     React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "info", exId: e.id }) }, "\u203A")),
                 React.createElement(MuscleTags, { ex: e })));
         }),
-        rt.exercises.some((x) => { const e = exOf(x.exId); return e?.loaded && lastW(x.exId) == null; }) &&
-            React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
-                React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Weights marked ? are estimates from your bodyweight and training age, deliberately light. Change them on the first set and they stick.")),
-        React.createElement("div", { style: { padding: "8px 12px 0", display: "flex", gap: 7 } }, [["strength", "Strength"], ["pump", "Pump"], ["deload", "Deload"]].map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (intent === v ? " on" : ""), onClick: () => setIntent(v) }, l)))),
-        React.createElement("div", { className: "il-card", style: { marginTop: 8 } },
-            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, intent === "strength" ? "Normal weights and rep targets. This one counts towards your progression."
-                : intent === "pump" ? "About 70% of your usual weight, higher reps, short rests. Kept out of your strength numbers."
-                    : "Same weights, half the sets. An easy week after a hard block.")),
-        React.createElement(Readiness, { value: chk, onChange: setChk }),
-        intent === "strength" && (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${ar.mood === "push" ? "var(--grn)" : ar.mood === "back off" ? "var(--gold)" : "var(--acc)"}` } },
+        intent === "strength" && (ar.mood === "push" || ar.mood === "back off") && (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${ar.mood === "push" ? "var(--grn)" : ar.mood === "back off" ? "var(--gold)" : "var(--acc)"}` } },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" }, "Today's call"),
                 React.createElement("span", { className: "il-n", style: { fontSize: 13, fontWeight: 600, color: ar.mood === "push" ? "var(--grn)" : ar.mood === "back off" ? "var(--gold)" : "var(--acc)" } }, ar.mood === "push" ? "Push" : ar.mood === "back off" ? "Ease off" : "As planned")),
@@ -26561,12 +26552,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                     : ar.mood === "push"
                         ? `${ar.why.length ? ar.why.join(" and ") + ", so " : ""}this is a day to chase the top of the rep range.`
                         : "Nothing to change — run it as written.",
-                ar.loadNote ? ` ${ar.loadNote}` : ""),
-            React.createElement("div", { className: "il-row", style: { marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" } },
-                React.createElement("div", { style: { minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: 13.5 } }, "Add warm-up sets"),
-                    React.createElement("div", { className: "il-sub" }, "A ramp before your first heavy set. Marked W, excluded from your numbers.")),
-                React.createElement("button", { className: "il-chip" + (warmUp ? " on" : ""), onClick: () => setWarmUp(!warmUp) }, warmUp ? "On" : "Off")))),
+                ar.loadNote ? ` ${ar.loadNote}` : ""))),
         React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: start }, "Start workout"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask coach to change it"),
@@ -27436,7 +27422,7 @@ function AddFood({ st, save, a, today, close, setSheet, sheet }) {
        turned over but the evening has not ended, so yesterday is the better
        guess — you can still say otherwise. */
     const [onDate, setOnDate] = useState(() => {
-        if (sheet && sheet.date && sheet.date <= today)
+        if (sheet && sheet.date && sheet.date <= addDays(today, 7))
             return sheet.date; // opened from a day you were viewing
         const h = new Date().getHours();
         return h < 4 ? addDays(today, -1) : today;
@@ -27573,14 +27559,14 @@ ${desc.trim()}`, 1200, "cheap");
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" } },
                 [[today, "Today"], [addDays(today, -1), "Yesterday"], [addDays(today, -2), dtiny(addDays(today, -2))]]
                     .map(([d, l]) => (React.createElement("button", { key: d, className: "il-chip" + (onDate === d ? " on" : ""), onClick: () => setOnDate(d) }, l))),
-                React.createElement("input", { className: "il-in il-n", type: "date", max: today, value: onDate, style: { width: 150, padding: "7px 10px", fontSize: 13 }, onChange: (e) => {
-                        if (e.target.value && e.target.value <= today)
+                React.createElement("input", { className: "il-in il-n", type: "date", max: addDays(today, 7), value: onDate, style: { width: 150, padding: "7px 10px", fontSize: 13 }, onChange: (e) => {
+                        if (e.target.value && e.target.value <= addDays(today, 7))
                             setOnDate(e.target.value);
                     } })),
             onDate !== today && (React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 8, color: "var(--gold)" } },
                 "Going onto ",
                 dlong(onDate),
-                ", not today.")),
+                onDate > today ? " \u2014 prepped ahead." : ", not today.")),
             React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 8px" } }, "Which meal"),
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } },
                 MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + (theMeal === m ? " on" : ""), onClick: () => setMeal(m) }, m))),
