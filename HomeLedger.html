@@ -953,6 +953,47 @@ const P3 = Object.fromEntries(Object.entries(P3RAW).map(([n, [a, b, h, note, lyi
 }));
 Object.entries(P3_ALIAS).forEach(([n, from]) => { if (!P3[n] && P3[from])
     P3[n] = P3[from]; });
+/* The incline stool's back pad leans at 0.42 rad — but the incline press pose
+   sat bolt upright in front of it, and the incline fly was the FLOOR fly's
+   coordinates with the stool drawn through the body. Both corrected here, by
+   transform, so the arm choreography is preserved exactly. */
+(function fixInclines() {
+    const UP = ["hd", "nk", "sp", "shL", "shR", "elL", "elR", "hnL", "hnR"];
+    const press = P3["Incline dumbbell press"];
+    if (press)
+        [press.a, press.b].forEach((F) => {
+            const [, hy, hz] = F.hip, c = Math.cos(0.42), n = Math.sin(0.42);
+            UP.forEach((j) => {
+                const [x, y, z] = F[j];
+                const dy = y - hy, dz = z - hz;
+                F[j] = [x, hy + dy * c + dz * n, hz - dy * n + dz * c];
+            });
+        });
+    const fly = P3["Incline dumbbell fly"];
+    if (fly) {
+        [fly.a, fly.b].forEach((F) => {
+            const [hx0, hy0, hz0] = F.hip;
+            const d = (Math.PI / 2 - 0.42) - Math.atan2(F.sp[1] - hy0, -(F.sp[2] - hz0));
+            const HIP = [0, 0.60, 0.10];
+            UP.forEach((j) => {
+                const dx = F[j][0] - hx0, dy = F[j][1] - hy0, dz = F[j][2] - hz0;
+                F[j] = [HIP[0] + dx, HIP[1] + dy * Math.cos(d) - dz * Math.sin(d),
+                    HIP[2] + dy * Math.sin(d) + dz * Math.cos(d)];
+            });
+            F.hip = HIP;
+            F.hpL = [-0.12, 0.585, 0.115];
+            F.hpR = [0.12, 0.585, 0.115];
+            /* thigh and shin are 0.42 in this skeleton — legs sit forward off the
+               stool at those lengths, feet planted */
+            F.knL = [-0.12, 0.344, 0.459];
+            F.knR = [0.12, 0.344, 0.459];
+            F.anL = [-0.12, 0.06, 0.773];
+            F.anR = [0.12, 0.06, 0.773];
+        });
+        fly.lying = false;
+        fly.seated = true; // sat on the stool, not on the floor
+    }
+})();
 /* ============ 3D EXERCISE ANIMATION ============
    Drag to turn, pinch to zoom. Falls back to the flat drawing if the 3D
    library can't load, so nothing ever ends up blank.                  */
@@ -1125,6 +1166,7 @@ function Form3D({ ex, h = 260, controls = true }) {
             root.add(padArm);
         }
         const NORM = new THREE.MeshStandardMaterial({ color: 0x878f9b, roughness: .55 });
+        const WARM = new THREE.MeshStandardMaterial({ color: 0xd9a13b, roughness: .5, emissive: 0x3a2c0a });
         const HOT = new THREE.MeshStandardMaterial({ color: 0x35c26b, roughness: .5, emissive: 0x0d3d20 });
         const DARK = new THREE.MeshStandardMaterial({ color: 0x4a5058, roughness: .7 });
         const MET = new THREE.MeshStandardMaterial({ color: 0xc7cbd1, roughness: .35, metalness: .4 });
@@ -1254,10 +1296,16 @@ function Form3D({ ex, h = 260, controls = true }) {
                     BREATH3.upper.forEach((k) => { P[k] = [P[k][0] + sw, P[k][1], P[k][2]]; });
                 }
             }
-            const hotSet = new Set();
-            if (api.current.muscles)
+            const hotSet = new Set(), warmSet = new Set();
+            if (api.current.muscles) {
                 (pose.hot || []).forEach((hh) => (HOT3[hh] || []).forEach((x) => hotSet.add(x)));
-            B3.forEach(([a, b]) => { const k = a + "-" + b; place(limbs[k], P[a], P[b]); limbs[k].material = hotSet.has(k) ? HOT : NORM; });
+                (pose.warm || []).forEach((x) => warmSet.add(x));
+            }
+            B3.forEach(([a, b]) => {
+                const k = a + "-" + b;
+                place(limbs[k], P[a], P[b]);
+                limbs[k].material = hotSet.has(k) ? HOT : warmSet.has(k) ? WARM : NORM;
+            });
             Object.entries(joints).forEach(([j, m]) => m.position.set(P[j][0], P[j][1], P[j][2]));
             bells.forEach((g, i) => { const j = i ? "hnR" : "hnL"; g.position.set(P[j][0], P[j][1], P[j][2]); });
             if (api.current.snap != null) {
@@ -1306,6 +1354,12 @@ function Form3D({ ex, h = 260, controls = true }) {
                 React.createElement("button", { className: "il-chip" + (muscles ? " on" : ""), onClick: () => setMuscles(!muscles) }, "Muscles")),
             React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8 } }, [[.4, "Slow"], [1, "Normal"], [1.8, "Fast"]].map(([v, l]) => (React.createElement("button", { key: l, className: "il-chip" + (speed === v ? " on" : ""), onClick: () => setSpeed(v) }, l)))),
             pose.note && React.createElement("div", { className: "il-note", style: { marginTop: 10 } }, pose.note),
+            pose.warm && pose.warm.length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 6 } },
+                React.createElement("span", { style: { color: "#35c26b" } }, "Green"),
+                " \u2014 the muscle it's for.",
+                " ",
+                React.createElement("span", { style: { color: "#d9a13b" } }, "Amber"),
+                " \u2014 the ones helping.")),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 6, color: "var(--faint)" } }, "Drag to turn it, pinch to zoom."))));
 }
 /* ============ ANATOMY ============
@@ -1615,6 +1669,28 @@ const EX = [
         loaded: false, timed: true, isCompound: true, cardio: true, quiet: !!quiet, met,
     })),
 ];
+/* Two tiers of highlight. pose.hot is the hand-set target, painted green.
+   The exercise row already names its assisting muscles — map those onto the
+   same limb segments and paint them amber, minus anything already green. */
+const MUS2HOT = { chest: "pec", fdelt: "delt_f", sdelt: "delt_s", rdelt: "delt_r",
+    lats: "lat", lat: "lat", uback: "trap", traps: "trap", trap: "trap",
+    bi: "bi", tri: "tri", fore: "fore", quads: "quad", quad: "quad",
+    hams: "ham", ham: "ham", glutes: "glute", glute: "glute",
+    calves: "calf", calf: "calf", abs: "abs", core: "abs", obl: "obl", lback: "abs" };
+EX.forEach((e) => {
+    const p = P3[e.name];
+    if (!p)
+        return;
+    const hotSegs = new Set();
+    (p.hot || []).forEach((h) => (HOT3[h] || []).forEach((x) => hotSegs.add(x)));
+    const warm = new Set();
+    (e.secondary || []).forEach((m) => {
+        (HOT3[MUS2HOT[m] || m] || []).forEach((x) => { if (!hotSegs.has(x))
+            warm.add(x); });
+    });
+    if (warm.size)
+        p.warm = [...warm];
+});
 const AEROBIC = AEROBIC_RAW.map(([name, kit, met, dist, cues], i) => ({
     id: "a" + i, name, kit, met, dist: !!dist, cues,
     move: "aerobic", group: "aerobic", aerobic: true, cardio: false, timed: false,
@@ -5257,7 +5333,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v273 · 4 Aug";
+const APP_VERSION = "v275 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -8930,7 +9006,9 @@ function ApiKeySheet({ st, save, close }) {
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "What it costs"),
             React.createElement("div", { className: "il-note" }, "Pennies. Reading a label or a food photo is a fraction of a penny; a coach answer is similar. Heavy daily use runs to a pound or two a month.")));
 }
-function ScalePhoto({ st, save, today, close }) {
+function ScalePhoto({ st, save, today, sheet, close }) {
+    /* v275: reachable from Add food with a day chosen */
+    const tgt = (sheet && sheet.date && sheet.date <= today) ? sheet.date : today;
     const [stage, setStage] = useState("start");
     const [shot, setShot] = useState(null);
     const [res, setRes] = useState(null);
@@ -8981,9 +9059,9 @@ function ScalePhoto({ st, save, today, close }) {
     }), { kcal: 0, p: 0, c: 0, f: 0 });
     const logIt = () => {
         const foods = [...st.foods];
-        let i = foods.findIndex((x) => x.date === today);
+        let i = foods.findIndex((x) => x.date === tgt);
         if (i < 0) {
-            foods.push({ date: today, entries: [] });
+            foods.push({ date: tgt, entries: [] });
             i = foods.length - 1;
         }
         const entries = rows.filter((r) => r.on).map((r) => ({
@@ -14814,7 +14892,10 @@ function cupboardMatch(st, rec) {
     return { have: need.length - missing.length, need: need.length,
         pct: Math.round(((need.length - missing.length) / need.length) * 100), missing };
 }
-function RecipeBook({ st, save, a, today, close, setSheet }) {
+function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
+    /* opened from Add food with a day chosen — every card opened from here
+       carries it, so "log it" lands where you said */
+    const onDate = sheet && sheet.date && sheet.date <= today ? sheet.date : null;
     const [meal, setMeal] = useState("");
     const [tags, setTags] = useState([]);
     const [maxMins, setMaxMins] = useState(0);
@@ -15059,7 +15140,7 @@ function RecipeBook({ st, save, a, today, close, setSheet }) {
         list.map((r, i) => {
             const m = cupboardMatch(st, r);
             const isSaved = saved.includes(r.n);
-            return (React.createElement("div", { key: i, className: "il-rt", style: { padding: 0, overflow: "hidden" }, onClick: () => setSheet({ t: "recipe", name: r.n }) },
+            return (React.createElement("div", { key: i, className: "il-rt", style: { padding: 0, overflow: "hidden" }, onClick: () => setSheet({ t: "recipe", name: r.n, date: onDate || undefined }) },
                 React.createElement("img", { src: recipePic(st, r), alt: "", loading: "lazy", style: { width: "100%", height: 78, objectFit: "cover", display: "block" } }),
                 React.createElement("div", { style: { padding: "11px 13px 12px" } },
                     React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
@@ -15321,8 +15402,10 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
        A serving is a serving whether you made two or eight — so log by how
        many servings went on your plate.                                  */
     const logIt = () => {
-        const day = st.foods.find((f) => f.date === today) || { date: today, entries: [] };
-        const rest = st.foods.filter((f) => f.date !== today);
+        /* opened from Add food on a chosen day, the serving goes there */
+        const tgt = sheet && sheet.date && sheet.date <= today ? sheet.date : today;
+        const day = st.foods.find((f) => f.date === tgt) || { date: tgt, entries: [] };
+        const rest = st.foods.filter((f) => f.date !== tgt);
         const now = new Date();
         const meal = now.getHours() < 11 ? "Breakfast" : now.getHours() < 15 ? "Lunch" : now.getHours() < 21 ? "Dinner" : "Snacks";
         const e = { id: "r" + Date.now(),
@@ -15556,7 +15639,7 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 "Cook it",
                 (base.method || []).length ? ` · ${base.method.length} steps` : ""),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rtweak", name: base.n }) }, "Nutritionist view"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rlog", name: base.n }) }, "Log what I ate"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "rlog", name: base.n, date: sheet && sheet.date }) }, "Log what I ate"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "lighter", name: base.n }) },
                 "Make it lighter \u00B7 ",
                 base.m[0],
@@ -20467,7 +20550,9 @@ How to judge it:
   scraped around, is a guess.
 - If you genuinely can't tell, say "a guess" and give your best number anyway.
 - If there's nothing food-like in the photo, return found: false.`;
-function LogMeal({ rec, st, save, today, close, setSheet }) {
+function LogMeal({ rec, st, save, today, close, setSheet, sheet }) {
+    /* opened from a day you chose in Add food — the serving lands there */
+    const tgt = sheet && sheet.date && sheet.date <= today ? sheet.date : today;
     const [ate, setAte] = useState(1);
     const [others, setOthers] = useState(0); // how many other people shared it
     const [extras, setExtras] = useState([]);
@@ -20514,8 +20599,8 @@ function LogMeal({ rec, st, save, today, close, setSheet }) {
         setBusy(false);
     };
     const logIt = () => {
-        const day = st.foods.find((f) => f.date === today) || { date: today, entries: [] };
-        const rest = st.foods.filter((f) => f.date !== today);
+        const day = st.foods.find((f) => f.date === tgt) || { date: tgt, entries: [] };
+        const rest = st.foods.filter((f) => f.date !== tgt);
         const now = new Date();
         const meal = now.getHours() < 11 ? "Breakfast" : now.getHours() < 15 ? "Lunch" : now.getHours() < 21 ? "Dinner" : "Snacks";
         const at = hhmm(now.getHours(), now.getMinutes());
@@ -20780,7 +20865,7 @@ function RCheckWrap({ sheet, st, save, close }) {
 }
 function RLogWrap({ sheet, st, save, today, close, setSheet }) {
     const r = findRec(st, sheet.name);
-    return r ? React.createElement(LogMeal, { rec: r, st, save, today, close, setSheet })
+    return r ? React.createElement(LogMeal, { rec: r, st, save, today, close, setSheet, sheet })
         : React.createElement(React.Fragment, null,
             React.createElement(SH, { title: "Recipe", close: close }),
             React.createElement("div", { className: "il-empty" }, "Gone."));
@@ -22785,6 +22870,7 @@ function Fuel({ st, save, a, today, setSheet }) {
                         const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
                         return c ? `${c} in it${soon ? `, ${soon} going off soon` : ""}` : "Tell me what you've got in";
                     })() }),
+                React.createElement(Row, { to: { t: "menu" }, title: "I'm out, read me the menu", sub: "Photograph it and she'll pick for your macros" }),
                 React.createElement(Row, { to: { t: "cookit" }, title: "How shall I cook it?", sub: (st.appliances || []).length ? "Oven, air fryer or microwave — written for each" : "Tell me what you cook with first" })));
         })(),
         (() => {
@@ -22874,10 +22960,7 @@ function Fuel({ st, save, a, today, setSheet }) {
                             React.createElement("span", { className: "il-n", style: { minWidth: 26, textAlign: "center", fontSize: 13 } }, e.qty || 1),
                             React.createElement("button", { className: "il-qty", onClick: () => setQty(e.id, (e.qty || 1) + 0.5), "aria-label": "More" }, "+"),
                             React.createElement("button", { className: "il-x", style: { marginLeft: 4 }, onClick: () => del(e.id) }, "\u00D7")))))))))),
-        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } },
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scan", date: showing }) }, "Scan a label"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "scalephoto" }) }, "Photograph my food"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "menu" }) }, "I'm out, read me the menu")),
+        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } }),
         (() => {
             const per = Math.round(P.weightKg * 0.4);
             const byMeal = MEALS.map((m) => ({ m, p: f.entries.filter((e) => (e.meal || "Snacks") === m).reduce((x, e) => x + e.p, 0) }));
@@ -24456,7 +24539,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, editId: sheet.id, seed: sheet.seed }),
             sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }),
             sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, sheet, close, setSheet }),
-            sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, close }),
+            sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, sheet, close }),
             sheet.t === "importwo" && React.createElement(ImportWorkouts, { st, save, close }),
             sheet.t === "importcsv" && React.createElement(ImportData, { st, save, close }),
             sheet.t === "pick" && React.createElement(PickExercise, { st, close, title: sheet.title, onPick: (e) => { close(); setTimeout(() => sheet.onPick(e), 40); } }),
@@ -24500,7 +24583,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "addrec" && React.createElement(AddRecipe, { st, save, a, today, close, setSheet }),
             sheet.t === "planner" && React.createElement(Planner, { st, save, a, today, close, setSheet }),
             sheet.t === "shopping" && React.createElement(Shopping, { sheet, st, save, a, today, close, setSheet }),
-            sheet.t === "recipes" && React.createElement(RecipeBook, { st, save, a, today, close, setSheet }),
+            sheet.t === "recipes" && React.createElement(RecipeBook, { st, save, a, today, close, setSheet, sheet }),
             sheet.t === "recipe" && React.createElement(RecipeSheet, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "ntalk" && React.createElement(NutChat, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "quickday" && React.createElement(QuickDay, { st, save, a, today, close, setSheet }),
@@ -26252,7 +26335,8 @@ ${desc.trim()}`, 1200, "cheap");
         }
         setBusy(false);
     };
-    const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["search", "Search"],
+    const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["recipe", "A recipe"],
+        ["photo", "Photograph it"], ["search", "Search"],
         ["scan", "Scan a label"], ["mine", "Mine"]];
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}${onDate === today ? "" : " · " + dtiny(onDate)}`, close: close }),
@@ -26343,6 +26427,14 @@ ${desc.trim()}`, 1200, "cheap");
                     " calories in total"),
                 found.note && React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6, color: "var(--gold)" } }, found.note),
                 React.createElement("button", { className: "il-btn sm", style: { width: "100%", marginTop: 12 }, onClick: () => put(found.items.map((x) => ({ ...x, guessed: true }))) }, "Log all of it"))))),
+        tab === "recipe" && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Something you've cooked, or a new card for the book. A logged serving lands on the day above."),
+            React.createElement("div", { style: { display: "grid", gap: 8 } },
+                React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "recipes", date: onDate }); } }, "One from the book \u2014 log a serving"),
+                React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "addrec" }); } }, "Photograph a new recipe card")))),
+        tab === "photo" && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Point it at the plate and she'll work out what's on it."),
+            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scalephoto", date: onDate }); } }, "Photograph my food"))),
         tab === "search" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
                 "The food table has ",
