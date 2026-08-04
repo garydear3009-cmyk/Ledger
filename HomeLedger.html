@@ -3535,9 +3535,11 @@ const TRAW = [
 ];
 const TAKE = TRAW.map(([name, c, cat, kcal, p, cb, f, portion], i) => ({ id: "t" + i, name, c, cat, kcal, p, c2: cb, f, portion }));
 /* build combinations that fit a calorie budget */
-function takeCombos(cuisine, budget, mode) {
-    const items = TAKE.filter((t) => t.c === cuisine).filter((t) => !tq || t.name.toLowerCase().includes(tq.toLowerCase()));
-    const anyq = tq ? TAKE.filter((t) => t.name.toLowerCase().includes(tq.toLowerCase())) : [];
+function takeCombos(cuisine, budget, mode, q) {
+    /* the search box lives in the component; it used to be read from here as a
+       free variable, which threw the moment anyone opened the screen */
+    const has = (t) => !q || t.name.toLowerCase().includes(q.toLowerCase());
+    const items = TAKE.filter((t) => t.c === cuisine).filter(has);
     const mains = items.filter((t) => t.cat === "main");
     const bases = [null, ...items.filter((t) => t.cat === "rice" || t.cat === "bread")];
     const extras = items.filter((t) => t.cat === "starter" || t.cat === "sundry");
@@ -3814,7 +3816,10 @@ function Takeaway({ st, save, today, close }) {
     const [sortBy, setSortBy] = useState("fill");
     const [tray, setTray] = useState([]);
     const [tq, setTq] = useState("");
-    const combos = useMemo(() => takeCombos(cuisine, Number(budget) || 0, sortBy), [cuisine, budget, sortBy]);
+    const combos = useMemo(() => takeCombos(cuisine, Number(budget) || 0, sortBy, tq), [cuisine, budget, sortBy, tq]);
+    /* matches from every cuisine, not just the one showing */
+    const anyq = useMemo(() => (tq
+        ? TAKE.filter((t) => t.name.toLowerCase().includes(tq.toLowerCase())) : []), [tq]);
     const items = TAKE.filter((t) => t.c === cuisine);
     const trayTot = tray.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c2, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 });
     const addAll = (list) => {
@@ -5333,7 +5338,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v276 · 4 Aug";
+const APP_VERSION = "v277 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5596,7 +5601,7 @@ function HomeLedgerInner() {
         else if (t) {
             setTab(t);
             if (t !== "train")
-                setSub("train");
+                setSub("body");
         }
         if (sh)
             setSheet(sh);
@@ -5673,9 +5678,8 @@ function HomeLedgerInner() {
             tab === "you" && React.createElement(You, { st, save, a, today, setSheet, go }),
             tab === "coach" && React.createElement(CoachTab, { st, save, a, today, setSheet }),
             tab === "supps" && React.createElement(Supplements, { st, save, a, today, setSheet }),
-            React.createElement("nav", { className: "il-tabs" }, ["you", "coach", "train", "progress", "fuel", "supps", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : "") +
-                    (k === "train" && sub === "body" ? " on" : ""), onClick: () => { setTab(k); if (k !== "train")
-                    setSub("train"); } },
+            React.createElement("nav", { className: "il-tabs" }, ["you", "coach", "train", "progress", "fuel", "supps", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : ""), onClick: () => { if (k === "train" && tab !== "train")
+                    setSub("body"); setTab(k); } },
                 React.createElement(Ico, { d: ICONS[k] }),
                 TITLE[k])))),
             React.createElement(AskBar, { st, setSheet, tab: view }),
@@ -24519,8 +24523,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
     const wrap = vp ? { top: vp.top, height: vp.h, bottom: "auto" } : undefined;
     const inner = vp ? { maxHeight: `calc(${vp.h}px - env(safe-area-inset-top) - 6px)` } : undefined;
     return (React.createElement("div", { className: "il-sheet", style: wrap, onClick: close },
-        React.createElement("div", { className: "il-si", ref: box, style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) = onFocusCapture = { watchFocus }, onBlurCapture: watchBlur },
-            " e.stopPropagation()}>",
+        React.createElement("div", { className: "il-si", ref: box, style: { ...inner, transform: dy ? `translateY(${dy}px)` : undefined, transition: drag.current.on ? "none" : "transform .2s" }, onClick: (e) => e.stopPropagation(), onFocusCapture: watchFocus, onBlurCapture: watchBlur },
             depth > 1 && (React.createElement("button", { onClick: close, style: { position: "sticky", top: 17, zIndex: 4, display: "flex", alignItems: "center",
                     gap: 6, background: "var(--bg)", border: 0, color: "var(--acc)", font: "inherit", fontSize: 13.5,
                     padding: "6px 16px 0", cursor: "pointer", width: "100%", textAlign: "left" } },
