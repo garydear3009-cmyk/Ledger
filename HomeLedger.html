@@ -331,7 +331,7 @@ const CSS = `
  background:var(--red);border:0;cursor:pointer;color:#fff;}
 .il-sw-bin svg{width:22px;height:22px;}
 .il-sw-body{position:relative;background:var(--card);border-radius:13px;will-change:transform;}
-.il-focus{position:fixed;inset:0;background:var(--bg);z-index:30;display:flex;flex-direction:column;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}.il-fhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}.il-fstrip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;flex-shrink:0}.il-fth{flex:0 0 auto;width:60px;height:60px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;position:relative;padding:0}.il-fth.on{border-color:var(--tint);box-shadow:0 0 0 1px var(--tint)}.il-ftick{position:absolute;top:2px;right:5px;font-size:11px;color:#35C26B}.il-fbody{flex:1;overflow-y:auto;min-height:0;padding-bottom:30px}.il-fset{display:grid;grid-template-columns:34px 1fr 1fr 52px;gap:8px;align-items:center;margin-bottom:8px}.il-pill{position:fixed;left:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:36;display:flex;align-items:center;gap:9px;background:#10281A;border:1px solid #1E4630;border-radius:999px;padding:9px 14px 9px 11px;box-shadow:0 8px 22px rgba(0,0,0,.4)}.il-pdot{width:9px;height:9px;border-radius:50%;background:#35C26B;animation:ilpulse 1.6s ease-in-out infinite}@keyframes ilpulse{0%,100%{opacity:1}50%{opacity:.35}}.il-hold{touch-action:none}.il-grip{font-size:12px;color:#565B64;margin-right:7px;align-self:center}.il-live{position:sticky;top:calc(57px + env(safe-area-inset-top));z-index:19;background:linear-gradient(180deg,rgba(11,11,13,.97),rgba(11,11,13,.92));
+.il-frest{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;flex-shrink:0}.il-frest.go{background:#10281A;border-color:#1E4630}.il-focus{position:fixed;inset:0;background:var(--bg);z-index:30;display:flex;flex-direction:column;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}.il-fhead{display:flex;align-items:center;gap:10px;margin-bottom:10px}.il-fstrip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;flex-shrink:0}.il-fth{flex:0 0 auto;width:60px;height:60px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;position:relative;padding:0}.il-fth.on{border-color:var(--tint);box-shadow:0 0 0 1px var(--tint)}.il-ftick{position:absolute;top:2px;right:5px;font-size:11px;color:#35C26B}.il-fbody{flex:1;overflow-y:auto;min-height:0;padding-bottom:30px}.il-fset{display:grid;grid-template-columns:34px 1fr 1fr 52px;gap:8px;align-items:center;margin-bottom:8px}.il-pill{position:fixed;left:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:36;display:flex;align-items:center;gap:9px;background:#10281A;border:1px solid #1E4630;border-radius:999px;padding:9px 14px 9px 11px;box-shadow:0 8px 22px rgba(0,0,0,.4)}.il-pdot{width:9px;height:9px;border-radius:50%;background:#35C26B;animation:ilpulse 1.6s ease-in-out infinite}@keyframes ilpulse{0%,100%{opacity:1}50%{opacity:.35}}.il-hold{touch-action:none}.il-grip{font-size:12px;color:#565B64;margin-right:7px;align-self:center}.il-live{position:sticky;top:calc(57px + env(safe-area-inset-top));z-index:19;background:linear-gradient(180deg,rgba(11,11,13,.97),rgba(11,11,13,.92));
  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:11px 14px;display:flex;align-items:center;gap:12px;}
 .il-lrow{display:grid;grid-template-columns:26px minmax(0,1fr) minmax(0,1fr) 44px;gap:7px;align-items:center;
  padding:6px 8px;box-sizing:border-box;width:100%;}
@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v287 · 4 Aug";
+const APP_VERSION = "v288 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6067,12 +6067,76 @@ function WorkoutPill({ s, onGo }) {
         React.createElement("span", { className: "il-n", style: { fontSize: 14, fontWeight: 600 } }, clock(el)),
         React.createElement("span", { style: { fontSize: 12.5, color: "#9BE8B8" } }, "Back to workout")));
 }
-function FocusMode({ st, s, elapsed, paused, write, setField, toggle, addWarm, setSheet, startRest, onMin, onFinish, fi, setFi }) {
+function FocusMode({ st, s, elapsed, paused, write, setField, toggle, addWarm, setSheet, startRest, stopRest, extendRest, restLeft, restEnd, onPause, onMin, onFinish, fi, setFi }) {
     const list = s.exercises.map((e) => ({ e, ex: exOf(e.exId) })).filter((x) => x.ex);
+    /* v288: the same hold-and-drag as the card list, sideways on the strip */
+    const thEls = useRef({});
+    const sd = useRef({ id: null, x0: 0, timer: null });
+    const [sDragId, setSDragId] = useState(null);
+    const [sDx, setSDx] = useState(0);
+    const stripReorder = (from, to) => {
+        write((sess) => { sess.exercises = moveItem(sess.exercises, from, to); return sess; });
+        setFi(to);
+    };
+    const thDown = (id) => (ev) => {
+        const pid = ev.pointerId, el = ev.currentTarget;
+        sd.current = { id, x0: ev.clientX, timer: setTimeout(() => {
+                setSDragId(id);
+                try {
+                    navigator.vibrate && navigator.vibrate(8);
+                }
+                catch (_) { }
+                el.setPointerCapture && el.setPointerCapture(pid);
+            }, 300) };
+    };
+    const thMove = (ev) => {
+        const d = sd.current;
+        if (!d.id)
+            return;
+        const dx = ev.clientX - d.x0;
+        if (!sDragId) {
+            if (Math.abs(dx) > 9) {
+                clearTimeout(d.timer);
+                sd.current = { id: null };
+            }
+            return;
+        }
+        setSDx(dx);
+        const ids = s.exercises.map((x) => x.exId);
+        const from = ids.indexOf(sDragId);
+        const prevEl = from > 0 ? thEls.current[ids[from - 1]] : null;
+        const nextEl = from < ids.length - 1 ? thEls.current[ids[from + 1]] : null;
+        if (prevEl && dx < 0 && ev.clientX < prevEl.getBoundingClientRect().left + prevEl.getBoundingClientRect().width / 2) {
+            stripReorder(from, from - 1);
+            sd.current.x0 = ev.clientX;
+            setSDx(0);
+        }
+        else if (nextEl && dx > 0 && ev.clientX > nextEl.getBoundingClientRect().left + nextEl.getBoundingClientRect().width / 2) {
+            stripReorder(from, from + 1);
+            sd.current.x0 = ev.clientX;
+            setSDx(0);
+        }
+    };
+    const thUp = () => {
+        const d = sd.current;
+        if (d.timer)
+            clearTimeout(d.timer);
+        sd.current = { id: null };
+        setSDragId(null);
+        setSDx(0);
+    };
     const idx = Math.max(0, Math.min(fi, list.length - 1));
     const cur = list[idx];
     const work = cur ? cur.e.sets.filter((x) => !x.warm) : [];
     const doneN = work.filter((x) => x.done).length;
+    useEffect(() => {
+        if (restEnd && restLeft === 0) {
+            try {
+                navigator.vibrate && navigator.vibrate([120, 60, 120]);
+            }
+            catch (_) { }
+        }
+    }, [restLeft === 0, restEnd]);
     /* finish the exercise you are on and the strip walks itself forward */
     useEffect(() => {
         if (!cur || !work.length || !work.every((x) => x.done))
@@ -6092,16 +6156,33 @@ function FocusMode({ st, s, elapsed, paused, write, setField, toggle, addWarm, s
         React.createElement("div", { className: "il-fhead" },
             React.createElement("button", { className: "il-x", onClick: onMin }, "\u00D7"),
             React.createElement("div", { style: { flex: 1, minWidth: 0, textAlign: "center" } },
-                React.createElement("span", { className: "il-d il-n", style: { fontSize: 20, fontWeight: 600 } }, clock(elapsed)),
-                paused && React.createElement("span", { style: { fontSize: 12, color: "var(--gold)", marginLeft: 8 } }, "paused")),
-            React.createElement("span", { className: "il-tag " + (s.intent === "deload" ? "t2" : isPump(s) ? "p" : "s") }, s.intent === "deload" ? "DELOAD" : isPump(s) ? "PUMP" : "STRENGTH")),
+                React.createElement("span", { className: "il-d il-n", style: { fontSize: 20, fontWeight: 600, color: paused ? "var(--gold)" : undefined } }, clock(elapsed)),
+                React.createElement("div", null,
+                    React.createElement("span", { className: "il-tag " + (s.intent === "deload" ? "t2" : isPump(s) ? "p" : "s"), style: { fontSize: 9.5 } }, s.intent === "deload" ? "DELOAD" : isPump(s) ? "PUMP" : "STRENGTH"))),
+            React.createElement("button", { className: "il-chip", onClick: onPause, style: { minWidth: 74 } }, paused ? "Resume" : "Pause")),
         React.createElement("div", { className: "il-fstrip" }, list.map((x, k) => {
             const w = x.e.sets.filter((q) => !q.warm);
             const fin2 = w.length > 0 && w.every((q) => q.done);
-            return (React.createElement("button", { key: x.e.exId, className: "il-fth" + (k === idx ? " on" : ""), onClick: () => setFi(k) },
+            return (React.createElement("button", { key: x.e.exId, ref: (el) => {
+                    if (el)
+                        thEls.current[x.e.exId] = el;
+                    else
+                        delete thEls.current[x.e.exId];
+                }, className: "il-fth" + (k === idx ? " on" : ""), style: {
+                    transform: sDragId === x.e.exId ? "translateX(" + sDx + "px) scale(1.06)" : undefined,
+                    zIndex: sDragId === x.e.exId ? 6 : undefined,
+                    touchAction: sDragId === x.e.exId ? "none" : undefined,
+                    boxShadow: sDragId === x.e.exId ? "0 6px 18px rgba(0,0,0,.5)" : undefined,
+                    transition: sDragId === x.e.exId ? "none" : "transform .15s"
+                }, onClick: () => setFi(k), onPointerDown: thDown(x.e.exId), onPointerMove: thMove, onPointerUp: thUp, onPointerCancel: thUp },
                 React.createElement(PoseThumb, { name: x.ex.name, size: 44, on: k === idx, done: fin2 }),
                 fin2 && React.createElement("span", { className: "il-ftick" }, "\u2713")));
         })),
+        (restLeft > 0 || (restEnd > 0 && Date.now() - restEnd < 4000)) && React.createElement("div", { className: "il-frest" + (restLeft <= 0 ? " go" : "") },
+            React.createElement("span", { className: "il-n", style: { fontSize: 19, fontWeight: 600 } }, restLeft > 0 ? Math.floor(restLeft / 60) + ":" + String(restLeft % 60).padStart(2, "0") : "Go"),
+            React.createElement("span", { style: { flex: 1, fontSize: 12.5, opacity: 0.85 } }, restLeft > 0 ? "Resting" : "Rest is up"),
+            restLeft > 0 && React.createElement("button", { className: "il-chip", onClick: extendRest }, "+30s"),
+            React.createElement("button", { className: "il-x", onClick: stopRest }, "\u00D7")),
         React.createElement("div", { className: "il-fbody" },
             React.createElement("div", { className: "il-row", style: { alignItems: "center", gap: 8, marginBottom: 2 } },
                 React.createElement("button", { className: "il-chip", disabled: idx === 0, onClick: () => setFi(idx - 1) }, "\u2039"),
@@ -6119,11 +6200,12 @@ function FocusMode({ st, s, elapsed, paused, write, setField, toggle, addWarm, s
                         " reps")),
                 React.createElement("button", { className: "il-chip", disabled: idx === list.length - 1, onClick: () => setFi(idx + 1) }, "\u203A")),
             React.createElement("div", { style: { display: "flex", gap: 7, justifyContent: "center", flexWrap: "wrap", margin: "10px 0 14px" } },
-                React.createElement("button", { className: "il-chip", onClick: () => addWarm(e.exId) }, "+ Warm-up"),
+                React.createElement("button", { className: "il-chip", onClick: () => addWarm(e.exId) }, "+ Warm-up sets"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "exprog", id: ex.id }) }, "History"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "info", exId: ex.id }) }, "How to"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "swap", exId: ex.id, sessionId: s.id }) }, "Swap"),
-                React.createElement("button", { className: "il-chip", onClick: () => startRest(ex.isCompound ? 150 : 90) }, "Rest")),
+                React.createElement("button", { className: "il-chip", onClick: () => startRest(ex.isCompound ? 150 : 90) }, "Start rest \u00B7 " + (ex.isCompound ? "2:30" : "1:30"))),
+            e.sets.some((q) => q.warm) && React.createElement("div", { className: "il-sub", style: { margin: "0 0 7px" } }, "W rows are the ramp \u2014 excluded from your numbers"),
             e.sets.map((q, j) => (React.createElement("div", { key: j, className: "il-fset" },
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0, textAlign: "center", color: q.warm ? "var(--gold)" : undefined } }, q.warm ? "W" : e.sets.slice(0, j).filter((z) => !z.warm).length + 1),
                 React.createElement("input", { className: "il-in il-n", inputMode: "decimal", value: q.w ?? "", placeholder: "kg", onChange: (ev) => setField(e.exId, j, "w", ev.target.value === "" ? null : Number(ev.target.value)) }),
@@ -6140,7 +6222,10 @@ function FocusMode({ st, s, elapsed, paused, write, setField, toggle, addWarm, s
             allDone && React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 16 }, onClick: onFinish }, "Finish session"))));
 }
 function LiveSession({ st, save, s, setSheet }) {
-    const [rest, setRest] = useState(0);
+    /* v288: rest is a deadline, not a trigger — the focus screen reads the
+       remaining seconds every tick instead of a child owning the countdown */
+    const [restEnd, setRestEnd] = useState(0);
+    const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const [fi, setFi] = useState(0);
     const [foc, setFoc] = useState(!FOCUS_UI.min);
     const minimize = () => { FOCUS_UI.min = true; setFoc(false); };
@@ -6225,11 +6310,11 @@ function LiveSession({ st, save, s, setSheet }) {
         return sess;
     });
     useEffect(() => {
-        if (fin || paused)
+        if ((fin || paused) && !restEnd)
             return;
         const t = setInterval(() => setTick((x) => x + 1), 1000);
         return () => clearInterval(t);
-    }, [fin, paused]);
+    }, [fin, paused, restEnd]);
     // tidy up anything left running overnight rather than showing a silly number
     useEffect(() => {
         if (s.finished || !stale)
@@ -6294,14 +6379,16 @@ function LiveSession({ st, save, s, setSheet }) {
         const now = !cur.done;
         write((sess) => { const e = sess.exercises.find((x) => x.exId === exId); e.sets[j].done = now; e.sets[j].at = now ? Date.now() : null; return sess; });
         if (now)
-            setRest(s.intent === "pump" ? 60 : s.intent === "deload" ? 90 : ex.isCompound ? 150 : 90);
+            setRestEnd(Date.now() + (s.intent === "pump" ? 60 : s.intent === "deload" ? 90 : ex.isCompound ? 150 : 90) * 1000);
     };
     const shotRef = useRef(null);
     const [shotErr, setShotErr] = useState("");
     const finish = () => write((sess) => { sess.finished = true; sess.durationSec = elapsed; return sess; });
     return (React.createElement(React.Fragment, null,
         !fin && foc && React.createElement(FocusMode, { st, s, elapsed, paused, write, setField, toggle, addWarm, setSheet, fi, setFi,
-            startRest: (n) => setRest(n), onMin: minimize,
+            startRest: (n) => setRestEnd(Date.now() + n * 1000), stopRest: () => setRestEnd(0),
+            extendRest: () => setRestEnd((e) => Math.max(Date.now(), e) + 30000),
+            restLeft, restEnd, onPause: togglePause, onMin: minimize,
             onFinish: () => { finish(); minimize(); } }),
         React.createElement("div", { className: "il-live" },
             React.createElement("div", { style: { flex: 1, minWidth: 0 } },
@@ -6511,7 +6598,7 @@ function LiveSession({ st, save, s, setSheet }) {
                     React.createElement("div", { className: "il-mini" },
                         React.createElement("div", { className: "v" }, Math.round(elapsed / 60)),
                         React.createElement("div", { className: "l" }, "minutes"))))),
-        rest > 0 && React.createElement(RestTimer, { secs: rest, onClose: () => setRest(0) })));
+        !foc && restLeft > 0 && React.createElement(RestTimer, { key: restEnd, secs: restLeft, onClose: () => setRestEnd(0) })));
 }
 /* ============ WATCH AND TRACKER ============
    Every tracker has its own name for the same activity, and its own end
