@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v286 · 4 Aug";
+const APP_VERSION = "v287 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6645,7 +6645,7 @@ function Train({ st, save, a, today, setSheet }) {
     const todays = (st.sessions || []).filter((x) => x.date === today);
     const ringKcal = todays.reduce((t, x) => t + burned(x, st.profile.weightKg), 0);
     const ringMin = todays.reduce((t, x) => t + Math.round((x.durationSec || 0) / 60), 0);
-    const s = st.sessions.find((x) => x.date === today);
+    const s = todays.find((x) => x.startedAt && !x.finished) || todays[todays.length - 1];
     const recent = [...st.sessions].reverse().filter((x) => x.date !== today).slice(0, 5);
     const early = new Date().getHours() < 10;
     const dl = deloadCheck(st, a);
@@ -8189,7 +8189,13 @@ function programState(st, today) {
     const routines = st.routines || [];
     const slots = (p.slots || []).map((id) => routines.find((r) => r.id === id) || null);
     const from = progWeekStart(today);
-    const done = (st.sessions || []).filter((x) => x.date >= from && x.finished !== false);
+    const done = (st.sessions || []).filter((x) => x.date >= from && x.finished !== false &&
+        /* v287: finished with zero seconds and nothing lifted is a ghost —
+           the corruption signature of the old date-collision, and of any
+           abandoned session that never did a set. Begun-and-in-progress
+           still ticks, as it always has. */
+        !(x.finished === true && x.startedAt && !(x.durationSec > 0) &&
+            !(x.exercises || []).some((e) => (e.sets || []).some((q) => q.done && !q.warm))));
     const used = new Set();
     const ticked = slots.map((rt) => {
         if (!rt)
@@ -23144,12 +23150,13 @@ function RingsSheet({ st, save, today, close }) {
             exId: e.id, sets: Array.from({ length: plan.rounds }, () => ({ w: 0, reps: plan.workSec, warm: false, done: false })),
         }));
         const sessions = [...st.sessions];
-        const i = sessions.findIndex((s) => s.date === today);
+        /* v287: same rule as StartRoutine — never eat a real session */
+        const i = sessions.findIndex((s) => s.date === today && !s.startedAt && s.finished === false);
         const rec = { id: "u" + Date.now(), date: today, intent: "rings", routineName: "Ring closer", hour: n.getHours(), minute: n.getMinutes(), startedAt: Date.now(), durationSec: plan.totalMin * 60, exercises };
         if (i < 0)
             sessions.push(rec);
         else
-            sessions[i] = { ...sessions[i], ...rec, id: sessions[i].id };
+            sessions[i] = { ...rec, id: sessions[i].id };
         save({ ...st, sessions });
         close();
     };
@@ -26144,13 +26151,19 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                 sets: [...warm, ...Array.from({ length: nSets }, () => ({ w, reps: startReps, warm: false, done: false, rir: null }))] };
         });
         const sessions = [...st.sessions];
-        const i = sessions.findIndex((s) => s.date === today);
+        /* v287: only an unstarted placeholder for today may be replaced.
+           Matching on the date alone overwrote this morning's finished
+           session — and the { ...old, ...rec } spread inherited its
+           finished and packed flags, so the new session was born complete
+           and the workout screen refused to mount it. Two sessions in one
+           day is a Tuesday, not an error. */
+        const i = sessions.findIndex((s) => s.date === today && !s.startedAt && s.finished === false);
         const rec = { id: "u" + Date.now(), date: today, intent, routineName: rt.name, routineId: rt.id, hour: n.getHours(), minute: n.getMinutes(),
             startedAt: Date.now(), durationSec: 0, checkin: { ...chk, at: Date.now() }, exercises };
         if (i < 0)
             sessions.push(rec);
         else
-            sessions[i] = { ...sessions[i], ...rec, id: sessions[i].id };
+            sessions[i] = { ...rec, id: sessions[i].id };
         save({ ...st, sessions });
         close();
     };
