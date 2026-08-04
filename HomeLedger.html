@@ -5152,7 +5152,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v262 · 3 Aug";
+const APP_VERSION = "v263 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -15288,29 +15288,6 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 ? `As written. Change it and the amounts below rescale.`
                 : `Scaled from ${base.serves} to ${serves}. Cooking times mostly stay the same — check things are done rather than trusting the clock.${serves > base.serves * 2 ? " At this size use a bigger pan or do it in two, or it'll steam instead of browning." : ""}`)),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "What you need"),
-        sub && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } },
-                "Instead of ",
-                sub.ing),
-            React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, placeholder: "What you use \u2014 e.g. Veetee brown rice pack", value: sub.name, onChange: (e) => setSub({ ...sub, name: e.target.value }) }),
-            React.createElement("div", { style: { display: "flex", gap: 8 } },
-                React.createElement("input", { className: "il-in il-n", style: { flex: 1 }, inputMode: "decimal", placeholder: "How much", value: sub.amount, onChange: (e) => setSub({ ...sub, amount: e.target.value }) }),
-                React.createElement("input", { className: "il-in", style: { width: 92, textAlign: "left" }, placeholder: "unit", value: sub.unit, onChange: (e) => setSub({ ...sub, unit: e.target.value }) })),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "8px 0 12px" } }, "Leave the amount blank to keep the recipe's own. A swap follows the ingredient, so it still works when you scale the recipe or rename it."),
-            React.createElement("div", { style: { display: "grid", gap: 7 } },
-                React.createElement("button", { className: "il-btn", disabled: !sub.name.trim(), onClick: () => {
-                        save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "recipe"));
-                        setSub(null);
-                        setFix(null);
-                    } }, "Just in this recipe"),
-                React.createElement("button", { className: "il-btn g", disabled: !sub.name.trim(), onClick: () => {
-                        save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "global"));
-                        setSub(null);
-                        setFix(null);
-                    } },
-                    "In every recipe that uses ",
-                    sub.ing.toLowerCase()),
-                React.createElement("button", { className: "il-btn g", onClick: () => setSub(null) }, "Cancel")))),
         React.createElement("div", { className: "il-card" },
             base.ing.map((i, n) => {
                 const missing = cm && cm.missing.some((x) => String(i[2]).toLowerCase().includes(x.split(",")[0].trim()));
@@ -15341,9 +15318,37 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                                     " ",
                                     React.createElement("button", { className: "il-chip", style: { marginLeft: 4 }, onClick: () => save(clearMySwap(st, base.n, was ? was.from : i[2])) }, "Undo")));
                             }
+                            /* The form belongs in the row you opened, not at the top of
+                               the card — it was rendering above the whole list, so you
+                               tapped one thing and something appeared somewhere else. */
+                            if (sub && sub.ing === i[2]) {
+                                return (React.createElement("div", { style: { borderLeft: "3px solid var(--tint)", paddingLeft: 11 } },
+                                    React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } },
+                                        "Instead of ",
+                                        sub.ing),
+                                    React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, placeholder: "What you use \u2014 e.g. Veetee brown rice pack", value: sub.name, onChange: (e) => setSub({ ...sub, name: e.target.value }) }),
+                                    React.createElement("div", { style: { display: "flex", gap: 8 } },
+                                        React.createElement("input", { className: "il-in il-n", style: { flex: 1 }, inputMode: "decimal", placeholder: "How much", value: sub.amount, onChange: (e) => setSub({ ...sub, amount: e.target.value }) }),
+                                        React.createElement("input", { className: "il-in", style: { width: 92, textAlign: "left" }, placeholder: "unit", value: sub.unit, onChange: (e) => setSub({ ...sub, unit: e.target.value }) })),
+                                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "8px 0 10px" } }, "Leave the amount blank to keep the recipe's own."),
+                                    React.createElement("div", { style: { display: "grid", gap: 7 } },
+                                        React.createElement("button", { className: "il-btn", disabled: !sub.name.trim(), onClick: () => {
+                                                save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "recipe"));
+                                                setSub(null);
+                                                setFix(null);
+                                            } }, "Just in this recipe"),
+                                        React.createElement("button", { className: "il-btn g", disabled: !sub.name.trim(), onClick: () => {
+                                                save(setMySwap(st, base.n, sub.ing, { name: sub.name.trim(), amount: sub.amount, unit: sub.unit }, "global"));
+                                                setSub(null);
+                                                setFix(null);
+                                            } },
+                                            "In every recipe that uses ",
+                                            sub.ing.toLowerCase()),
+                                        React.createElement("button", { className: "il-btn g", onClick: () => setSub(null) }, "Cancel"))));
+                            }
                             return (React.createElement("button", { className: "il-btn g sm", onClick: () => setSub({ ing: i[2], amount: "", unit: i[1] || "", name: "" }) }, "Use something else instead"));
                         })(),
-                        React.createElement("div", { style: { display: "flex", gap: 7 } },
+                        !(sub && sub.ing === i[2]) && React.createElement("div", { style: { display: "flex", gap: 7 } },
                             missing ? (React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => {
                                     save({ ...st,
                                         cupboard: [...(st.cupboard || []), { name: i[2], cat: guessCat(i[2]), at: Date.now() }],
@@ -15363,7 +15368,7 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                                             : [...(st.shopAdded || []), { name: i[2], at: Date.now() + Math.random() }] });
                                     setFix(null);
                                 } }, queued ? "Take off list" : missing ? "Add to list" : "Running low")),
-                        React.createElement("button", { className: "il-btn g sm", onClick: () => {
+                        !(sub && sub.ing === i[2]) && React.createElement("button", { className: "il-btn g sm", onClick: () => {
                                 close();
                                 setTimeout(() => setSheet({ t: missing ? "additem" : "kitchen", prefill: i[2] }), 50);
                             } }, missing ? "Let me say how much, or photograph it" : "Open it in my kitchen")))));
