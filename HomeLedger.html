@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v320 · 5 Aug</div>
+  <div class="v">v321 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5768,7 +5768,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v320 · 5 Aug";
+const APP_VERSION = "v321 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5959,6 +5959,7 @@ function HomeLedgerInner() {
                 catch { }
             }
             clearTimeout(timer);
+            got = adoptCards(got);
             if (valid(got)) {
                 if (settled && provisional && !dirty.current) {
                     setSt(got);
@@ -16176,6 +16177,29 @@ function cupboardMatch(st, rec) {
 /* One test for "is this Slimming World" everywhere it can appear — the 16
    recipes carry source, the 22 ready-meal foods carry it in the name. */
 const isSW = (x) => !!x && (x.source === "Slimming World" || /^Slimming World /.test(x.n || x.name || ""));
+/* however he types it, "slimming world" stores as the one canonical form the
+   badge and the filter key on; anything else is kept as written */
+const canonSource = (t) => {
+    const v = String(t || "").trim();
+    return /^slimming\s*world$/i.test(v) ? "Slimming World" : v || null;
+};
+/* v321: he says every recipe photographed off a card is Slimming World, so
+   cards that never stated a source move over, once, at load. null means "no
+   decision was ever made" and only those move — the tick on the recipe card
+   writes "Slimming World" or "" (decided not), and both stick forever. */
+const adoptCards = (g) => {
+    if (!g || !Array.isArray(g.myRecipes))
+        return g;
+    let moved = false;
+    const my = g.myRecipes.map((r) => {
+        if (r && r.mine && r.via === "photo" && r.source == null) {
+            moved = true;
+            return { ...r, source: "Slimming World" };
+        }
+        return r;
+    });
+    return moved ? { ...g, myRecipes: my } : g;
+};
 function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
     /* opened from Add food with a day chosen — every card opened from here
        carries it, so "log it" lands where you said */
@@ -16768,6 +16792,10 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 base.wasCalled,
                 "\u201D")))) : (React.createElement("div", { style: { padding: "0 12px", marginBottom: 4 } },
             React.createElement("button", { className: "il-btn g", onClick: () => setNaming(base.n) }, "Rename this recipe"),
+            base.mine && (React.createElement("button", { className: "il-chip il-swc" + (isSW(base) ? " on" : ""), style: { width: "100%", marginTop: 8 }, onClick: () => {
+                    /* "" not null — null would be re-adopted at the next load */
+                    save({ ...st, myRecipes: (st.myRecipes || []).map((r) => r.n === base.n ? { ...r, source: isSW(base) ? "" : "Slimming World" } : r) });
+                } }, isSW(base) ? "\u2713 Slimming World recipe" : "Mark as Slimming World")),
             base.mine && (React.createElement("button", { className: "il-btn dz", onClick: () => {
                     if (!window.confirm(`Delete ${base.n}? Your rating, photo and any place it has in the week's plan go with it. This can't be undone.`))
                         return;
@@ -17444,7 +17472,7 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
             /* off a video is a different thing from off a card, and he wants them
                kept apart */
             via: fromVideo ? "video" : "photo",
-            source: source.trim() || null, num: res.num ?? null, at: Date.now() };
+            source: canonSource(source), num: res.num ?? null, at: Date.now() };
         save({ ...st, myRecipes: [...(st.myRecipes || []), rec],
             recipePhotos: { ...(st.recipePhotos || {}), [rec.n]: imgs.slice(0, 2) } });
         const done = [...filed, which];
@@ -17483,7 +17511,8 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
                 React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "If it runs over two pages, add both. If the nutrition is on a separate page \u2014 the way meal-kit books print it \u2014 add that too and she'll find the right row."))),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Where's it from?"),
-                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Optional \u2014 Slimming World, a book, a friend", value: source, onChange: (e) => setSource(e.target.value) })),
+                React.createElement("button", { className: "il-chip il-swc" + (source === "Slimming World" ? " on" : ""), style: { marginBottom: 8 }, onClick: () => setSource(source === "Slimming World" ? "" : "Slimming World") }, source === "Slimming World" ? "\u2713 Slimming World" : "Slimming World"),
+                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Or type it \u2014 a book, a friend", value: source, onChange: (e) => setSource(e.target.value) })),
             err && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
                 React.createElement("div", { className: "il-note" }, err)),
             React.createElement("div", { style: { padding: "0 12px" } },
