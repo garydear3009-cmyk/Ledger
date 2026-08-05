@@ -5686,7 +5686,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v307 · 5 Aug";
+const APP_VERSION = "v309 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6081,6 +6081,27 @@ const DEBRIEF = [
     ["strong", "Felt strong"], ["fine", "Normal"], ["flat", "Felt flat"],
     ["tired", "Short on sleep"], ["rushed", "Rushed it"], ["sore", "Something felt off"],
 ];
+/* v308: he started a session, stopped ten seconds later, and the app treated
+   it like any other workout — a full wrap-up questionnaire, then a permanent
+   record of 0kg and 0 sets he could not remove. A session with nothing logged
+   and no time on the clock is not a short session, it is one that did not
+   happen. This is the test for that, used by the wrap-up and by Train. */
+function sessionWork(s) {
+    const all = ((s && s.exercises) || []).flatMap((e) => (e.sets || []).filter((x) => !x.warm));
+    const done = all.filter((x) => x.done || Number(x.mins) > 0);
+    return { sets: all.length, done: done.length };
+}
+function abandoned(s, nowMs) {
+    if (!s || !s.startedAt)
+        return false;
+    const w = sessionWork(s);
+    if (w.done > 0)
+        return false; // anything ticked means it counts
+    const ran = s.durationSec != null
+        ? s.durationSec
+        : Math.round(((nowMs || Date.now()) - s.startedAt - (s.pausedTotal || 0)) / 1000);
+    return ran < 300; // under five minutes with nothing logged
+}
 function debriefFor(st, exId) {
     /* the last thing they said about a session that contained this exercise */
     const done = (st.sessions || []).filter((x) => x.finished && x.debrief);
@@ -7098,19 +7119,23 @@ function Train({ st, save, a, today, setSheet }) {
         s && !(s.finished && s.packed) && (React.createElement(React.Fragment, null,
             React.createElement(LiveSession, { st, save, s, setSheet }))),
         s && s.finished && s.packed && (React.createElement("div", { className: "il-list", style: { margin: "0 12px 10px" } },
+            abandoned(s) && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)", margin: "0 0 8px" } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "That one didn't really happen"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginBottom: 10 } }, "Started and stopped with nothing logged. It's sitting in your history as a session \u2014 bin it and nothing counts it."),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => save({ ...st, sessions: st.sessions.filter((x) => x.id !== s.id) }) }, "Bin it"))),
             React.createElement("div", { className: "il-li", onClick: () => save({ ...st, sessions: st.sessions.map((x) => x.id === s.id ? { ...x, packed: false } : x) }) },
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { style: { fontSize: 14, fontWeight: 500 } },
                         "Today: ",
                         s.routineName || "session",
-                        " \\u2713"),
+                        " \u2713"),
                     React.createElement("div", { className: "il-sub il-n" },
                         VOL(sessVol(s)).toLocaleString(),
                         " ",
                         VOLU(),
-                        " \\u00b7 ",
+                        " \u00b7 ",
                         s.exercises.reduce((x, e) => x + e.sets.filter((q) => !q.warm).length, 0),
-                        " sets \\u00b7 ",
+                        " sets \u00b7 ",
                         dur(s.durationSec),
                         s.completion && s.completion.status !== "planned" ? ` \u00b7 ${{ extra: "and extra", short: "cut short", much_shorter: "well short" }[s.completion.status] || ""}` : "")),
                 React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))),
@@ -8491,12 +8516,13 @@ function programState(st, today) {
     const slots = (p.slots || []).map((id) => routines.find((r) => r.id === id) || null);
     const from = progWeekStart(today);
     const done = (st.sessions || []).filter((x) => x.date >= from && x.finished !== false &&
-        /* v287: finished with zero seconds and nothing lifted is a ghost —
-           the corruption signature of the old date-collision, and of any
-           abandoned session that never did a set. Begun-and-in-progress
-           still ticks, as it always has. */
-        !(x.finished === true && x.startedAt && !(x.durationSec > 0) &&
-            !(x.exercises || []).some((e) => (e.sets || []).some((q) => q.done && !q.warm))));
+        /* v287 wanted to stop a ghost session ticking the week off, but only
+           caught sessions with ZERO seconds on them — and the wrap-up writes
+           a floor of 60. So Gary's ten-second Push ticked Push off his
+           programme. v309: the same test the rest of the app uses. It is a
+           superset of the old rule, so the date-collision ghosts it was
+           written for are still caught. Begun-and-in-progress still ticks. */
+        !(x.finished === true && abandoned(x)));
     const used = new Set();
     const ticked = slots.map((rt) => {
         if (!rt)
@@ -12491,7 +12517,7 @@ function Tips({ st, save, a, close, setSheet, go }) {
                     r.action,
                     r.goto ? " \u2192" : ""),
                 React.createElement("button", { className: "il-btn g sm", onClick: () => hide(r.id) }, "Dismiss")),
-            doneIds.includes(r.id) && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--faint)" } }, "You have taken this on \\u2014 it drops off once the number behind it moves.")))),
+            doneIds.includes(r.id) && React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8, color: "var(--faint)" } }, "You have taken this on \u2014 it drops off once the number behind it moves.")))),
         hidden.length > 0 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
                 React.createElement("div", { className: "il-lbl" },
@@ -12500,7 +12526,7 @@ function Tips({ st, save, a, close, setSheet, go }) {
                 React.createElement("button", { className: "il-chip", onClick: () => save({ ...st, hiddenTips: [] }) }, "Bring them back")),
             React.createElement("div", { className: "il-note" }, "Gone for good unless you want them again. They will not reappear on their own, even if the number behind one gets worse."))),
         React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "These come from rules run against your own logs \\u2014 volume per muscle, how hard you have been training, adherence, how long you have been in a deficit. Ordered by how much they matter, not how recent they are.")));
+            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "These come from rules run against your own logs \u2014 volume per muscle, how hard you have been training, adherence, how long you have been in a deficit. Ordered by how much they matter, not how recent they are.")));
 }
 /* ============ FINISHING A SESSION ============
    A session logged as done when you only got through half of it quietly
@@ -12527,6 +12553,13 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
     const mins = Math.max(1, Math.round((Date.now() - started - (s.pausedTotal || 0)) / 60000));
     const pct = all.length ? Math.round((done.length / all.length) * 100) : 0;
     const guess = pct >= 98 ? "planned" : pct >= 60 ? "short" : "much_shorter";
+    /* v308: nothing ticked and barely any time on it — do not make him answer
+       five questions about a session that did not happen. */
+    const nothingHappened = abandoned(s);
+    const binIt = () => {
+        save({ ...st, sessions: st.sessions.filter((x) => x.id !== s.id) });
+        close();
+    };
     const commit = () => {
         const st2 = status || guess;
         const sessions = st.sessions.map((x) => x.id !== s.id ? x : ({
@@ -12542,6 +12575,13 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
         save({ ...st, sessions });
         close();
     };
+    if (nothingHappened)
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "That one didn't happen", sub: "Started and stopped, nothing logged", close: close }),
+            React.createElement("div", { className: "il-card" },
+                React.createElement("div", { className: "il-note", style: { fontSize: 13 } }, "No sets ticked and barely any time on the clock. There's nothing here worth asking you about \u2014 bin it and it won't count against your week, or keep it if you did something the app didn't see.")),
+            React.createElement("button", { className: "il-btn", style: { width: "100%" }, onClick: binIt }, "Bin it \u2014 it never happened"),
+            React.createElement("button", { className: "il-btn g", style: { width: "100%", marginTop: 8 }, onClick: commit }, "No, keep it"));
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "How did that go?", sub: `${mins} minutes${s.pausedTotal ? `, ${Math.round(s.pausedTotal / 60000)} paused` : ""}`, close: close }),
         React.createElement("div", { className: "il-card" },
@@ -27008,7 +27048,9 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
     const [name, setName] = useState(live ? live.program.name : "");
     const [adding, setAdding] = useState(!live);
     const chosen = slots.map((id) => routines.find((r) => r.id === id)).filter(Boolean);
-    const mins = chosen.reduce((n, r) => n + routineMinutes(r.exercises), 0);
+    /* v309: this said 141 minutes for a week that really takes closer to
+       four hours — it was the lifting time, not the time in the room. */
+    const mins = chosen.reduce((n, r) => n + sessionTime(r.exercises).full, 0);
     const per = {};
     chosen.forEach((rt) => (rt.exercises || []).forEach((x) => {
         const ex = exOf(x.exId);
@@ -27057,8 +27099,8 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
                             rt && React.createElement("div", { className: "il-sub il-n" },
                                 rt.exercises.length,
                                 " exercises \u00B7 about ",
-                                routineMinutes(rt.exercises),
-                                " min")),
+                                sessionTime(rt.exercises).full,
+                                " min in the room")),
                         React.createElement("span", { className: "il-lbl", style: { flexShrink: 0 } }, i + 1)),
                     React.createElement("div", { style: { display: "flex", gap: 6 } },
                         React.createElement("button", { className: "il-chip", disabled: i === 0, onClick: () => move(i, -1) }, "Up"),
@@ -27082,7 +27124,7 @@ function ProgramSheet({ st, save, a, today, close, setSheet }) {
                     chosen.length,
                     " sessions \u00B7 about ",
                     Math.round(mins),
-                    " minutes \u00B7 ",
+                    " minutes in the room \u00B7 ",
                     Object.values(per).reduce((n, x) => n + x, 0),
                     " working sets"),
                 thin.length > 0 && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 6, color: "var(--gold)" } },
