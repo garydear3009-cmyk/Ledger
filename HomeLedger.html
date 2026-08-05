@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v293 · 4 Aug";
+const APP_VERSION = "v294 · 4 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -24940,6 +24940,13 @@ function You({ st, save, a, today, setSheet, go }) {
     const hide = (id) => save({ ...st, hiddenTips: [...hidden, id] });
     const doneIds = acts.filter((x) => x.status === "done").map((x) => x.id);
     const prev = acts.filter((x) => (Date.now() - new Date(x.date).getTime()) / 864e5 > 5);
+    /* v294: the follow-ups card below resolves past suggestion ids against
+       `read` — which was never declared in this component. The card only
+       renders once you have responded to a suggestion, so it sat armed for
+       weeks and went off the first night real data reached it: the whole
+       You tab fell over with "Can't find variable: read". Unfiltered on
+       purpose — a suggestion you have since hidden should still resolve. */
+    const read = useMemo(() => coachRead(st, a), [st, a]);
     return (React.createElement(React.Fragment, null,
         React.createElement(Welcome, { st, a, today, setSheet }),
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
