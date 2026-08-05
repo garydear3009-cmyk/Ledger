@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v321 · 5 Aug</div>
+  <div class="v">v322 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5768,7 +5768,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v321 · 5 Aug";
+const APP_VERSION = "v322 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -16792,10 +16792,13 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                 base.wasCalled,
                 "\u201D")))) : (React.createElement("div", { style: { padding: "0 12px", marginBottom: 4 } },
             React.createElement("button", { className: "il-btn g", onClick: () => setNaming(base.n) }, "Rename this recipe"),
-            base.mine && (React.createElement("button", { className: "il-chip il-swc" + (isSW(base) ? " on" : ""), style: { width: "100%", marginTop: 8 }, onClick: () => {
-                    /* "" not null — null would be re-adopted at the next load */
-                    save({ ...st, myRecipes: (st.myRecipes || []).map((r) => r.n === base.n ? { ...r, source: isSW(base) ? "" : "Slimming World" } : r) });
-                } }, isSW(base) ? "\u2713 Slimming World recipe" : "Mark as Slimming World")),
+            React.createElement("button", { className: "il-chip il-swc" + (isSW(base) ? " on" : ""), style: { width: "100%", marginTop: 8 }, onClick: () => {
+                    /* v322: one mark for any recipe, built-in or his — keyed by
+                       name like ratings and renames, applied in renamedBook.
+                       An explicit false sticks, so an adopted card he unmarks
+                       stays unmarked. */
+                    save({ ...st, swMarks: { ...(st.swMarks || {}), [base.n]: !isSW(base) } });
+                } }, isSW(base) ? "\u2713 Slimming World recipe" : "Mark as Slimming World"),
             base.mine && (React.createElement("button", { className: "il-btn dz", onClick: () => {
                     if (!window.confirm(`Delete ${base.n}? Your rating, photo and any place it has in the week's plan go with it. This can't be undone.`))
                         return;
@@ -22572,9 +22575,19 @@ const rateWord = (n) => (RATE_WORDS.find(([lo, hi]) => n >= lo && n <= hi) || RA
 const displayName = (st, n) => ((st || {}).renames || {})[n] || n;
 const renamedBook = (st, list) => {
     const rn = (st || {}).renames || {};
-    if (!Object.keys(rn).length)
+    /* v322: his tick outranks where a recipe came from. Marks are keyed by
+       the DISPLAY name — the name the tick was pressed under — so they are
+       looked up after any rename has been applied. */
+    const sw = (st || {}).swMarks || {};
+    if (!Object.keys(rn).length && !Object.keys(sw).length)
         return list;
-    return list.map((r) => (rn[r.n] ? { ...r, n: rn[r.n], wasCalled: r.n } : r));
+    return list.map((r) => {
+        let out = rn[r.n] ? { ...r, n: rn[r.n], wasCalled: r.n } : r;
+        const v = sw[out.n];
+        if (v !== undefined)
+            out = { ...out, source: v ? "Slimming World" : "" };
+        return out;
+    });
 };
 /* Everything downstream keys on the name, so a rename has to take the stored
    references with it or the favourite, the rating and the photo are orphaned. */
@@ -22674,6 +22687,7 @@ function renameRecipe(st, from, to) {
         ratings: move(st.ratings),
         cookLog: move(st.cookLog),
         recipePhotos: move(st.recipePhotos),
+        swMarks: move(st.swMarks),
     };
     /* the week's plan stores a name per day and slot */
     if (st.mealPlan) {
