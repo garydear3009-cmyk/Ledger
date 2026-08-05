@@ -3509,12 +3509,19 @@ function MealFinder({ st, save, a, today, close }) {
     const [open, setOpen] = useState(null);
     const [mq, setMq] = useState("");
     const res = useMemo(() => {
-        const base = findMeals({ meal, minP: Number(minP) || 0, maxKcal: Number(maxKcal) || 0, maxMin, avoid, have, useHave, bestFor });
+        const raw = findMeals({ meal, minP: Number(minP) || 0, maxKcal: Number(maxKcal) || 0, maxMin, avoid, have, useHave, bestFor });
+        /* v311: these carry their ingredients as [name, ...] rather than the
+           book's shape, so score them here rather than through recipeTaste */
+        const score = (x) => ((x.r.ings || []).reduce((n, ing) => {
+            const t = tasteOf(st, ing && ing[0]);
+            return n + (t === -1 ? -2 : t === 1 ? 1 : 0);
+        }, 0));
+        const base = raw.slice().sort((x, y) => score(y) - score(x));
         if (!mq)
             return base;
         const t = mq.toLowerCase();
         return base.filter((x) => x.r.name.toLowerCase().includes(t) || x.r.ings.some(([nm]) => nm.toLowerCase().includes(t)));
-    }, [meal, minP, maxKcal, maxMin, avoid, have, useHave, bestFor, mq]);
+    }, [meal, minP, maxKcal, maxMin, avoid, have, useHave, bestFor, mq, st.tastes]);
     const log = (x) => {
         const foods = [...st.foods];
         let i = foods.findIndex((f) => f.date === today);
@@ -5686,7 +5693,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v309 · 5 Aug";
+const APP_VERSION = "v312 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -15541,7 +15548,7 @@ function NutChat({ sheet, st, save, a, today, close, setSheet }) {
         save({ ...st, nutChat: next.slice(-120) });
         try {
             const hist = chat.slice(-20).map((m) => `${m.role === "user" ? "THEY SAID" : "YOU SAID"}: ${m.text}`).join("\n\n");
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 Return ONLY JSON, no fences:
 { "reply": "your answer, plain text, paragraphs separated by blank lines",
@@ -16187,6 +16194,11 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
             return (cupboardMatch(st, y)?.pct || 0) - (cupboardMatch(st, x)?.pct || 0);
         return 0;
     }).sort((a, b) => {
+        /* v310: what he can't stand sinks, what he loves floats. Only ever a
+           tie-break nudge — the chosen sort still leads. */
+        const ta = recipeTaste(st, a).score, tb = recipeTaste(st, b).score;
+        if (ta !== tb)
+            return tb - ta;
         if (sort !== "rating")
             return 0;
         const x = rateAvg(st, a.n), y = rateAvg(st, b.n);
@@ -16194,6 +16206,9 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
     });
     const toggleTag = (t) => setTags((x) => x.includes(t) ? x.filter((y) => y !== t) : [...x, t]);
     return React.createElement(React.Fragment, null,
+        React.createElement("button", { className: "il-chip", style: { margin: "0 0 10px" }, onClick: () => setSheet({ t: "tastes" }) },
+            "What I like and don't",
+            Object.keys(st.tastes || {}).length ? " \u00b7 " + Object.keys(st.tastes || {}).length : ""),
         React.createElement(SH, { title: "Recipes", sub: `${list.length} of ${all.length}`, close: close }),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7, flexWrap: "wrap" } },
             React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "addrec" }) }, "+ Photograph a recipe"),
@@ -16677,6 +16692,17 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                         React.createElement("span", { style: { fontSize: 13, color: "var(--dim)" } }, "/20"))),
                 r.note && React.createElement("div", { className: "il-note", style: { fontSize: 13, marginTop: 8 } }, r.note)));
         })(),
+        (() => {
+            const t = recipeTaste(st, base);
+            if (!t.disliked.length && !t.loved.length && !t.swapped.length)
+                return null;
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${t.score < 0 ? "var(--red)" : "var(--grn)"}` } },
+                React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, t.score < 0 ? "Marked down for you" : "One for you"),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } },
+                    t.disliked.length ? `You've said no to ${t.disliked.join(", ").toLowerCase()}. ` : "",
+                    t.loved.length ? `You like ${t.loved.join(", ").toLowerCase()}. ` : "",
+                    t.swapped.length ? `Already swapped out: ${t.swapped.join(", ").toLowerCase()} \u2014 so this one isn't marked down for it.` : "")));
+        })(),
         base.swapped && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
             React.createElement("div", { className: "il-note", style: { fontSize: 13 } },
                 "Adjusted for your rules: ",
@@ -16734,6 +16760,11 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
                             missing ? (queued ? " · on your list" : " · not in your kitchen") : queued ? " · on your list" : ""),
                         React.createElement("span", { className: "il-n", style: { fontSize: 14, color: "var(--dim)", flexShrink: 0 } }, amount(i[0], i[1]))),
                     open && (React.createElement("div", { style: { paddingBottom: 12, display: "grid", gap: 7 } },
+                        React.createElement("div", { style: { display: "flex", gap: 7, alignItems: "center" } },
+                            React.createElement("button", { className: "il-chip" + (tasteOf(st, i[2]) === 1 ? " on" : ""), onClick: () => save(setTaste(st, i[2], 1)) }, "\u2665 Love it"),
+                            React.createElement("button", { className: "il-chip" + (tasteOf(st, i[2]) === -1 ? " on" : ""), style: tasteOf(st, i[2]) === -1 ? { background: "#33121A", color: "var(--red)", borderColor: "var(--red)" } : undefined, onClick: () => save(setTaste(st, i[2], -1)) }, "\u2715 Not for me"),
+                            tasteOf(st, i[2]) !== 0 && React.createElement("span", { className: "il-sub", style: { margin: 0 } }, tasteOf(st, i[2]) === 1 ? "recipes with it come up" : "recipes with it drop down")),
+                        tasteOf(st, i[2]) === -1 && !mySwapFor(st, base.n, i[2]) && React.createElement("div", { className: "il-note", style: { fontSize: 12, borderLeft: "3px solid var(--gold)", paddingLeft: 9 } }, "Swap it for something you do like below and this recipe stops being marked down for it."),
                         React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, missing ? `I can't find ${i[2].toLowerCase()} in your kitchen.`
                             : `You've got ${i[2].toLowerCase()}. Running low on it?`),
                         React.createElement(SwapRows, { name: i[2] }),
@@ -17287,7 +17318,7 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
         setHerRead("");
         try {
             const sum = recipeFromIngredients(res, pool);
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 They have just photographed a recipe and are about to put it in their book. Give them your read on it
 before they do: what it is good for, what it is short of, and the one or two changes that would earn
@@ -17909,6 +17940,81 @@ function ruleCheck(st, rec) {
    Stored by the original ingredient's name so it keeps working when a recipe
    is renamed or rescaled. */
 const swapKey = (n) => String(n || "").toLowerCase().replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+/* ---------------------------------------------------------------------------
+   v310: what he likes and what he won't have. Keyed with swapKey, the same
+   normaliser the substitutions use, so a taste and a swap on the same
+   ingredient are talking about the same thing.
+
+   His rule, and it is the important one: a disliked ingredient only pushes a
+   recipe down while it is still IN the recipe. Swap the black beans for
+   something he likes and the chilli comes back up the list.
+--------------------------------------------------------------------------- */
+function tasteOf(st, ingName) {
+    const k = swapKey(ingName);
+    if (!k)
+        return 0;
+    const v = (st.tastes || {})[k];
+    return v === 1 || v === -1 ? v : 0;
+}
+function setTaste(st, ingName, v) {
+    const k = swapKey(ingName);
+    if (!k)
+        return st;
+    const t = { ...(st.tastes || {}) };
+    if (t[k] === v)
+        delete t[k]; // tapping the same one again clears it
+    else
+        t[k] = v;
+    return { ...st, tastes: t };
+}
+/* Score a recipe by what is actually in it once the swaps have been applied. */
+/* v311: what the coach and the nutritionist are told about his tastes. A
+   dislike is a real instruction to them — there is no reason to offer three
+   dinners and have one of them be a thing he won't eat — but with the same
+   escape hatch the book has: suggest it with the swap, or not at all. */
+function tasteBrief(st) {
+    const t = st.tastes || {};
+    const keys = Object.keys(t);
+    if (!keys.length)
+        return "";
+    const no = keys.filter((k) => t[k] === -1);
+    const yes = keys.filter((k) => t[k] === 1);
+    let out = "\n\n=== WHAT THEY LIKE AND WON'T EAT ===\n";
+    if (no.length)
+        out += `Will not eat: ${no.join(", ")}. Do not put these in anything you suggest. ` +
+            `If a dish would otherwise be right, suggest it WITH a named replacement for the ` +
+            `offending ingredient and say what you have swapped \u2014 do not quietly leave it in.\n`;
+    if (yes.length)
+        out += `Likes: ${yes.join(", ")}. Favour these where they fit.\n`;
+    out += "These are their own marks against ingredients, not allergies or a diet \u2014 " +
+        "treat them as strong preferences and never lecture them about it.";
+    return out;
+}
+function recipeTaste(st, rec) {
+    const out = { score: 0, loved: [], disliked: [], swapped: [] };
+    if (!rec || !Array.isArray(rec.ing))
+        return out;
+    rec.ing.forEach((line) => {
+        const name = line && line[2];
+        if (!name)
+            return;
+        /* if he has swapped this one out, judge the replacement instead */
+        const sw = mySwapFor(st, rec.n, name);
+        const effective = sw && sw.name ? sw.name : name;
+        const t = tasteOf(st, effective);
+        if (t === -1) {
+            out.disliked.push(effective);
+            out.score -= 2;
+        }
+        else if (t === 1) {
+            out.loved.push(effective);
+            out.score += 1;
+        }
+        if (sw && sw.name && tasteOf(st, name) === -1)
+            out.swapped.push(name); // the thing he doesn't like, dealt with
+    });
+    return out;
+}
 function mySwapFor(st, recName, ingName) {
     const m = st.mySwaps || {};
     const k = swapKey(ingName);
@@ -18714,13 +18820,19 @@ function Inspiration({ st, save, a, today, close, setSheet }) {
             const mins = Number(a2.time) || 999;
             const many = Number(a2.many) || 2;
             const fit = all.filter((r) => (!a2.meal || r.meal === a2.meal) && r.mins <= mins);
-            const pool = (fit.length >= 6 ? fit : all.filter((r) => !a2.meal || r.meal === a2.meal)).slice(0, 40);
+            const pool = (fit.length >= 6 ? fit : all.filter((r) => !a2.meal || r.meal === a2.meal))
+                /* v311: hand her the ones he'd actually eat first, so even the shortlist
+                   is his. Anything with something he won't eat sinks; it can still make
+                   the list if there is little else, and she is told to swap it. */
+                .slice()
+                .sort((x, y) => recipeTaste(st, y).score - recipeTaste(st, x).score)
+                .slice(0, 40);
             const cupList = (st.cupboard || []).map((c) => c.name).join(", ");
             const lines = pool.map((r) => {
                 const cm = cupboardMatch(st, r);
                 return `${r.n} — ${r.mins} min, serves ${r.serves}, ${r.m[0]}cal ${r.m[1]}p ${r.m[2]}c ${r.m[3]}f${cm ? `, you have ${cm.pct}% of what it needs${cm.missing.length ? ` (missing ${cm.missing.join(", ")})` : ""}` : ""}`;
             }).join("\n");
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 They want an idea for something to cook. Pick three from the list below and say why each one.
 
@@ -22050,7 +22162,7 @@ function RecipeTweaks({ rec, st, save, a, close, setSheet }) {
         setBusy(true);
         setChat((c) => [...c, { role: "user", text }]);
         try {
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 They are looking at this recipe and have a question about it. Answer it directly, three or four
 sentences. If they want it higher in protein, lower in carbs, dairy-free or whatever else, give them
@@ -22091,7 +22203,7 @@ ${text}`, 1600, "mid");
             const P = st.profile;
             const fd = st.foods.filter((f) => f.entries.length).slice(-14);
             const avgP = fd.length ? Math.round(fd.reduce((x, f) => x + f.entries.reduce((y, e) => y + e.p, 0), 0) / fd.length) : null;
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 ${TWEAK_PROMPT}
 
@@ -22574,7 +22686,7 @@ function Lighter({ sheet, st, save, close, setSheet }) {
         setBusy(true);
         setErr("");
         try {
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 Somebody wants this recipe under ${target} calories a serving. It's currently ${rec.m[0]}.
 The app has already worked out an arithmetic version by trimming amounts. Your job is to say whether
@@ -22811,7 +22923,7 @@ function Healthier({ sheet, st, save, close, setSheet }) {
         setBusy(true);
         setErr("");
         try {
-            const txt = await callClaude(`${NUT_BRIEF}
+            const txt = await callClaude(`${NUT_BRIEF}${tasteBrief(st)}
 
 Somebody wants to know how to make this recipe better for them nutritionally — not lighter, better.
 Micronutrients, fibre, variety.
@@ -23874,6 +23986,34 @@ Rules for the brief:
   presenting it as settled.
 - In caveats, be specific: claims resting on muscle-activation studies, on untrained
   subjects, or on a single trial extrapolated wide. Empty array if it is sober throughout.`;
+function TasteList({ st, save, close }) {
+    const t = st.tastes || {};
+    const keys = Object.keys(t).sort();
+    const loved = keys.filter((k) => t[k] === 1);
+    const nope = keys.filter((k) => t[k] === -1);
+    const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
+    const countFor = (k) => book.filter((r) => (r.ing || []).some((l) => swapKey(l[2]) === k)).length;
+    const row = (k, v) => (React.createElement("div", { key: k, className: "il-row", style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
+        React.createElement("div", { style: { minWidth: 0 } },
+            React.createElement("div", { style: { fontSize: 14 } }, k),
+            React.createElement("div", { className: "il-sub il-n" },
+                countFor(k),
+                " recipe",
+                countFor(k) === 1 ? "" : "s",
+                v === 1 ? " come up" : " drop down")),
+        React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => save(setTaste(st, k, v)) }, "Forget it")));
+    return (React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "What you like and don't", sub: keys.length ? `${keys.length} ingredient${keys.length === 1 ? "" : "s"} marked` : "Nothing marked yet", close: close }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Mark an ingredient on any recipe card and it applies everywhere. Recipes with something you won't eat sink down the book; recipes with things you like float up. Swapping a disliked ingredient out of a recipe cancels the mark-down for that recipe.")),
+        nope.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 4px" } }, "Not for you"),
+            nope.map((k) => row(k, -1))),
+        loved.length > 0 && React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-lbl", style: { margin: "16px 0 4px" } }, "You like these"),
+            loved.map((k) => row(k, 1))),
+        !keys.length && React.createElement("div", { className: "il-empty" }, "Open any recipe, tap an ingredient, and tell it what you think.")));
+}
 function RefShelf({ st, save, close }) {
     const fileRef = useRef(null);
     const [txt, setTxt] = useState("");
@@ -24711,71 +24851,9 @@ function Fuel({ st, save, a, today, setSheet }) {
     return (React.createElement(React.Fragment, null,
         React.createElement("button", { className: "il-fab", onClick: () => setSheet({ t: "addfood", date: showing }), "aria-label": "Add food" }, "+"),
         (() => {
-            /* The week, four rows of seven. Tap a day and everything below shows
-               that day instead. */
-            const w = weekFood(st, today, showing);
-            const rows = [["kcal", "var(--tint)"], ["p", "var(--grn)"], ["c", "var(--gold)"], ["f", "var(--pmp)"]];
-            const letters = ["M", "T", "W", "T", "F", "S", "S"];
-            return (React.createElement("div", { className: "il-card lead" },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 12 } },
-                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 } },
-                        React.createElement("button", { className: "il-chip", style: { padding: "5px 10px" }, onClick: () => setDay(addDays(showing, -7)) }, "\u2039"),
-                        React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, weekStart(showing) === weekStart(today) ? "This week"
-                            : weekStart(showing) === weekStart(addDays(today, -7)) ? "Last week"
-                                : "Week of " + dtiny(weekStart(showing))),
-                        React.createElement("button", { className: "il-chip", style: { padding: "5px 10px", opacity: weekStart(showing) >= weekStart(today) ? 0.35 : 1 }, disabled: weekStart(showing) >= weekStart(today), onClick: () => setDay(addDays(showing, 7)) }, "\u203A")),
-                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } }, w.loggedDays ? `${w.loggedDays} day${w.loggedDays === 1 ? "" : "s"} logged` : "nothing logged")),
-                rows.map(([k, colour], r) => (React.createElement("div", { key: k, style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 } },
-                    React.createElement("span", { className: "il-lbl", style: { width: 52, flexShrink: 0, fontSize: 10 } }, k === "kcal" ? "CAL" : k.toUpperCase()),
-                    React.createElement("div", { className: "il-wk", style: { flex: 1, minWidth: 0 } }, w.days.map((d, x) => {
-                        const pct = d.ahead || !w.target[k] ? 0 : Math.min(100, Math.round((d[k] / w.target[k]) * 100));
-                        return (React.createElement("button", { key: d.date, className: d.date === showing ? "on" : "", onClick: () => setDay(d.date) },
-                            React.createElement("span", { className: "il-wkb" + (d.ahead ? " ahead" : "") }, !d.ahead && React.createElement("i", { style: { height: pct + "%", background: pct >= 100 ? "var(--grn)" : colour, opacity: d.logged ? 1 : .25 } })),
-                            r === rows.length - 1 && React.createElement("span", { className: "il-wkd" }, letters[x])));
-                    })),
-                    React.createElement("span", { className: "il-n", style: { width: 44, textAlign: "right", flexShrink: 0, fontSize: 11.5,
-                            color: "var(--txt)" } }, (() => {
-                        /* v296: this column used to hold the week's average and never
-                           moved when you picked a day, which read as broken. It is the
-                           selected day now; the average is in the line underneath. */
-                        const d = w.days.find((x) => x.date === showing);
-                        return d && d.logged ? d[k] : d && !d.ahead ? 0 : "—";
-                    })())))),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } },
-                    "The figure on the right is that day's total. Your average across the ",
-                    w.loggedDays || 0,
-                    " logged day",
-                    w.loggedDays === 1 ? "" : "s",
-                    " you logged \u2014 days you have not eaten yet are left out rather than counted as nought.")));
-        })(),
-        (() => {
-            const Row = ({ to, title, sub, colour }) => (React.createElement("button", { className: "il-mrow", onClick: () => setSheet(to) },
-                React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
-                    colour && React.createElement("span", { style: { width: 3, height: 26, borderRadius: 2, background: colour, flexShrink: 0 } }),
-                    React.createElement("span", { style: { minWidth: 0 } },
-                        React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, title),
-                        React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub))),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
-            return (React.createElement("div", { className: "il-menu" },
-                React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Chat \u2014 or jump in below" : "Ask her anything, or tell her what you ate" }),
-                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
-                React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: (() => {
-                        const n = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
-                        return n ? `${n} meals planned` : "And the shopping writes itself";
-                    })() }),
-                React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: (() => {
-                        const sh = shopLines(st, weekStart(today));
-                        const n = sh.need.length + sh.ranOut.length + sh.added.length;
-                        return n ? `${n} thing${n === 1 ? "" : "s"} on it` : "Nothing on it yet";
-                    })() }),
-                React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: (() => {
-                        const c = (st.cupboard || []).length;
-                        const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
-                        return c ? `${c} in it${soon ? `, ${soon} going off soon` : ""}` : "Tell me what you've got in";
-                    })() })));
-        })(),
-        (() => {
-            /* what is left, at a glance, before anything else on the screen */
+            /* v312: what's left and the week that produced it were at opposite
+               ends of the page — he asked for them to share the screen. One
+               card: the number he came for, then the week underneath it. */
             const bars = [
                 ["Calories", Math.round(t.k), Math.round(baseK), "var(--tint)"],
                 ["Protein", Math.round(t.p), P.proteinTarget, "var(--grn)"],
@@ -24783,6 +24861,9 @@ function Fuel({ st, save, a, today, setSheet }) {
                 ["Fat", Math.round(t.f), P.fatTarget, "var(--pmp)"],
             ];
             const left = Math.max(0, Math.round(baseK) - Math.round(t.k));
+            const w = weekFood(st, today, showing);
+            const rows = [["kcal", "var(--tint)"], ["p", "var(--grn)"], ["c", "var(--gold)"], ["f", "var(--pmp)"]];
+            const letters = ["M", "T", "W", "T", "F", "S", "S"];
             return (React.createElement("div", { className: "il-card lead" },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 16, cursor: "pointer" }, onClick: () => setSheet({ t: "targets" }) },
                     React.createElement("div", { className: "il-hero", style: { flexShrink: 0, color: left ? "var(--txt)" : "var(--grn)" } }, left),
@@ -24812,9 +24893,39 @@ function Fuel({ st, save, a, today, setSheet }) {
                 }),
                 React.createElement("div", { style: { display: "flex", gap: 7, marginTop: 14 } },
                     React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => setSheet({ t: "meals" }) }, "What should I eat?"),
-                    React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => setSheet({ t: "fuel" }) }, "The detail"))));
+                    React.createElement("button", { className: "il-btn g sm", style: { flex: 1 }, onClick: () => setSheet({ t: "fuel" }) }, "The detail")),
+                React.createElement("div", { style: { borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 12 } },
+                    React.createElement("div", { className: "il-row", style: { marginBottom: 12 } },
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 } },
+                            React.createElement("button", { className: "il-chip", style: { padding: "5px 10px" }, onClick: () => setDay(addDays(showing, -7)) }, "\u2039"),
+                            React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, weekStart(showing) === weekStart(today) ? "This week"
+                                : weekStart(showing) === weekStart(addDays(today, -7)) ? "Last week"
+                                    : "Week of " + dtiny(weekStart(showing))),
+                            React.createElement("button", { className: "il-chip", style: { padding: "5px 10px", opacity: weekStart(showing) >= weekStart(today) ? 0.35 : 1 }, disabled: weekStart(showing) >= weekStart(today), onClick: () => setDay(addDays(showing, 7)) }, "\u203A")),
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } }, w.loggedDays ? `${w.loggedDays} day${w.loggedDays === 1 ? "" : "s"} logged` : "nothing logged")),
+                    rows.map(([k, colour], r) => (React.createElement("div", { key: k, style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 6 } },
+                        React.createElement("span", { className: "il-lbl", style: { width: 52, flexShrink: 0, fontSize: 10 } }, k === "kcal" ? "CAL" : k.toUpperCase()),
+                        React.createElement("div", { className: "il-wk", style: { flex: 1, minWidth: 0 } }, w.days.map((d, x) => {
+                            const pct = d.ahead || !w.target[k] ? 0 : Math.min(100, Math.round((d[k] / w.target[k]) * 100));
+                            return (React.createElement("button", { key: d.date, className: d.date === showing ? "on" : "", onClick: () => setDay(d.date) },
+                                React.createElement("span", { className: "il-wkb" + (d.ahead ? " ahead" : "") }, !d.ahead && React.createElement("i", { style: { height: pct + "%", background: pct >= 100 ? "var(--grn)" : colour, opacity: d.logged ? 1 : .25 } })),
+                                r === rows.length - 1 && React.createElement("span", { className: "il-wkd" }, letters[x])));
+                        })),
+                        React.createElement("span", { className: "il-n", style: { width: 44, textAlign: "right", flexShrink: 0, fontSize: 11.5,
+                                color: "var(--txt)" } }, (() => {
+                            /* v296: this column used to hold the week's average and never
+                               moved when you picked a day, which read as broken. It is the
+                               selected day now; the average is in the line underneath. */
+                            const d = w.days.find((x) => x.date === showing);
+                            return d && d.logged ? d[k] : d && !d.ahead ? 0 : "—";
+                        })())))),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } },
+                        "The figure on the right is that day's total. Your average across the ",
+                        w.loggedDays || 0,
+                        " logged day",
+                        w.loggedDays === 1 ? "" : "s",
+                        " you logged \u2014 days you have not eaten yet are left out rather than counted as nought."))));
         })(),
-        React.createElement("div", { style: { padding: "0 12px", marginTop: 16 } }),
         isToday && (() => {
             const prepped = (st.foods || []).filter((x) => x.date > today &&
                 x.date <= addDays(today, 7) && (x.entries || []).length);
@@ -24872,29 +24983,30 @@ function Fuel({ st, save, a, today, setSheet }) {
                             React.createElement("button", { className: "il-x", style: { marginLeft: 4 }, onClick: () => del(e.id) }, "\u00D7")))))))))),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8, marginBottom: 4 } }),
         (() => {
-            const per = Math.round(P.weightKg * 0.4);
-            const byMeal = MEALS.map((m) => ({ m, p: f.entries.filter((e) => (e.meal || "Snacks") === m).reduce((x, e) => x + e.p, 0) }));
-            const hits = byMeal.filter((x) => x.p >= per * 0.8).length;
-            if (!f.entries.length)
-                return null;
-            return (React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
-                    React.createElement("div", { className: "il-lbl" }, "Protein across the day"),
-                    React.createElement("span", { className: "il-n", style: { fontSize: 13, color: hits >= 3 ? "var(--grn)" : "var(--gold)", fontWeight: 600 } },
-                        hits,
-                        " of 4 doses")),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 10, fontSize: 12.5 } },
-                    "Three to five doses of about ",
-                    per,
-                    "g does more than the same total in one sitting."),
-                byMeal.map((x) => (React.createElement("div", { key: x.m, style: { marginBottom: 8 } },
-                    React.createElement("div", { className: "il-row" },
-                        React.createElement("span", { style: { fontSize: 13 } }, x.m),
-                        React.createElement("span", { className: "il-n", style: { fontSize: 12.5, color: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } },
-                            Math.round(x.p),
-                            "g")),
-                    React.createElement("div", { className: "il-bar" },
-                        React.createElement("i", { style: { width: Math.min(100, (x.p / per) * 100) + "%", background: x.p >= per * 0.8 ? "var(--grn)" : "var(--dim)" } })))))));
+            const Row = ({ to, title, sub, colour }) => (React.createElement("button", { className: "il-mrow", onClick: () => setSheet(to) },
+                React.createElement("span", { style: { minWidth: 0, display: "flex", gap: 10, alignItems: "center" } },
+                    colour && React.createElement("span", { style: { width: 3, height: 26, borderRadius: 2, background: colour, flexShrink: 0 } }),
+                    React.createElement("span", { style: { minWidth: 0 } },
+                        React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, title),
+                        React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub))),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
+            return (React.createElement("div", { className: "il-menu" },
+                React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Chat \u2014 or jump in below" : "Ask her anything, or tell her what you ate" }),
+                React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
+                React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: (() => {
+                        const n = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
+                        return n ? `${n} meals planned` : "And the shopping writes itself";
+                    })() }),
+                React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: (() => {
+                        const sh = shopLines(st, weekStart(today));
+                        const n = sh.need.length + sh.ranOut.length + sh.added.length;
+                        return n ? `${n} thing${n === 1 ? "" : "s"} on it` : "Nothing on it yet";
+                    })() }),
+                React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: (() => {
+                        const c = (st.cupboard || []).length;
+                        const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
+                        return c ? `${c} in it${soon ? `, ${soon} going off soon` : ""}` : "Tell me what you've got in";
+                    })() })));
         })(),
         sug.macro && (() => {
             const label = { p: "protein", c: "carbs", f: "fat" }[sug.macro];
@@ -26555,6 +26667,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "health" && React.createElement(HealthSheet, { st, close }),
             sheet.t === "appleimport" && React.createElement(AppleImport, { st, save, today, close }),
             sheet.t === "refshelf" && React.createElement(RefShelf, { st, save, close }),
+            sheet.t === "tastes" && React.createElement(TasteList, { st, save, close }),
             sheet.t === "bodycomp" && React.createElement(BodyComp, { st, a, today, close, setSheet }),
             !NO_DONE.includes(sheet.t) && !(vp && vp.open) && !typing &&
                 React.createElement(DoneBar, { close: close, back: BACK_ONLY.includes(sheet.t), label: BACK_ONLY.includes(sheet.t) ? "Back" : DONE_LABEL[sheet.t] || "Done" }))));
@@ -26627,14 +26740,17 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
 /* Screens with their own closing action, or that aren't a task you finish. */
 /* Screens where a Done bar would either close something mid-job or look like
    it moves you on when it does not. */
-const NO_DONE = ["ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
+/* v311: the recipe card and the book close from their own header — a bar
+   across the bottom was one more thing between him and the food */
+const NO_DONE = ["recipe", "recipes", "tastes",
+    "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
     "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood",
     "addrec", "scan", "saveit", "cookmode"];
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
 const BACK_ONLY = ["scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
-    "guide", "sides", "adhere", "muscle", "volume", "recipe", "myratings", "photos"];
+    "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
     additem: "Done adding", kitchen: "Done", list: "Done shopping", expiry: "Done",
