@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v300 · 5 Aug";
+const APP_VERSION = "v301 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -8366,6 +8366,30 @@ function routineMinutes(list) {
     if (heavy)
         secs += 210; // a warm-up, but only if something needs one
     return Math.max(4, Math.round(secs / 60));
+}
+/* v301: routineMinutes is the planner's budget — the sets, the work, and the
+   rest between working sets. It is not how long you are actually in the room.
+   The warm-up ramp the app now always adds, the rest after each last set
+   before you move on, and the business of changing the dumbbells over are all
+   real minutes and none of them were counted. Gary clocked it: "the estimated
+   time doesn't include any warm ups or rest periods". Both numbers now exist —
+   the planner keeps using routineMinutes, the sheet shows both. */
+function sessionTime(list) {
+    const working = routineMinutes(list);
+    let extra = 0;
+    (list || []).forEach((x) => {
+        const e = exOf(x.exId);
+        if (!e || e.aerobic)
+            return;
+        /* count the ramp through the same function that builds it, so the two
+           can never drift apart */
+        extra += warmupFor(e, 20).length * 60;
+        extra += restFor(e); // the rest after the last working set
+        extra += 25; // finding the plates, the bench, the phone
+    });
+    if ((list || []).length)
+        extra += 120; // getting started, and the bit at the end
+    return { working, full: Math.max(working, Math.round(working + extra / 60)) };
 }
 const prettyMins = (m) => m >= 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`;
 function MuscleTags({ ex }) {
@@ -21569,7 +21593,7 @@ function LogMeal({ rec, st, save, today, close, setSheet, sheet }) {
            name ends in brackets survives it. */
         const entries = [{ id: "r" + Date.now(),
                 name: `${rec.n}${ate === 1 ? "" : ` (${ate} servings)`}`, meal, at, ts: Date.now(),
-                nm0: rec.n, unitName: "serving", unitStep: 0.25,
+                nm0: rec.n, rid: rec.id || null, unitName: "serving", unitStep: 0.25,
                 per1: { kcal: base[0], p: base[1], c: base[2], f: base[3] }, serv: ate,
                 kcal: Math.round(base[0] * ate), p: Math.round(base[1] * ate),
                 c: Math.round(base[2] * ate), f: Math.round(base[3] * ate) },
@@ -26858,6 +26882,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
         return null;
     };
     const mins = routineMinutes(rt.exercises);
+    const time = sessionTime(rt.exercises);
     const muscles = [...new Set(rt.exercises.flatMap((x) => exOf(x.exId)?.primary || []))];
     const totalSets = rt.exercises.reduce((x, e) => x + (intent === "deload" ? Math.ceil(e.sets / 2) : e.sets), 0);
     const start = () => {
@@ -26891,7 +26916,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
         close();
     };
     return React.createElement(React.Fragment, null,
-        React.createElement(SH, { title: rt.name, sub: `${rt.exercises.length} exercises · about ${prettyMins(mins)}`, close: close }),
+        React.createElement(SH, { title: rt.name, sub: `${rt.exercises.length} exercises · about ${prettyMins(time.full)} in the room`, close: close }),
         (() => {
             /* decided from what actually happened, before you are stood there with
                a dumbbell in your hand deciding it badly */
@@ -26948,8 +26973,11 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                     React.createElement("div", { className: "v" }, totalSets),
                     React.createElement("div", { className: "l" }, "working sets")),
                 React.createElement("div", { className: "il-mini" },
-                    React.createElement("div", { className: "v", style: { fontSize: mins >= 60 ? 15 : 25 } }, prettyMins(mins)),
-                    React.createElement("div", { className: "l" }, "estimated"))),
+                    React.createElement("div", { className: "v", style: { fontSize: time.working >= 60 ? 15 : 25 } }, prettyMins(time.working)),
+                    React.createElement("div", { className: "l" }, "lifting")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v", style: { fontSize: time.full >= 60 ? 15 : 25 } }, prettyMins(time.full)),
+                    React.createElement("div", { className: "l" }, "door to door"))),
             React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, muscles.map((m) => (React.createElement("span", { key: m, style: { fontSize: 11.5, padding: "4px 9px", borderRadius: 7, background: "var(--c2)", color: "var(--txt)", fontWeight: 500 } }, M[m]))))),
         rt.exercises.map((x, i) => {
             const e = exOf(x.exId);
@@ -28952,6 +28980,44 @@ function EntrySheet({ st, save, today, sheet, close }) {
        per-unit figures travel on the entry, so this works even if the recipe
        is later edited or deleted. */
     const per1 = e.per1 && isFinite(e.per1.kcal) ? e.per1 : null;
+    /* v301: "the recipe can be selected as a default, then adjusted correctly
+       for that day" — 40g of oats becomes 60g and the numbers follow. The
+       recipe is found by the id stored since v300, or by name for anything
+       logged before that, so old entries get this too. */
+    const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
+    const rec = e.rid ? book.find((r) => r.id === e.rid) : (per1 || e.ing ? book.find((r) => r.n === nm0) : null);
+    const fpool = [...FOODS, ...(st.myFoods || [])];
+    const lines = e.ing || (rec ? rec.ing : null);
+    const [openIng, setOpenIng] = useState(false);
+    const priceLines = (ls) => {
+        const out = recipeFromIngredients({ ing: ls, serves: (rec && rec.serves) || 1 }, fpool);
+        return out ? { kcal: out.per[0], p: out.per[1], c: out.per[2], f: out.per[3],
+            missed: out.missed, rough: out.rough } : null;
+    };
+    const setLine = (idx, amount) => {
+        if (!lines)
+            return;
+        const ls = lines.map((l, i) => (i === idx ? [amount, l[1], l[2], ...l.slice(3)] : l));
+        const one = priceLines(ls);
+        if (!one)
+            return;
+        const n = e.serv != null ? e.serv : 1;
+        write({ ing: ls, per1: { kcal: one.kcal, p: one.p, c: one.c, f: one.f },
+            adjusted: true, serv: n, unitName: e.unitName || "serving", unitStep: e.unitStep || 0.25,
+            nm0, kcal: Math.round(one.kcal * n), p: Math.round(one.p * n),
+            c: Math.round(one.c * n), f: Math.round(one.f * n) });
+    };
+    const resetLines = () => {
+        if (!rec)
+            return;
+        const one = priceLines(rec.ing);
+        const n = e.serv != null ? e.serv : 1;
+        const base = one || per1;
+        write({ ing: null, adjusted: false, nm0,
+            per1: base ? { kcal: base.kcal, p: base.p, c: base.c, f: base.f } : null,
+            kcal: base ? Math.round(base.kcal * n) : e.kcal, p: base ? Math.round(base.p * n) : e.p,
+            c: base ? Math.round(base.c * n) : e.c, f: base ? Math.round(base.f * n) : e.f });
+    };
     const uStep = e.unitStep || (e.unitName === "serving" ? 0.25 : 1);
     const uName = e.unitName || "serving";
     const [uEdit, setUEdit] = useState(null);
@@ -29030,6 +29096,33 @@ function EntrySheet({ st, save, today, sheet, close }) {
                     React.createElement("button", { className: "il-qty", onClick: () => setQty(qty + 0.5) }, "+"),
                     React.createElement("span", { className: "il-sub", style: { margin: 0, marginLeft: 6 } }, qty === 1 ? "as logged" : `${qty}\u00D7 what you logged`)),
                 React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "This one was written down rather than weighed off the food list, so there is nothing to recalculate from \u2014 the multiplier is the honest tool here.")))),
+        lines && lines.length > 0 && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-row", style: { marginBottom: openIng ? 10 : 0 } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { className: "il-lbl" }, "What went in"),
+                    React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } },
+                        e.adjusted ? "Adjusted for this day" : "As the recipe is written",
+                        " \u00B7 ",
+                        lines.length,
+                        " ingredients")),
+                React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => setOpenIng(!openIng) }, openIng ? "Done" : "Change it")),
+            openIng && React.createElement(React.Fragment, null,
+                lines.map((l, i) => {
+                    const priced = lineMacros(l, fpool);
+                    return (React.createElement("div", { key: i, style: { display: "flex", alignItems: "center", gap: 8, padding: "7px 0",
+                            borderTop: "1px solid var(--line)" } },
+                        React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                opacity: priced && priced.m ? 1 : 0.55 } },
+                            l[2],
+                            priced && priced.m ? "" : " \u2014 not priced"),
+                        React.createElement("input", { className: "il-in il-n", inputMode: "decimal", style: { width: 68, textAlign: "center" }, value: l[0] == null ? "" : l[0], onChange: (ev) => {
+                                const v = Number(String(ev.target.value).replace(/[^\d.]/g, ""));
+                                setLine(i, isFinite(v) ? v : 0);
+                            } }),
+                        React.createElement("span", { className: "il-sub il-n", style: { margin: 0, width: 34 } }, l[1] || "")));
+                }),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "Change an amount and one serving is re-priced from the ingredients, then multiplied by how many you had. Anything the app can't price is left out of the sum and greyed above."),
+                e.adjusted && rec && React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: resetLines }, "Put it back to the recipe")))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Which meal"),
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + ((e.meal || "Snacks") === m ? " on" : ""), onClick: () => write({ meal: m }) }, m)))),
