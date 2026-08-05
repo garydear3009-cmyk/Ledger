@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v301 · 5 Aug";
+const APP_VERSION = "v303 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -5844,6 +5844,23 @@ function HomeLedgerInner() {
                 persist(pending.current);
         }, 350);
     };
+    /* v303: the app writes itself 350ms after any change and keeps a second
+       copy at most once a minute. This is the button for when you want to know
+       it has happened rather than trust that it will — it skips the wait and
+       forces the backup copy too. */
+    const [justSaved, setJustSaved] = useState(false);
+    const savedFlash = useRef(null);
+    const saveNow = () => {
+        if (!canWrite.current)
+            return;
+        clearTimeout(writeTimer.current);
+        lastBak.current = 0; // the second copy goes as well, not just the main one
+        persist(pending.current || st);
+        setJustSaved(true);
+        clearTimeout(savedFlash.current);
+        savedFlash.current = setTimeout(() => setJustSaved(false), 2200);
+    };
+    useEffect(() => () => clearTimeout(savedFlash.current), []);
     const a = useMemo(() => (st ? analyse(st) : null), [st]);
     if (!ready || !st)
         return React.createElement("div", { className: "il" },
@@ -5889,6 +5906,8 @@ function HomeLedgerInner() {
                         ? React.createElement("button", { className: "il-chip", style: { background: "#33121A", color: "var(--red)" }, onClick: () => setSheet({ t: "diag" }) }, "\u26A0 not saving")
                         : health?.at && React.createElement("span", { style: { fontSize: 10.5, color: health.err ? "var(--red)" : "var(--grn)",
                                 fontVariantNumeric: "tabular-nums" } }, health.err ? "⚠ not saving" : `saved ${short(health.at)}`),
+                    health?.probe !== false && React.createElement("button", { className: "il-chip", style: { padding: "4px 9px", fontSize: 11,
+                            color: justSaved ? "var(--grn)" : undefined, borderColor: justSaved ? "var(--grn)" : undefined }, onClick: saveNow, "aria-label": "Save now" }, justSaved ? "Saved ✓" : "Save"),
                     hb && React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: hb[1] }) }, hb[0]))),
             health?.probe === false && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
                 React.createElement("div", { className: "il-h2", style: { marginBottom: 6 } }, "Nothing is being saved"),
@@ -28938,6 +28957,38 @@ Return ONLY JSON: { "read": "the three or four sentences", "call": "the one line
 /* Everything about one thing you ate: how much, which meal, what time. The
    day list could only nudge the quantity, which is the least of it — a
    breakfast logged as a snack stays wrong forever otherwise. */
+/* v302: what a logged entry can be re-portioned from. This was inline in
+   EntrySheet and had a bug that only bit real data — the fallback that finds
+   a recipe by name was gated behind `per1 || e.ing`, which is exactly what an
+   entry logged BEFORE v300 does not have. So the one case the fallback was
+   written for was the one case it skipped, and Gary's oats kept showing the
+   multiplier. Out here it can be tested against a real old-shaped entry
+   rather than asserted about in the source. */
+function entrySource(st, e) {
+    const out = { src: null, rec: null, nm0: "", per1: null, serv: 1, lines: null };
+    if (!e)
+        return out;
+    out.nm0 = e.nm0 || String(e.name || "").replace(/\s*\([^)]*\)\s*$/, "");
+    const pool = [...FOODS, ...(st.myFoods || [])];
+    out.src = e.fid ? pool.find((f) => f.id === e.fid) || null : null;
+    if (!out.src) {
+        const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
+        out.rec = (e.rid ? book.find((r) => r.id === e.rid) : null)
+            || book.find((r) => r.n === out.nm0) || null;
+    }
+    out.per1 = e.per1 && isFinite(e.per1.kcal) && e.per1.kcal > 0 ? e.per1 : null;
+    /* an entry from before v300 carries no per-serving figures, but the recipe
+       it names still does */
+    if (!out.per1 && out.rec && Array.isArray(out.rec.m) && out.rec.m[0] > 0)
+        out.per1 = { kcal: out.rec.m[0], p: out.rec.m[1], c: out.rec.m[2], f: out.rec.m[3] };
+    if (e.serv != null)
+        out.serv = e.serv;
+    else if (out.per1 && out.per1.kcal > 0 && e.kcal > 0)
+        /* work back how many servings the logged calories represent */
+        out.serv = Math.max(0.25, Math.round((e.kcal / out.per1.kcal) * 4) / 4);
+    out.lines = e.ing || (out.rec ? out.rec.ing : null) || null;
+    return out;
+}
 function EntrySheet({ st, save, today, sheet, close }) {
     const day = (st.foods || []).find((f) => f.date === sheet.date) || { date: sheet.date, entries: [] };
     const e = (day.entries || []).find((x) => x.id === sheet.id);
@@ -28961,10 +29012,9 @@ function EntrySheet({ st, save, today, sheet, close }) {
     /* v299: an entry logged from the food list carries the food it came from
        and the grams that were weighed out. Where both survive we can re-weigh
        it exactly instead of scaling by eye, and the name follows. */
-    const src = e.fid ? [...FOODS, ...(st.myFoods || [])].find((f) => f.id === e.fid) : null;
-    /* the name without its amount: stored on anything logged since v300,
-       stripped off the end for everything older */
-    const nm0 = e.nm0 || String(e.name).replace(/\s*\([^)]*\)\s*$/, "");
+    const found = entrySource(st, e);
+    const src = found.src;
+    const nm0 = found.nm0;
     const [gEdit, setGEdit] = useState(null);
     const gNow = gEdit != null ? gEdit : (e.g != null ? e.g : (src ? src.serv : 100));
     const setGrams = (n) => {
@@ -28979,15 +29029,14 @@ function EntrySheet({ st, save, today, sheet, close }) {
     /* v300: a recipe serving, or an ingredient measured in its own unit. The
        per-unit figures travel on the entry, so this works even if the recipe
        is later edited or deleted. */
-    const per1 = e.per1 && isFinite(e.per1.kcal) ? e.per1 : null;
+    const per1 = found.per1;
     /* v301: "the recipe can be selected as a default, then adjusted correctly
        for that day" — 40g of oats becomes 60g and the numbers follow. The
        recipe is found by the id stored since v300, or by name for anything
        logged before that, so old entries get this too. */
-    const book = renamedBook(st, [...COOK, ...COOK2, ...COOK3, ...(st.myRecipes || [])]);
-    const rec = e.rid ? book.find((r) => r.id === e.rid) : (per1 || e.ing ? book.find((r) => r.n === nm0) : null);
+    const rec = found.rec;
     const fpool = [...FOODS, ...(st.myFoods || [])];
-    const lines = e.ing || (rec ? rec.ing : null);
+    const lines = found.lines;
     const [openIng, setOpenIng] = useState(false);
     const priceLines = (ls) => {
         const out = recipeFromIngredients({ ing: ls, serves: (rec && rec.serves) || 1 }, fpool);
@@ -29001,7 +29050,7 @@ function EntrySheet({ st, save, today, sheet, close }) {
         const one = priceLines(ls);
         if (!one)
             return;
-        const n = e.serv != null ? e.serv : 1;
+        const n = found.serv;
         write({ ing: ls, per1: { kcal: one.kcal, p: one.p, c: one.c, f: one.f },
             adjusted: true, serv: n, unitName: e.unitName || "serving", unitStep: e.unitStep || 0.25,
             nm0, kcal: Math.round(one.kcal * n), p: Math.round(one.p * n),
@@ -29011,7 +29060,7 @@ function EntrySheet({ st, save, today, sheet, close }) {
         if (!rec)
             return;
         const one = priceLines(rec.ing);
-        const n = e.serv != null ? e.serv : 1;
+        const n = found.serv;
         const base = one || per1;
         write({ ing: null, adjusted: false, nm0,
             per1: base ? { kcal: base.kcal, p: base.p, c: base.c, f: base.f } : null,
@@ -29021,7 +29070,7 @@ function EntrySheet({ st, save, today, sheet, close }) {
     const uStep = e.unitStep || (e.unitName === "serving" ? 0.25 : 1);
     const uName = e.unitName || "serving";
     const [uEdit, setUEdit] = useState(null);
-    const uNow = uEdit != null ? uEdit : (e.serv != null ? e.serv : 1);
+    const uNow = uEdit != null ? uEdit : found.serv;
     const uLabel = (n) => (uName === "serving"
         ? `${n} serving${n === 1 ? "" : "s"}`
         : `${n}${uName === "unit" ? "" : uName}`);
