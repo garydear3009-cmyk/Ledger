@@ -5693,7 +5693,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v312 · 5 Aug";
+const APP_VERSION = "v313 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -25025,7 +25025,8 @@ function Fuel({ st, save, a, today, setSheet }) {
                         " \u00B7 closes ",
                         Math.round(c.closes * 100),
                         "%")),
-                React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) }, "Adjust")));
+                React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "food", foodId: c.food.id }) }, "Adjust"),
+                React.createElement("button", { className: "il-x", style: { flexShrink: 0, marginLeft: 6 }, "aria-label": "Don't suggest " + c.food.name, onClick: () => save(setTaste(st, c.food.name, -1)) }, "\u2715")));
             return (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Closing today's gap"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 6 } },
@@ -25041,7 +25042,9 @@ function Fuel({ st, save, a, today, setSheet }) {
                     React.createElement("div", { className: "il-lbl", style: { margin: "14px 0 0", color: "var(--dim)" } }, sug.mine.length ? "Or something new" : "Worth a look"),
                     sug.fresh.map((c, i) => React.createElement(Row, { key: "f" + i, c: c }))),
                 React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "meals" }) }, "More suggestions \u2192"),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } }, "Tap any of them to pick your own portion before logging it.")));
+                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 8 } },
+                    "Tap any of them to pick your own portion before logging it. ",
+                    "\u2715 means don't suggest it again \u2014 that also marks it in your recipes, and the taste list undoes it.")));
         })(),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", onClick: () => setTips(!tips), style: { cursor: "pointer" } },
@@ -25069,6 +25072,11 @@ function suggestFoods(gaps, st) {
     const scored = pool.map((f) => {
         if (!f || (f[macro] || 0) < MIN100[macro])
             return null;
+        /* v313: he can mark a suggestion as not for him and it stops being
+           offered. Same st.tastes the recipe ingredients use, so marking
+           golden syrup here also sinks every recipe that calls for it. */
+        if (tasteOf(st, f.name) === -1)
+            return null;
         let g = f.serv || 100;
         // if a normal serving barely dents it, go up to double — but no further
         if ((f[macro] * g) / 100 < gap * 0.25)
@@ -25080,7 +25088,8 @@ function suggestFoods(gaps, st) {
         return {
             food: f, grams: g, m,
             closes: Math.min(1, m[macro] / Math.max(1, gap)),
-            density: m[macro] / Math.max(1, m.kcal), // grams of the macro per calorie
+            density: (m[macro] / Math.max(1, m.kcal)) * (tasteOf(st, f.name) === 1 ? 1.25 : 1),
+            liked: tasteOf(st, f.name) === 1,
             used: counts[f.id] || 0, isRecent: recent.has(f.id),
         };
     }).filter(Boolean).sort((x, y) => y.density - x.density);
