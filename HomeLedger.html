@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v322 · 5 Aug</div>
+  <div class="v">v323 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5768,7 +5768,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v322 · 5 Aug";
+const APP_VERSION = "v323 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -16177,6 +16177,15 @@ function cupboardMatch(st, rec) {
 /* One test for "is this Slimming World" everywhere it can appear — the 16
    recipes carry source, the 22 ready-meal foods carry it in the name. */
 const isSW = (x) => !!x && (x.source === "Slimming World" || /^Slimming World /.test(x.n || x.name || ""));
+/* v323: a batch of photos can hold several recipes. The reader says which
+   zero-based photos each recipe appears on; anything missing or nonsense
+   falls back to the first two, which is exactly what a one-card batch
+   always was. */
+const photosFor = (imgs, res) => {
+    const ix = (res && Array.isArray(res.photos))
+        ? res.photos.filter((i) => Number.isInteger(i) && imgs[i]) : [];
+    return (ix.length ? ix.map((i) => imgs[i]) : imgs).slice(0, 2);
+};
 /* however he types it, "slimming world" stores as the one canonical form the
    badge and the filter key on; anything else is kept as written */
 const canonSource = (t) => {
@@ -17339,6 +17348,7 @@ the order they appear. Most of the time it has one entry.
   "method": ["each step as its own string"],
   "note": "any tip the card gives, or your own one-line note on what's most likely to go wrong",
   "m": [calories, protein, carbs, fat] per portion,
+  "photos": [zero-based indexes of the photos this recipe appears on, its nutrition-table photo included],
   "alt": null, or if the card also lists another portion size:
          { "serves": number, "ing": [...same shape...], "m": [cal,p,c,f] },
   "unsure": "which column and which table row you used, plus anything you couldn't read"
@@ -17373,7 +17383,7 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
     const [filed, setFiled] = useState([]); // the ones already in the book
     const fileRef = useRef(null);
     const add = async (e) => {
-        const fs = [...(e.target.files || [])].slice(0, 4 - imgs.length);
+        const fs = [...(e.target.files || [])].slice(0, 12 - imgs.length);
         if (!fs.length)
             return;
         setErr("");
@@ -17381,7 +17391,7 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
             const got = [];
             for (const f of fs)
                 got.push(await readPhoto(f, 1400, .85));
-            setImgs((x) => [...x, ...got].slice(0, 4));
+            setImgs((x) => [...x, ...got].slice(0, 12));
         }
         catch {
             setErr("Couldn't read one of those.");
@@ -17416,7 +17426,7 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                 ...imgs.map((u) => ({ type: "image", source: { type: "base64", media_type: mediaTypeOf(u), data: u.split(",")[1] } })),
                 { type: "text", text: `${READ_RECIPE}${fromVideo
                         ? "\n\nThese are frames taken at even intervals through a cooking video, in order."
-                        : imgs.length > 1 ? "\n\nThe photos are pages of the same recipe, in order." : ""}` },
+                        : imgs.length > 1 ? "\n\nThere may be SEVERAL different recipe cards across these photos, and one card's front and its nutrition table may be separate photos. Group the photos into recipes and return every distinct recipe, with each one's photo indexes." : ""}` },
             ];
             const txt = await callClaude(content, 3000, "mid");
             const j = looseJson(txt);
@@ -17477,7 +17487,7 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
             via: fromVideo ? "video" : "photo",
             source: canonSource(source), num: res.num ?? null, at: Date.now() };
         save({ ...st, myRecipes: [...(st.myRecipes || []), rec],
-            recipePhotos: { ...(st.recipePhotos || {}), [rec.n]: imgs.slice(0, 2) } });
+            recipePhotos: { ...(st.recipePhotos || {}), [rec.n]: photosFor(imgs, res) } });
         const done = [...filed, which];
         setFiled(done);
         /* more than one card in the photos? go straight to the next one rather
@@ -17501,8 +17511,8 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
                 React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: add }),
                 React.createElement("input", { type: "file", accept: "video/*", ref: vidRef, style: { display: "none" }, onChange: addClip }),
                 React.createElement("button", { className: "il-btn g", onClick: () => vidRef.current?.click() }, fromVideo ? `Use a different video · ${imgs.length} frames` : "Read it off a video"),
-                React.createElement("button", { className: "il-btn g", disabled: imgs.length >= 4 && !fromVideo, onClick: () => { setFromVideo(false); fileRef.current?.click(); } }, imgs.length >= 4 ? "Four is the most she can read at once"
-                    : imgs.length ? `Add another page · ${imgs.length} of 4` : "Photograph the recipe")),
+                React.createElement("button", { className: "il-btn g", disabled: imgs.length >= 12 && !fromVideo, onClick: () => { setFromVideo(false); fileRef.current?.click(); } }, imgs.length >= 12 ? "Twelve is the most she can read at once"
+                    : imgs.length ? `Add another card or page · ${imgs.length} of 12` : "Photograph the recipe")),
             imgs.length > 0 && (React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                     React.createElement("div", { className: "il-lbl" },
