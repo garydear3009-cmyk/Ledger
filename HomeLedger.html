@@ -5593,7 +5593,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v298 · 5 Aug";
+const APP_VERSION = "v300 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -11691,12 +11691,20 @@ ${reviewDossier(st, a)}` },
             return;
         }
         const keep = mode === "replace" ? (st.routines || []).filter((r) => !r.generated) : (st.routines || []);
-        save({
-            ...st, routines: [...rts, ...keep],
+        let next = { ...st, routines: [...rts, ...keep],
             reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, chat,
                     commit: Array.isArray(res.commit) ? res.commit.slice(0, 3) : [], kept: res.kept || "", accepted: true },
-                ...(st.reviews || [])].slice(0, 8),
-        });
+                ...(st.reviews || [])].slice(0, 8) };
+        /* v299: accepting used to drop the sessions into the list and stop
+           there — the Train tab went on showing the old block as the active
+           programme, so a plan he had just agreed to looked like it had gone
+           nowhere. Taking it as the week makes it the programme too. */
+        if (mode === "replace") {
+            if (next.program)
+                next = endProgram(next, today);
+            next = startProgram(next, plan.name || "From your review", rts.map((r) => r.id), "review", today);
+        }
+        save(next);
         close();
     };
     const conf = (c) => c === "solid" ? ["#10281A", "#6FDC9B", "Solid"] : c === "suggestive" ? ["#132241", "#7FA8F0", "Suggestive"] : ["#241F12", "#E5C87E", "Speculative"];
@@ -11852,8 +11860,8 @@ ${reviewDossier(st, a)}` },
                     React.createElement("button", { className: "il-btn sm", style: { flexShrink: 0 }, disabled: chatBusy || !ask2.trim(), onClick: askPlan }, "Ask")),
                 React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } }, ["Why that exercise order?", "Can you make Thursday shorter?", "Swap something out", "Is this too much?"].map((q) => (React.createElement("button", { key: q, className: "il-chip", onClick: () => { setAsk2(q); setTimeout(() => askPlan(q), 30); } }, q))))),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => accept("replace") }, "Use this instead of my current sessions"),
-                React.createElement("button", { className: "il-btn g", onClick: () => accept("add") }, "Add it alongside what I've got"),
+                React.createElement("button", { className: "il-btn", onClick: () => accept("replace") }, "Run this as my programme"),
+                React.createElement("button", { className: "il-btn g", onClick: () => accept("add") }, "Just add the sessions, keep my programme"),
                 React.createElement("button", { className: "il-btn g", onClick: () => {
                         save({ ...st, reviews: [{ at: Date.now(), headline: res.headline, sections: res.sections, answers: ans, free, plan, accepted: false }, ...(st.reviews || [])].slice(0, 8) });
                         close();
@@ -21554,14 +21562,26 @@ function LogMeal({ rec, st, save, today, close, setSheet, sheet }) {
         const now = new Date();
         const meal = now.getHours() < 11 ? "Breakfast" : now.getHours() < 15 ? "Lunch" : now.getHours() < 21 ? "Dinner" : "Snacks";
         const at = hhmm(now.getHours(), now.getMinutes());
+        /* v300: carry what one serving is, so the portion can be corrected
+           afterwards from the recipe's own figures rather than scaled by eye.
+           nm0 is the name without the amount, so re-portioning rewrites the
+           bracket instead of growing a second one — and a recipe whose real
+           name ends in brackets survives it. */
         const entries = [{ id: "r" + Date.now(),
                 name: `${rec.n}${ate === 1 ? "" : ` (${ate} servings)`}`, meal, at, ts: Date.now(),
+                nm0: rec.n, unitName: "serving", unitStep: 0.25,
+                per1: { kcal: base[0], p: base[1], c: base[2], f: base[3] }, serv: ate,
                 kcal: Math.round(base[0] * ate), p: Math.round(base[1] * ate),
                 c: Math.round(base[2] * ate), f: Math.round(base[3] * ate) },
             ...extras.map((e, i) => {
                 const m = extraMacros(e.row, e.amount);
-                return { id: "x" + Date.now() + i, name: `${e.row[0]} (${e.amount}${e.row[1] || ""})`,
-                    meal, at, ts: Date.now(), kcal: Math.round(m.kcal), p: Math.round(m.p),
+                const one = extraMacros(e.row, 1);
+                const u = e.row[1] || "";
+                return { id: "x" + Date.now() + i, name: `${e.row[0]} (${e.amount}${u})`,
+                    meal, at, ts: Date.now(), nm0: e.row[0], unitName: u || "unit",
+                    unitStep: u === "g" || u === "ml" ? 10 : 1,
+                    per1: { kcal: one.kcal, p: one.p, c: one.c, f: one.f }, serv: e.amount,
+                    kcal: Math.round(m.kcal), p: Math.round(m.p),
                     c: Math.round(m.c), f: Math.round(m.f) };
             })];
         save({ ...st, foods: [...rest, { ...day, entries: [...day.entries, ...entries] }] });
@@ -23970,7 +23990,7 @@ function Body({ st, save, a, today, setSheet }) {
                 return null;
             const days = Math.round((new Date() - new Date(w.date + "T12:00:00")) / 864e5);
             const recent = (st.weights || []).slice(-10).map((x) => x.kg);
-            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "nightly" }) },
+            return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "bodycomp" }) },
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
                     React.createElement("div", { className: "il-hero", style: { flexShrink: 0 } }, fmtBW(w.kg)),
                     React.createElement("div", { style: { minWidth: 0, flex: 1 } },
@@ -28034,9 +28054,11 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
             foods.push({ date: bowlDate, entries: [] });
             i = foods.length - 1;
         }
+        /* v299: carry the food and the grams so the entry can be re-weighed
+           later instead of only scaled by eye */
         const add = rows.map((r) => ({ id: "u" + Date.now() + Math.random(), name: r.name,
             meal: mealFor(nowHM()), at: nowHM(), kcal: Math.round(r.kcal), p: Math.round(r.p),
-            c: Math.round(r.c), f: Math.round(r.f) }));
+            c: Math.round(r.c), f: Math.round(r.f), fid: r.fid || null, g: r.g || null }));
         foods[i] = { ...foods[i], entries: [...foods[i].entries, ...add] };
         save({ ...st, foods });
     };
@@ -28301,7 +28323,8 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0, width: 14 } }, "g"),
                 React.createElement("button", { className: "il-x", onClick: () => setBowl((b) => b.filter((x) => x.key !== r.key)) }, "\u00D7")))),
             React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 4 }, onClick: () => {
-                    logBowl(bowl.map((r) => ({ name: r.f.name, kcal: r.f.kcal * r.g / 100, p: r.f.p * r.g / 100,
+                    logBowl(bowl.map((r) => ({ name: r.f.name + " (" + AMT(r.f, r.g) + ")", fid: r.f.id, g: r.g,
+                        kcal: r.f.kcal * r.g / 100, p: r.f.p * r.g / 100,
                         c: r.f.c * r.g / 100, f: r.f.f * r.g / 100 })));
                     setBowl([]);
                 } }, "Log the bowl \u00B7 " + bowl.length + (bowl.length === 1 ? " item" : " items"))),
@@ -28907,6 +28930,46 @@ function EntrySheet({ st, save, today, sheet, close }) {
             c: Math.round(one.c * qty), f: Math.round(one.f * qty) });
     };
     const qty = e.qty || 1;
+    /* v299: an entry logged from the food list carries the food it came from
+       and the grams that were weighed out. Where both survive we can re-weigh
+       it exactly instead of scaling by eye, and the name follows. */
+    const src = e.fid ? [...FOODS, ...(st.myFoods || [])].find((f) => f.id === e.fid) : null;
+    /* the name without its amount: stored on anything logged since v300,
+       stripped off the end for everything older */
+    const nm0 = e.nm0 || String(e.name).replace(/\s*\([^)]*\)\s*$/, "");
+    const [gEdit, setGEdit] = useState(null);
+    const gNow = gEdit != null ? gEdit : (e.g != null ? e.g : (src ? src.serv : 100));
+    const setGrams = (n) => {
+        const g = Math.max(1, Math.min(5000, Math.round(n)));
+        setGEdit(g);
+        if (!src)
+            return;
+        const m = scale(src, g);
+        write({ g, qty: 1, unit: null, name: `${nm0} (${AMT(src, g)})`, nm0,
+            kcal: Math.round(m.kcal), p: Math.round(m.p), c: Math.round(m.c), f: Math.round(m.f) });
+    };
+    /* v300: a recipe serving, or an ingredient measured in its own unit. The
+       per-unit figures travel on the entry, so this works even if the recipe
+       is later edited or deleted. */
+    const per1 = e.per1 && isFinite(e.per1.kcal) ? e.per1 : null;
+    const uStep = e.unitStep || (e.unitName === "serving" ? 0.25 : 1);
+    const uName = e.unitName || "serving";
+    const [uEdit, setUEdit] = useState(null);
+    const uNow = uEdit != null ? uEdit : (e.serv != null ? e.serv : 1);
+    const uLabel = (n) => (uName === "serving"
+        ? `${n} serving${n === 1 ? "" : "s"}`
+        : `${n}${uName === "unit" ? "" : uName}`);
+    const setUnits = (n) => {
+        const dp = uStep < 1 ? 100 : 1;
+        const v = Math.max(uStep, Math.min(99, Math.round(n * dp) / dp));
+        setUEdit(v);
+        if (!per1)
+            return;
+        write({ serv: v, qty: 1, unit: null, nm0,
+            name: v === 1 && uName === "serving" ? nm0 : `${nm0} (${uLabel(v)})`,
+            kcal: Math.round(per1.kcal * v), p: Math.round(per1.p * v),
+            c: Math.round(per1.c * v), f: Math.round(per1.f * v) });
+    };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: e.name, sub: `${e.meal || "Snacks"}${e.at ? " · " + e.at : ""}`, close: close }),
         React.createElement("div", { className: "il-card lead" },
@@ -28923,11 +28986,50 @@ function EntrySheet({ st, save, today, sheet, close }) {
                         Math.round(e.f))))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "How much"),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
-                React.createElement("button", { className: "il-qty", onClick: () => setQty(qty - 0.5) }, "\u2212"),
-                React.createElement("span", { className: "il-hero sm", style: { minWidth: 54, textAlign: "center" } }, qty),
-                React.createElement("button", { className: "il-qty", onClick: () => setQty(qty + 0.5) }, "+"),
-                React.createElement("span", { className: "il-sub", style: { margin: 0, marginLeft: 6 } }, qty === 1 ? "as logged" : `${qty}× what you logged`))),
+            !src && per1 ? (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                    React.createElement("button", { className: "il-qty", onClick: () => setUnits(uNow - uStep) }, "\u2212"),
+                    React.createElement("span", { className: "il-hero sm", style: { minWidth: 64, textAlign: "center" } }, uNow),
+                    React.createElement("button", { className: "il-qty", onClick: () => setUnits(uNow + uStep) }, "+"),
+                    React.createElement("span", { className: "il-sub", style: { margin: 0, marginLeft: 6 } }, uName === "serving" ? (uNow === 1 ? "serving" : "servings") : uName)),
+                uName === "serving" && React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } }, [0.5, 1, 1.5, 2].map((v) => (React.createElement("button", { key: v, className: "il-chip" + (uNow === v ? " on" : ""), onClick: () => setUnits(v) }, v === 0.5 ? "Half" : v === 1 ? "One" : v + " servings")))),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } },
+                    "One ",
+                    uName === "serving" ? "serving" : uName,
+                    " is ",
+                    Math.round(per1.kcal),
+                    " cal \u00B7 P",
+                    Math.round(per1.p),
+                    " C",
+                    Math.round(per1.c),
+                    " F",
+                    Math.round(per1.f),
+                    " \u2014 change the amount and the numbers are recalculated from that, not estimated."))) : src ? (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                    React.createElement("button", { className: "il-qty", onClick: () => setGrams(gNow - (gNow > 50 ? 10 : 5)) }, "\u2212"),
+                    React.createElement("input", { className: "il-in il-n", inputMode: "numeric", style: { width: 92, textAlign: "center", fontSize: 20 }, value: gNow, onChange: (ev) => {
+                            const v = Number(String(ev.target.value).replace(/[^\d]/g, ""));
+                            setGEdit(isFinite(v) ? v : 0);
+                        }, onBlur: () => setGrams(gNow) }),
+                    React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, src.unit === "ml" ? "ml" : "g"),
+                    React.createElement("button", { className: "il-qty", onClick: () => setGrams(gNow + (gNow >= 50 ? 10 : 5)) }, "+")),
+                React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } }, [src.serv, 100, 150, 200].filter((v, i, arr) => v && arr.indexOf(v) === i).map((v) => (React.createElement("button", { key: v, className: "il-chip" + (gNow === v ? " on" : ""), onClick: () => setGrams(v) },
+                    AMT(src, v),
+                    v === src.serv ? " \u00B7 usual" : "")))),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } },
+                    "Weighed against ",
+                    src.name,
+                    " at ",
+                    Math.round(src.kcal),
+                    " cal per 100",
+                    src.unit === "ml" ? "ml" : "g",
+                    " \u2014 change it and the numbers are recalculated exactly, not estimated."))) : (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
+                    React.createElement("button", { className: "il-qty", onClick: () => setQty(qty - 0.5) }, "\u2212"),
+                    React.createElement("span", { className: "il-hero sm", style: { minWidth: 54, textAlign: "center" } }, qty),
+                    React.createElement("button", { className: "il-qty", onClick: () => setQty(qty + 0.5) }, "+"),
+                    React.createElement("span", { className: "il-sub", style: { margin: 0, marginLeft: 6 } }, qty === 1 ? "as logged" : `${qty}\u00D7 what you logged`)),
+                React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "This one was written down rather than weighed off the food list, so there is nothing to recalculate from \u2014 the multiplier is the honest tool here.")))),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Which meal"),
             React.createElement("div", { style: { display: "flex", gap: 7, flexWrap: "wrap" } }, MEALS.map((m) => (React.createElement("button", { key: m, className: "il-chip" + ((e.meal || "Snacks") === m ? " on" : ""), onClick: () => write({ meal: m }) }, m)))),
