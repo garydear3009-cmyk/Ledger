@@ -5693,7 +5693,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v313 · 5 Aug";
+const APP_VERSION = "v314 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -28434,9 +28434,11 @@ ${desc.trim()}`, 1200, "cheap");
         }
         setBusy(false);
     };
-    const TABS = [["quick", "Quick add"], ["describe", "Describe it"], ["recipe", "A recipe"],
-        ["photo", "Photograph it"], ["search", "Search"],
-        ["scan", "Scan a label"], ["mine", "Mine"]];
+    /* v314: photograph-the-plate and scan-a-label were two tabs doing the same
+       thing — point the camera at food. One tab, pick which inside. Order is
+       his: quick, camera, recipe, search, mine, describe. */
+    const TABS = [["quick", "Quick add"], ["camera", "Use the camera"], ["recipe", "A recipe"],
+        ["search", "Search"], ["mine", "Mine"], ["describe", "Describe it"]];
     /* Typed but not added: Done used to close the sheet and throw it away, so
        it is handed the finishing move instead. */
     const quickReady = !!what.trim() && !!(k || p || c || f2);
@@ -28492,18 +28494,21 @@ ${desc.trim()}`, 1200, "cheap");
             React.createElement("div", { style: { display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "recipes", date: onDate }); } }, "One from the book \u2014 log a serving"),
                 React.createElement("button", { className: "il-btn g", onClick: () => { setSheet({ t: "addrec" }); } }, "Photograph a new recipe card")))),
-        tab === "photo" && (React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Point it at the plate and she'll work out what's on it."),
-            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scalephoto", date: onDate }); } }, "Photograph my food"))),
+        tab === "camera" && (React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Two different jobs for the same camera \u2014 pick the one that matches what's in front of you."),
+            React.createElement("div", { style: { display: "grid", gap: 10 } },
+                React.createElement("div", null,
+                    React.createElement("button", { className: "il-btn", style: { width: "100%" }, onClick: () => { setSheet({ t: "scalephoto", date: onDate }); } }, "Photograph my food"),
+                    React.createElement("div", { className: "il-sub", style: { margin: "5px 2px 0" } }, "A plate, a bowl, a takeaway \u2014 she works out what's on it and what it comes to.")),
+                React.createElement("div", null,
+                    React.createElement("button", { className: "il-btn g", style: { width: "100%" }, onClick: () => { setSheet({ t: "scan", date: onDate }); } }, "Scan a label or barcode"),
+                    React.createElement("div", { className: "il-sub", style: { margin: "5px 2px 0" } }, "Anything with a pack. The barcode is looked up first and the printed panel read if it isn't known."))))),
         tab === "search" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
                 "The food table has ",
                 FOODS.length,
                 " things in it, with portions you can pick by eye."),
             React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "food", date: onDate }); } }, "Search the food table"))),
-        tab === "scan" && (React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Photograph the nutrition label and the numbers come off it. Works on anything with a panel on the back."),
-            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "scan", date: onDate }); } }, "Scan a label"))),
         tab === "mine" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Things you've built yourself \u2014 a dish you make often, or a recipe out of the book."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
