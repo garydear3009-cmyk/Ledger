@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v317 · 5 Aug</div>
+  <div class="v">v320 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -338,6 +338,9 @@ const CSS = `
 .il-mini .l{font-size:10px;color:var(--faint);margin-top:2px;}
 .il-rt{background:var(--card);border-radius:13px;padding:14px;margin:0 12px 9px;cursor:pointer;}
 .il-rt:active{background:var(--c2);}
+.il-swb{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:20px;background:rgba(228,18,125,.16);color:#FF6EB8;border:1px solid rgba(228,18,125,.55);vertical-align:middle;margin-left:7px;flex-shrink:0;}
+.il-swc{color:#FF6EB8;border-color:rgba(228,18,125,.55);background:rgba(228,18,125,.10);}
+.il-swc.on{background:rgba(228,18,125,.30);color:#FFA1CF;border-color:#E4127D;}
 .il-tl{border-left:2px solid var(--line);margin-left:8px;padding-left:16px;position:relative;padding-bottom:16px;}
 .il-tl:last-child{border-left-color:transparent;padding-bottom:0;}
 .il-tl:before{content:"";position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:5px;background:var(--acc);}
@@ -5765,7 +5768,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v317 · 5 Aug";
+const APP_VERSION = "v320 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -9047,7 +9050,9 @@ function SearchAll({ st, close, setSheet }) {
             g.rows.map((r, i) => (React.createElement("div", { key: i, className: "il-list", style: { margin: "0 12px 6px" } },
                 React.createElement("div", { className: "il-li", onClick: () => setSheet(r.to) },
                     React.createElement("div", { style: { minWidth: 0 } },
-                        React.createElement("div", { style: { fontSize: 14.5 } }, r.name),
+                        React.createElement("div", { style: { fontSize: 14.5 } },
+                            r.name,
+                            r.sw && React.createElement("span", { className: "il-swb" }, "SW")),
                         r.sub && React.createElement("div", { className: "il-sub" }, r.sub)),
                     React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))))));
 }
@@ -12437,7 +12442,15 @@ function Equipment({ st, save, close, setSheet }) {
     const mine = eq[where] || [];
     const toggle = (id) => {
         const next = mine.includes(id) ? mine.filter((x) => x !== id) : [...mine, id];
-        save({ ...st, equip: { ...eq, [where]: next } });
+        /* v318: a tick takes effect the moment it lands — when you are editing
+           the place you currently train at, the exercise list unlocks without
+           needing "Use this kit" as a second step. Closing with the × used to
+           leave the kit stale, which read as the tick doing nothing. Editing
+           the OTHER place still leaves your current kit alone. */
+        const patch = { ...st, equip: { ...eq, [where]: next } };
+        if (where === (st.where || "home"))
+            patch.kit = oldKitFor(next);
+        save(patch);
     };
     const shot = async (e) => {
         const f = e.target.files?.[0];
@@ -16160,6 +16173,9 @@ function cupboardMatch(st, rec) {
     return { have: need.length - missing.length, need: need.length,
         pct: Math.round(((need.length - missing.length) / need.length) * 100), missing };
 }
+/* One test for "is this Slimming World" everywhere it can appear — the 16
+   recipes carry source, the 22 ready-meal foods carry it in the name. */
+const isSW = (x) => !!x && (x.source === "Slimming World" || /^Slimming World /.test(x.n || x.name || ""));
 function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
     /* opened from Add food with a day chosen — every card opened from here
        carries it, so "log it" lands where you said */
@@ -16302,7 +16318,11 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
                 React.createElement("button", { className: "il-btn", style: { flex: 1 }, onClick: () => setSheet({ t: "find" }) }, "Find me more"),
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "family" }) }, "Write one down")),
             React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search a name or an ingredient\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", value: q, onChange: (e) => setQ(e.target.value) })),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } }, RMEALS.map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (meal === k ? " on" : ""), onClick: () => setMeal(meal === k ? "" : k) }, l)))),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
+            RMEALS.map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (meal === k ? " on" : ""), onClick: () => setMeal(meal === k ? "" : k) }, l))),
+            React.createElement("button", { className: "il-chip il-swc" + (src === "sw" ? " on" : ""), onClick: () => setSrc(src === "sw" ? "" : "sw") },
+                "Slimming World · ",
+                all.filter(isSW).length)),
         React.createElement("div", { style: { padding: "10px 12px 0" } },
             React.createElement("button", { className: "il-chip", onClick: () => setShowFilters(!showFilters) },
                 showFilters ? "Hide filters" : "Filters",
@@ -16432,7 +16452,8 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
                     React.createElement("div", { className: "il-row", style: { marginBottom: 4 } },
                         React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15.5 } },
                             r.n,
-                            isSaved ? " ★" : ""),
+                            isSaved ? " ★" : "",
+                            isSW(r) && React.createElement("span", { className: "il-swb" }, "SW")),
                         React.createElement("span", { className: "il-sub il-n", style: { margin: 0, flexShrink: 0 } },
                             r.mins,
                             " min")),
@@ -16716,6 +16737,8 @@ function RecipeSheet({ sheet, st, save, a, today, close, setSheet }) {
     };
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: base.n, sub: `${base.cui} · ${base.mins} minutes`, close: close }),
+        isSW(base) && React.createElement("div", { style: { padding: "8px 14px 0" } },
+            React.createElement("span", { className: "il-swb", style: { marginLeft: 0 } }, "Slimming World recipe")),
         naming !== "" ? (React.createElement("div", { className: "il-card lead" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Call it something else"),
             React.createElement("input", { className: "il-in", style: { textAlign: "left" }, value: naming, autoFocus: true, enterKeyHint: "done", onChange: (e) => setNaming(e.target.value), onKeyDown: (e) => {
@@ -17028,7 +17051,7 @@ function searchAll(st, q) {
         .slice(0, 8)
         .map((r) => ({ name: r.n, sub: [r.cui, r.m ? `${r.m[0]} cal · ${r.m[1]}g protein` : null,
             rank(r.n) === 3 ? "matched an ingredient" : null].filter(Boolean).join(" · "),
-        to: { t: "recipe", name: r.n } })));
+        sw: isSW(r), to: { t: "recipe", name: r.n } })));
     /* Name, the muscles in both the app's shorthand and plain English, the kit,
        the movement and the group — so "shoulders", "kettlebell", "hinge" and
        "legs" all reach the right exercises. Attributes are matched as whole
@@ -17075,7 +17098,7 @@ function searchAll(st, q) {
         .sort((x, y) => rank(x.name) - rank(y.name))
         .slice(0, 8)
         .map((f) => ({ name: f.name, sub: `${f.kcal} cal per 100${f.unit === "ml" ? "ml" : "g"} · ${f.p}g protein`,
-        to: { t: "log" } })));
+        sw: isSW(f), to: { t: "log" } })));
     push("In your kitchen", "#7FA8F0", (st.cupboard || [])
         .filter((c) => hit(c.name))
         .slice(0, 6)
@@ -19278,6 +19301,112 @@ function SuppPick({ st, save, today, close }) {
                 on.size,
                 " on the daily list")));
 }
+/* ============ PROTEIN PRODUCT FINDER ============
+   Real UK shelf products with typical PER-SERVING macros. These figures come
+   from memory of the labels and flavours vary, so the screen says so and
+   points at the barcode scanner as the authority — the same honesty rule as
+   the v304 shop-shelf foods. Thirty well-known products beat eighty shaky
+   ones; rows are [name, form, serving, kcal, p, c, f, tags]. */
+const PROTEIN_RAW = [
+    ["MyProtein Impact Whey", "powder", "25g scoop", 103, 21, 2, 2, []],
+    ["MyProtein Impact Whey Isolate", "powder", "25g scoop", 93, 23, 1, 0, []],
+    ["Optimum Nutrition Gold Standard Whey", "powder", "30g scoop", 120, 24, 3, 1, []],
+    ["Bulk Pure Whey Protein", "powder", "30g scoop", 118, 24, 2, 2, []],
+    ["PhD Diet Whey", "powder", "25g scoop", 92, 17, 3, 2, []],
+    ["MyProtein Slow-Release Casein", "powder", "30g scoop", 111, 24, 2, 1, []],
+    ["Bulk Vegan Protein Powder", "powder", "35g scoop", 137, 23, 3, 3, ["vegan"]],
+    ["MyProtein Soy Protein Isolate", "powder", "30g scoop", 116, 27, 1, 1, ["vegan"]],
+    ["MyProtein Clear Whey Isolate", "clear", "25g scoop", 90, 20, 1, 0, []],
+    ["Bulk Clear Whey Isolate", "clear", "25g scoop", 90, 20, 1, 0, []],
+    ["Grenade Protein Bar", "bar", "60g bar", 220, 20, 14, 9, []],
+    ["Barebells Protein Bar", "bar", "55g bar", 200, 20, 14, 8, []],
+    ["Fulfil Vitamin & Protein Bar", "bar", "55g bar", 190, 20, 13, 7, []],
+    ["MyProtein Layered Bar", "bar", "60g bar", 213, 20, 17, 8, []],
+    ["PhD Smart Bar", "bar", "64g bar", 234, 20, 17, 9, []],
+    ["Nature Valley Protein Bar", "bar", "40g bar", 190, 10, 15, 11, []],
+    ["Bounce Protein Ball", "bar", "49g ball", 200, 12, 15, 10, []],
+    ["Trek Protein Flapjack", "bar", "50g flapjack", 199, 9, 24, 7, ["vegan"]],
+    ["UFIT Protein Shake", "drink", "330ml bottle", 156, 22, 9, 4, []],
+    ["UFIT PRO 50", "drink", "500ml bottle", 232, 50, 4, 2, []],
+    ["Grenade Protein Shake", "drink", "330ml bottle", 200, 25, 5, 8, []],
+    ["For Goodness Shakes Protein", "drink", "435ml bottle", 208, 25, 21, 2, []],
+    ["Fage Total 0%", "yoghurt", "170g pot", 90, 18, 5, 0, []],
+    ["Arla Protein Yoghurt", "yoghurt", "200g pot", 145, 20, 13, 2, []],
+    ["Lindahls Kvarg", "yoghurt", "150g pot", 85, 16, 5, 0, []],
+    ["Arla Skyr", "yoghurt", "150g pot", 98, 16, 6, 0, []],
+    ["Danone HiPRO Pot", "yoghurt", "160g pot", 90, 15, 6, 0, []],
+    ["Jack Link's Beef Jerky", "snack", "25g pack", 70, 9, 3, 1, []],
+    ["Peperami Original", "snack", "22.5g stick", 116, 5, 1, 10, []],
+    ["Babybel Original", "snack", "20g cheese", 62, 5, 0, 5, []],
+    ["Babybel Light", "snack", "20g cheese", 42, 5, 0, 3, []],
+    ["Mr Porky Pork Scratchings", "snack", "40g bag", 245, 18, 1, 19, []],
+];
+const PROTEIN = PROTEIN_RAW.map(([n, form, serv, kcal, p, c, f, tags], i) => ({ id: "pp" + i, n, form, serv, kcal, p, c, f, tags }));
+/* grams of protein per 100 kcal — the honest way to compare a 42-kcal cheese
+   with a 234-kcal bar */
+const proteinValue = (x) => Math.round((x.p * 100) / Math.max(1, x.kcal) * 10) / 10;
+const PROT_FORMS = [["all", "All"], ["powder", "Powder"], ["clear", "Clear whey"], ["bar", "Bars"], ["drink", "Drinks"], ["yoghurt", "Yoghurt"], ["snack", "Snacks"]];
+function ProteinFinder({ st, save, today, close, setSheet }) {
+    const [form, setForm] = useState("all");
+    const [hiP, setHiP] = useState(false);
+    const [loK, setLoK] = useState(false);
+    const [veg, setVeg] = useState(false);
+    const [sort, setSort] = useState("value");
+    const [q, setQ] = useState("");
+    const [logged, setLogged] = useState([]);
+    const list = PROTEIN
+        .filter((x) => form === "all" || x.form === form)
+        .filter((x) => !hiP || x.p >= 20)
+        .filter((x) => !loK || x.kcal <= 150)
+        .filter((x) => !veg || x.tags.includes("vegan"))
+        .filter((x) => !q || x.n.toLowerCase().includes(q.toLowerCase()))
+        .sort((a, b) => sort === "value" ? proteinValue(b) - proteinValue(a)
+        : sort === "protein" ? b.p - a.p : a.kcal - b.kcal);
+    const log = (x) => {
+        const foods = [...st.foods];
+        let i = foods.findIndex((f) => f.date === today);
+        if (i < 0) {
+            foods.push({ date: today, entries: [] });
+            i = foods.length - 1;
+        }
+        foods[i] = { ...foods[i], entries: [...foods[i].entries, { id: "u" + Date.now() + Math.random(),
+                    name: `${x.n} (${x.serv})`, meal: mealNow(), at: nowHM(), kcal: x.kcal, p: x.p, c: x.c, f: x.f }] };
+        save({ ...st, foods });
+        setLogged([...logged, x.id]);
+    };
+    return (React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Protein products", sub: `${list.length} of ${PROTEIN.length} shown`, close: close }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note" }, "Typical per-serving figures from the labels — flavours and recipes vary, so treat these as a guide. The barcode scanner is the authority."),
+            React.createElement("button", { className: "il-chip", style: { marginTop: 10 }, onClick: () => setSheet({ t: "scan" }) }, "Scan a label instead")),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 2 } }, PROT_FORMS.map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (form === k ? " on" : ""), onClick: () => setForm(k) }, l)))),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 2 } },
+            React.createElement("button", { className: "il-chip" + (hiP ? " on" : ""), onClick: () => setHiP(!hiP) }, "20g+ protein"),
+            React.createElement("button", { className: "il-chip" + (loK ? " on" : ""), onClick: () => setLoK(!loK) }, "Under 150 kcal"),
+            React.createElement("button", { className: "il-chip" + (veg ? " on" : ""), onClick: () => setVeg(!veg) }, "Vegan"),
+            React.createElement("button", { className: "il-chip", onClick: () => setSort(sort === "value" ? "protein" : sort === "protein" ? "kcal" : "value") }, sort === "value" ? "Sort: protein per calorie" : sort === "protein" ? "Sort: most protein" : "Sort: fewest calories")),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("input", { className: "il-in", placeholder: "Search a product", value: q, onChange: (e) => setQ(e.target.value) })),
+        React.createElement("div", { className: "il-card", style: { padding: 0 } },
+            list.length === 0 && React.createElement("div", { className: "il-note", style: { padding: 14 } }, "Nothing matches — loosen a filter."),
+            list.map((x) => (React.createElement("div", { key: x.id, className: "il-li", style: { alignItems: "center" } },
+                React.createElement("div", { style: { minWidth: 0, flex: 1 } },
+                    React.createElement("div", { style: { fontSize: 14 } }, x.n),
+                    React.createElement("div", { className: "il-sub" },
+                        x.serv,
+                        " · ",
+                        x.kcal,
+                        " kcal · ",
+                        x.p,
+                        "P ",
+                        x.c,
+                        "C ",
+                        x.f,
+                        "F · ",
+                        proteinValue(x),
+                        "g protein per 100 kcal")),
+                React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0, marginLeft: 8 }, onClick: () => log(x) }, logged.includes(x.id) ? "✓" : "Log one")))))));
+}
 function Supplements({ st, save, a, today, setSheet }) {
     /* what you take daily, and what is merely in the cupboard */
     const mine = takingList(st);
@@ -19440,6 +19569,13 @@ function Supplements({ st, save, a, today, setSheet }) {
                     React.createElement("div", { className: "il-sub" }, answered >= 6 ? "Based on your answers, your training and your food" : "Answer the questionnaire first")),
                 React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
         React.createElement("div", { className: "il-list", style: { margin: "0 12px 8px" } },
+            React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "protein" }) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14 } }, "Protein products"),
+                    React.createElement("div", { className: "il-sub" },
+                        PROTEIN.length,
+                        " powders, bars, drinks and snacks compared — with filters")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")),
             React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "supplist" }) },
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { style: { fontSize: 14 } }, "The evidence, one by one"),
@@ -26664,8 +26800,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "units" && React.createElement(UnitsSheet, { st, save, close }),
             sheet.t === "intake" && React.createElement(Intake, { st, save, close }),
             sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, editId: sheet.id, seed: sheet.seed }),
-            sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }),
-            sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, sheet, close, setSheet }),
+            sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }), (sheet.t === "protein" && React.createElement(ProteinFinder, { st: st, save: save, today: today, close: close, setSheet: setSheet }),
+            sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, sheet, close, setSheet })),
             sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, sheet, close }),
             sheet.t === "importwo" && React.createElement(ImportWorkouts, { st, save, close }),
             sheet.t === "importcsv" && React.createElement(ImportData, { st, save, close }),
@@ -26823,14 +26959,18 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
    it moves you on when it does not. */
 /* v311: the recipe card and the book close from their own header — a bar
    across the bottom was one more thing between him and the food */
-const NO_DONE = ["recipe", "recipes", "tastes",
+/* v318: both kit screens carry their own committing button — "Save" on the
+   chip list, "Use this kit and close" on the catalogue — and a second generic
+   Done that closed WITHOUT applying the staged choice read as two exits that
+   disagree. He asked for it gone. */
+const NO_DONE = ["kit", "equip", "recipe", "recipes", "tastes",
     "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
     "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood",
     "addrec", "scan", "saveit", "cookmode"];
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
-const BACK_ONLY = ["scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
+const BACK_ONLY = ["protein", "scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
     "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
