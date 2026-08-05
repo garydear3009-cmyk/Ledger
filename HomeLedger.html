@@ -111,6 +111,12 @@ const CSS = `
 .il-welc-fill{position:absolute;left:0;right:0;bottom:0;border-radius:0 0 8px 8px;
   transition:height .5s cubic-bezier(.2,.7,.3,1);}
 @media (prefers-reduced-motion:reduce){.il-welc-fill{transition:none;}}
+.il-leadb{all:unset;display:flex;align-items:center;gap:9px;width:100%;box-sizing:border-box;
+  padding:7px 0;font-size:13.5px;line-height:1.35;color:var(--txt);cursor:pointer;
+  border-top:1px solid rgba(255,255,255,.07);}
+.il-leadb:first-of-type{border-top:0;}
+.il-leadb[disabled]{cursor:default;}
+.il-leadb .d{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.55;flex-shrink:0;}
 .il-welc-dayl{font-family:'Inter',system-ui,sans-serif;font-style:normal;text-align:center;
   font-size:10px;color:var(--faint);margin-top:5px;letter-spacing:.04em;}
 /* ---- v236: a display voice for headings and hero numbers ---- */
@@ -5680,7 +5686,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v305 · 5 Aug";
+const APP_VERSION = "v307 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -13221,6 +13227,90 @@ const liveSessions = (st) => st.sessions.filter((s) => !(st.excluded || []).incl
 const realSessions = (st) => liveSessions(st).filter((s) => s.exercises && s.exercises.some((e) => e.sets && e.sets.some((x) => x.done)));
 const liveWeights = (st) => st.weights.filter((w) => !(st.excluded || []).includes("w" + w.date));
 const liveMeas = (st) => st.meas.filter((m) => !(st.excluded || []).includes("m" + m.date));
+/* v307: both these tabs opened with a wall of cards and no way to tell from
+   the top whether anything underneath had changed. This is the bright line at
+   the top — a headline and two or three bullets, each one a door to the thing
+   it is talking about. Pure, so the suite can read what it would say. */
+function leadPct(n) {
+    const v = Math.abs(Math.round(n));
+    return v + "%";
+}
+function tabLead(kind, st, a, today) {
+    const out = { headline: "", sub: "", bullets: [] };
+    if (!a)
+        return out;
+    if (kind === "coach") {
+        const th = st.coachChat || [];
+        const asked = th.filter((m) => m.role === "user").length;
+        const lastR = (st.reviews || [])[0];
+        const days = lastR ? Math.round((Date.now() - lastR.at) / 864e5) : null;
+        out.headline = days == null ? "He hasn't read you yet"
+            : days >= 7 ? "Worth another look at you"
+                : asked ? "He's up to date" : "He's read everything";
+        out.sub = asked ? `${asked} question${asked === 1 ? "" : "s"} so far — he remembers all of it`
+            : "Your whole log is in front of him";
+        if (days == null)
+            out.bullets.push({ text: "No full review yet — twelve weeks read properly", to: { t: "review" } });
+        else if (days >= 7)
+            out.bullets.push({ text: `A week of new data since the last review`, to: { t: "review" } });
+        else
+            out.bullets.push({ text: `Reviewed ${days === 0 ? "today" : days + (days === 1 ? " day" : " days") + " ago"}`, to: { t: "pastrev" } });
+        if (lastR && lastR.headline)
+            out.bullets.push({ text: lastR.headline, to: { t: "pastrev" } });
+        const open = openCommitments(st);
+        if (open.length)
+            out.bullets.push({ text: `${open.length} thing${open.length === 1 ? "" : "s"} you said you would do`, to: null });
+        else if (asked)
+            out.bullets.push({ text: "Carry on where you left off", to: { t: "ctalk" } });
+        return out;
+    }
+    /* progress */
+    const rows = (a.review || []).filter((r) => r.change != null);
+    const up = rows.slice().sort((x, y) => y.change - x.change)[0];
+    const down = rows.slice().sort((x, y) => x.change - y.change)[0];
+    const stats = liftStats(st, a);
+    out.headline = !stats.exercises ? "Nothing logged to read yet"
+        : up && up.change > 1 ? `${up.name} is your mover`
+            : rows.length ? "Holding steady" : "Still building a picture";
+    out.sub = stats.exercises
+        ? `${stats.sessions} session${stats.sessions === 1 ? "" : "s"} \u00B7 ${stats.sets} working sets \u00B7 ${stats.exercises} exercises`
+        : "Log a few sessions and this fills in";
+    if (up && up.change > 1)
+        out.bullets.push({ text: `${up.name} up ${leadPct(up.change)} on the month`, to: { t: "exprog", id: up.id } });
+    if (down && down.change < -1 && (!up || down.id !== up.id))
+        out.bullets.push({ text: `${down.name} down ${leadPct(down.change)} — worth a look`, to: { t: "exprog", id: down.id } });
+    if (stats.heaviest)
+        out.bullets.push({ text: `Heaviest yet: ${stats.heaviest.name}, ${W(stats.heaviest.kg)}${stats.heaviest.reps ? " \u00D7 " + stats.heaviest.reps : ""}`,
+            to: { t: "exprog", id: stats.heaviest.id } });
+    /* the buried gold: the patterns nobody scrolls to */
+    const buckets = (a.buckets || []).filter((b) => b.n >= 3);
+    if (buckets.length >= 2) {
+        const best = buckets.slice().sort((x, y) => y.val - x.val)[0];
+        const worst = buckets.slice().sort((x, y) => x.val - y.val)[0];
+        if (best.val - worst.val >= 6)
+            out.bullets.push({ text: `You lift best ${best.t.toLowerCase()} \u2014 ${Math.round(best.val - worst.val)}% over your worst slot`, to: null });
+    }
+    const sg = (a.sleepGroups || []).filter((g) => g.n >= 3);
+    if (sg.length >= 2) {
+        const b = sg.slice().sort((x, y) => y.val - x.val)[0];
+        const w = sg.slice().sort((x, y) => x.val - y.val)[0];
+        if (b.val - w.val >= 6)
+            out.bullets.push({ text: `Better sessions on ${b.key.toLowerCase()}`, to: null });
+    }
+    out.bullets = out.bullets.slice(0, 4);
+    return out;
+}
+function TabLead({ lead, wash, setSheet }) {
+    if (!lead || !lead.headline)
+        return null;
+    return (React.createElement("div", { className: "il-welc", style: { background: `radial-gradient(120% 140% at 12% 0%, ${wash[0]} 0%, rgba(0,0,0,0) 62%), radial-gradient(120% 140% at 92% 8%, ${wash[1]} 0%, rgba(0,0,0,0) 58%), var(--card)` } },
+        React.createElement("div", { className: "il-welc-hi", style: { fontSize: 24 } }, lead.headline),
+        lead.sub && React.createElement("div", { className: "il-welc-said", style: { marginBottom: lead.bullets.length ? 12 : 0 } }, lead.sub),
+        lead.bullets.map((b, i) => (React.createElement("button", { key: i, className: "il-leadb", disabled: !b.to, onClick: () => b.to && setSheet(b.to) },
+            React.createElement("span", { className: "d" }),
+            React.createElement("span", { style: { flex: 1, minWidth: 0 } }, b.text),
+            b.to && React.createElement("span", { style: { color: "var(--faint)", fontSize: 15, flexShrink: 0 } }, "\u203A"))))));
+}
 function CoachTab({ st, save, a, today, setSheet }) {
     const th = st.coachChat || [];
     const last = th.length ? th[th.length - 1] : null;
@@ -13236,6 +13326,7 @@ function CoachTab({ st, save, a, today, setSheet }) {
         ["Is my programme sound?", { t: "ctalk", seed: "Look at the sessions I've got saved and tell me honestly whether the programme is sound for my goal, or whether I'd do better with something else." }],
     ];
     return (React.createElement(React.Fragment, null,
+        React.createElement(TabLead, { lead: tabLead("coach", st, a, today), wash: ["rgba(91,141,239,.30)", "rgba(180,124,255,.20)"], setSheet: setSheet }),
         React.createElement("div", { className: "il-note", style: { margin: "4px 16px 12px", fontSize: 13.5 } },
             "He has your whole log in front of him and will tell you when he's certain and when he's guessing.",
             th.length > 0 && ` ${th.filter((m) => m.role === "user").length} questions so far — he remembers all of it.`),
@@ -24400,6 +24491,7 @@ function Progress({ st, a, today, setSheet }) {
         : sort === "heavy" ? (((stats.bestBy[y.id] || {}).e1rm || 0) - ((stats.bestBy[x.id] || {}).e1rm || 0))
             : x.name.localeCompare(y.name));
     return (React.createElement(React.Fragment, null,
+        React.createElement(TabLead, { lead: tabLead("progress", st, a, today), wash: ["rgba(62,207,142,.28)", "rgba(91,141,239,.20)"], setSheet: setSheet }),
         (() => {
             const w = weekPicture(st, a, today);
             return (React.createElement("div", { className: "il-card lead", style: { cursor: "pointer" }, onClick: () => setSheet({ t: "week" }) },
@@ -25698,6 +25790,10 @@ function You({ st, save, a, today, setSheet, go }) {
        You tab fell over with "Can't find variable: read". Unfiltered on
        purpose — a suggestion you have since hidden should still resolve. */
     const read = useMemo(() => coachRead(st, a), [st, a]);
+    /* v306: "You said you would" and "What I asked you to do before" were two
+       tall cards of homework sitting between him and the rest of the tab. Same
+       content, one line until he asks for it. */
+    const [tasksOpen, setTasksOpen] = useState(false);
     return (React.createElement(React.Fragment, null,
         React.createElement(Welcome, { st, a, today, setSheet }),
         pct < 100 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
@@ -25767,19 +25863,44 @@ function You({ st, save, a, today, setSheet, go }) {
         })(),
         (() => {
             const open = openCommitments(st);
-            if (!open.length)
+            const still = prev.filter((x) => read.find((r) => r.id === x.id));
+            const n = open.length + still.length;
+            if (!n)
                 return null;
-            return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
-                React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "You said you would"),
-                open.map((c, i) => (React.createElement("div", { key: c.key, style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
-                    React.createElement("div", { style: { fontSize: 14, marginBottom: 2 } }, c.what),
-                    React.createElement("div", { className: "il-sub il-n", style: { marginBottom: 8 } },
-                        c.by ? c.by + " · " : "",
-                        c.days === 0 ? "today" : `${c.days} days ago`),
-                    React.createElement("div", { style: { display: "flex", gap: 6 } },
-                        React.createElement("button", { className: "il-chip on", onClick: () => save(settleCommitment(st, c.key, true)) }, "Did it"),
-                        React.createElement("button", { className: "il-chip", onClick: () => save(settleCommitment(st, c.key, false)) }, "Didn't"))))),
-                React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Answer honestly. The next review is told either way, and a straight no is more use to it than a quiet yes.")));
+            return (React.createElement("div", { className: "il-card", style: { borderLeft: `3px solid ${open.length ? "var(--gold)" : "var(--line)"}` } },
+                React.createElement("button", { style: { all: "unset", display: "flex", alignItems: "center", gap: 10, width: "100%", cursor: "pointer" }, onClick: () => setTasksOpen(!tasksOpen) },
+                    React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                        React.createElement("div", { className: "il-lbl" }, "Tasks"),
+                        React.createElement("div", { className: "il-sub", style: { margin: "3px 0 0" } },
+                            open.length ? `${open.length} to answer` : "nothing to answer",
+                            still.length ? ` \u00B7 ${still.length} still going` : "")),
+                    React.createElement("span", { className: "il-tag", style: { background: open.length ? "#241F12" : "#1A1D22",
+                            color: open.length ? "var(--gold)" : "var(--dim)", flexShrink: 0 } }, n),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 15, flexShrink: 0,
+                            transform: tasksOpen ? "rotate(90deg)" : "none", transition: "transform .15s" } }, "\u203A")),
+                tasksOpen && React.createElement("div", { style: { marginTop: 12 } },
+                    open.length > 0 && React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 4 } }, "You said you would"),
+                    open.map((c, i) => (React.createElement("div", { key: c.key, style: { padding: "8px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                        React.createElement("div", { style: { fontSize: 14, marginBottom: 2 } }, c.what),
+                        React.createElement("div", { className: "il-sub il-n", style: { marginBottom: 8 } },
+                            c.by ? c.by + " \u00B7 " : "",
+                            c.days === 0 ? "today" : `${c.days} days ago`),
+                        React.createElement("div", { style: { display: "flex", gap: 6 } },
+                            React.createElement("button", { className: "il-chip on", onClick: () => save(settleCommitment(st, c.key, true)) }, "Did it"),
+                            React.createElement("button", { className: "il-chip", onClick: () => save(settleCommitment(st, c.key, false)) }, "Didn't"))))),
+                    still.length > 0 && React.createElement("div", { className: "il-lbl", style: { fontSize: 10, margin: "14px 0 4px" } }, "Taken on earlier, not shifted yet"),
+                    still.slice(0, 4).map((x) => {
+                        const q = read.find((r) => r.id === x.id);
+                        return (React.createElement("div", { key: x.id + x.date, className: "il-row", style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
+                            React.createElement("div", { style: { minWidth: 0 } },
+                                React.createElement("div", { style: { fontSize: 13.5 } }, q ? q.action : x.id),
+                                React.createElement("div", { className: "il-sub" },
+                                    dtiny(x.date),
+                                    " \u00B7 ",
+                                    x.status === "done" ? "you took it on" : "you passed")),
+                            React.createElement("span", { className: "il-tag", style: { background: "#241F12", color: "var(--gold)", flexShrink: 0 } }, "STILL OPEN")));
+                    }),
+                    React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Answer honestly \u2014 the next review is told either way, and a straight no is more use to it than a quiet yes. Anything that drops off did so because the underlying number changed, not because you ticked it."))));
         })(),
         (() => {
             const lastR = (st.reviews || [])[0];
@@ -25814,20 +25935,6 @@ function You({ st, save, a, today, setSheet, go }) {
                     " \u2014 photograph the screens and it reads them off for you."),
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log tonight's screenshots")));
         })(),
-        prev.length > 0 && (React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "What I asked you to do before"),
-            prev.slice(0, 4).map((x) => {
-                const q = read.find((r) => r.id === x.id);
-                return (React.createElement("div", { key: x.id + x.date, className: "il-row", style: { padding: "9px 0", borderTop: "1px solid var(--line)" } },
-                    React.createElement("div", { style: { minWidth: 0 } },
-                        React.createElement("div", { style: { fontSize: 13.5 } }, q ? q.action : x.id),
-                        React.createElement("div", { className: "il-sub" },
-                            dtiny(x.date),
-                            " \u00B7 ",
-                            x.status === "done" ? "you took it on" : "you passed")),
-                    React.createElement("span", { className: "il-tag", style: { background: q ? "#241F12" : "#10281A", color: q ? "var(--gold)" : "var(--grn)", flexShrink: 0 } }, q ? "STILL OPEN" : "SORTED")));
-            }),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Anything marked sorted has dropped off the list because the underlying number changed \u2014 not because you ticked it."))),
         React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Where I've landed for you"),
         React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 12 } },
