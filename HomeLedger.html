@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v316 · 5 Aug</div>
+  <div class="v">v317 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -580,6 +580,7 @@ const EQUIP = [
     ["ghd", "Glute ham developer", "Benches & racks", null, "gym"],
     ["pullup", "Pull-up bar", "Bars & bodyweight", "bar", "home"],
     ["dip", "Dip bars", "Bars & bodyweight", "dip", "home"],
+    ["tower", "Power tower (pull-up + dip)", "Bars & bodyweight", ["bar", "dip"], "home"],
     ["rings", "Gymnastic rings", "Bars & bodyweight", "bar", "home"],
     ["trx", "Suspension trainer", "Bars & bodyweight", "band", "home"],
     ["parallettes", "Parallettes", "Bars & bodyweight", null, "home"],
@@ -590,6 +591,8 @@ const EQUIP = [
     ["band_tube", "Tube bands with handles", "Bands & cables", "band", "home"],
     ["band_mini", "Mini bands", "Bands & cables", "band", "home"],
     ["cable", "Cable machine", "Bands & cables", null, "gym"],
+    ["pulley_sys", "Pulley system (wall or door)", "Bands & cables", "pulley", "home"],
+    ["cable_attach", "Cable attachments (rope, bars, D-handle)", "Bands & cables", null, "home"],
     ["functional", "Functional trainer", "Bands & cables", null, "gym"],
     ["smith", "Smith machine", "Machines", null, "gym"],
     ["legpress", "Leg press", "Machines", null, "gym"],
@@ -999,6 +1002,9 @@ const P3_ALIAS = {
     "Pulley chest fly": "Band chest fly", "Pulley triceps pushdown": "Band triceps pushdown",
     "Pulley curl": "Band curl", "Pulley lateral raise": "Band lateral raise",
     "Pulley crunch": "Weighted crunch", "Pulley wood chop": "Pallof press",
+    "Pulley rope overhead extension": "Band overhead triceps extension",
+    "Pulley rope hammer curl": "Band hammer curl", "Pulley reverse curl": "Reverse curl",
+    "Pulley close-grip row": "Band row", "Pulley upright row": "Band upright row",
 };
 const P3 = Object.fromEntries(Object.entries(P3RAW).map(([n, [a, b, h, note, lying, seated]]) => {
     const un = (arr) => Object.fromEntries(J3.map((k, i) => [k, [arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]]]));
@@ -1019,6 +1025,27 @@ Object.entries(P3_ALIAS).forEach(([n, from]) => {
     if (!P3[n] && P3[from])
         P3[n] = P3[from];
 });
+/* Pulley straight-arm pulldown: no cousin keeps the arms straight, so the
+   pose is authored — the standing template's body verbatim, with both arms
+   swept as one rigid line from overhead-forward down to the thighs. Bone
+   lengths are exact (0.30 upper, 0.28 forearm) so the elbow solver's rules
+   hold, and the family physics (pulldown = hands travel in to the body)
+   passes on real geometry rather than a borrowed bend. */
+{
+    const base = P3["Standing lateral raise"];
+    const armTo = (sh, dir, r) => [sh[0], sh[1] + dir[1] * r, sh[2] + dir[2] * r];
+    const up = [0, 0.707, 0.707], down = [0, -0.866, 0.5];
+    const frame = (dir) => ({ ...base.a,
+        elL: armTo(base.a.shL, dir, 0.30), elR: armTo(base.a.shR, dir, 0.30),
+        hnL: armTo(base.a.shL, dir, 0.58), hnR: armTo(base.a.shR, dir, 0.58) });
+    P3["Pulley straight-arm pulldown"] = { ...base, a: frame(up), b: frame(down),
+        hot: ["lat"], note: "Arms straight the whole way. The lats sweep the bar to the thighs.",
+        /* fam is set by hand: the exercise's own family is "pulldown" for the
+           physics audit, but "pulldown" does not arc — a straight lerp would
+           shrink the arm from 0.58 to 0.35 mid-rep. "pullover" pivots both
+           elbow and hand about the shoulder, which is exactly this sweep. */
+        fam: "pullover", lying: false, seated: false, seq: null, segs: null };
+}
 /* The incline stool's back pad leans at 0.42 rad — but the incline press pose
    sat bolt upright in front of it, and the incline fly was the FLOOR fly's
    coordinates with the stool drawn through the body. Both corrected here, by
@@ -1670,6 +1697,10 @@ const ANAT_ALIAS = {
     "Pulley chest fly": "Band chest fly", "Pulley triceps pushdown": "Band triceps pushdown",
     "Pulley curl": "Band curl", "Pulley lateral raise": "Band lateral raise",
     "Pulley crunch": "Weighted crunch", "Pulley wood chop": "Pallof press",
+    "Pulley rope overhead extension": "Band overhead triceps extension",
+    "Pulley rope hammer curl": "Band hammer curl", "Pulley reverse curl": "Reverse curl",
+    "Pulley close-grip row": "Band row", "Pulley upright row": "Band upright row",
+    "Pulley straight-arm pulldown": "Straight-arm pullover",
 };
 const ANAT = Object.fromEntries([
     ["Farmer's carry", { "fore_flex": 1, "trap_up": 1, "trap_mid": 0.5, "obl_ext": 0.5, "transverse": 0.5, "erector": 0.5 }],
@@ -1911,6 +1942,19 @@ const MET_BY_MOVE = {
 };
 const groupOf = (ex) => ex.aerobic ? "aerobic" : ex.cardio ? "cardio" : (Object.keys(GROUPS).find((g) => GROUPS[g].m.length && ex.primary.some((m) => GROUPS[g].m.includes(m))) || "core");
 RAW.push(...PULLEY_RAW);
+/* The cable-attachment set on the pulley: tricep rope, straight bar, V-bar
+   and D-handle. Gated on the pulley itself — the handles do nothing without
+   it. Appended after every existing row because exercise ids are positional
+   and his whole history is filed under them. */
+const ATTACH_RAW = [
+    ["Pulley rope overhead extension", ["pulley"], "ohtri", ["tri"], [], 10, 15, 0, ["Anchor low behind you, rope overhead, elbows up by your ears", "Only the forearms move — press to straight and pull the rope ends apart at the top", "The long head gets its full stretch at the bottom, which nothing else at home gives it"]],
+    ["Pulley rope hammer curl", ["pulley"], "hammer", ["bi", "fore"], [], 10, 15, 0, ["Anchor low, a rope end in each hand, palms facing each other", "Curl without swinging, elbows pinned to the ribs", "The rope lets the wrists stay neutral the whole way up"]],
+    ["Pulley reverse curl", ["pulley"], "curl", ["fore", "bi"], [], 12, 20, 0, ["Straight bar, palms facing down throughout", "Curl to the shoulders and lower slowly — the cable fights you both ways", "Much lighter than a normal curl. The top of the forearm is the point"]],
+    ["Pulley straight-arm pulldown", ["pulley"], "pulldown", ["lats"], ["tri"], 10, 15, 0, ["Anchor high, straight bar, arms long, a slight lean forward", "Sweep the bar down to the thighs without letting the elbows bend", "All lats — no biceps to help, which is the whole idea"]],
+    ["Pulley close-grip row", ["pulley"], "row", ["lats", "uback"], ["bi"], 8, 12, 0, ["Anchor low, V-handle, sit tall with a flat back", "Pull to the navel with the elbows brushing the ribs", "The narrow neutral grip works the lats through a longer arc than a wide row"]],
+    ["Pulley upright row", ["pulley"], "upright", ["sdelt"], ["traps"], 12, 20, 0, ["Anchor low, straight bar, hands inside shoulder width", "Pull up to chest height, elbows leading the hands", "Stop at the chest — higher trades side delt for a pinched shoulder"]],
+];
+RAW.push(...ATTACH_RAW);
 const EX = [
     ...RAW.map(([name, kit, move, primary, secondary, lo, hi, perSide, cues], i) => ({
         id: "x" + i, name, kit, move, primary, secondary, lo, hi, cues, perSide: !!perSide,
@@ -5721,7 +5765,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v316 · 5 Aug";
+const APP_VERSION = "v317 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -12369,7 +12413,7 @@ const oldKitFor = (ids) => {
     ids.forEach((id) => {
         const m = eqById[id]?.maps;
         if (m)
-            out.add(m);
+            (Array.isArray(m) ? m : [m]).forEach((k) => out.add(k));
     });
     return [...out];
 };
