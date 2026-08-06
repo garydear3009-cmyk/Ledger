@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v332 · 5 Aug</div>
+  <div class="v">v337 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -2886,7 +2886,7 @@ const FRAW = [
     ["Tap water", 9, 0, 0, 0, 0, 500, "1 glass"],
     ["Milk, 1% fat", 9, 42, 3.5, 4.8, 1, 250, "1 glass"],
     /* v304: a UK shop-shelf batch — hand-held ice creams and lollies, the
-       biscuit tin, and the Slimming World range Leanne buys. Published pack
+       biscuit tin, and the Slimming World range bought at home. Published pack
        figures where they are printed, converted to per-100g; the ready meals
        are the Iceland range. Treat them as close rather than exact and let
        the barcode scanner overrule any of them. */
@@ -5768,7 +5768,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v332 · 5 Aug";
+const APP_VERSION = "v337 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6063,6 +6063,11 @@ function HomeLedgerInner() {
             setTab("train");
             setSub("coach");
         }
+        else if (t === "meas") {
+            /* v333: the tape and the scales live on Progress now */
+            setTab("progress");
+            setSub("meas");
+        }
         else if (t) {
             setTab(t);
             if (t !== "train")
@@ -6073,7 +6078,8 @@ function HomeLedgerInner() {
     };
     /* Body is half of Train now, so anything keyed by tab — the heading, the
        header button, the section tint — has to ask which half you are on. */
-    const view = tab !== "train" ? tab : sub === "body" ? "body" : sub === "coach" ? "coach" : "train";
+    const view = tab === "train" ? (sub === "body" ? "body" : sub === "coach" ? "coach" : "train")
+        : tab === "progress" && sub === "meas" ? "body" : tab;
     const hb = HEADBTN[view];
     return (React.createElement("div", { className: "il" },
         React.createElement("style", null, CSS),
@@ -6142,7 +6148,13 @@ function HomeLedgerInner() {
                     : sub === "coach"
                         ? React.createElement(CoachTab, { st, save, a, today, setSheet })
                         : React.createElement(Train, { st, save, a, today, setSheet }))),
-            tab === "progress" && React.createElement(Progress, { st, a, today, setSheet }),
+            tab === "progress" && (React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { padding: "10px 12px 2px", display: "flex", gap: 7 } },
+                    React.createElement("button", { className: "il-chip" + (sub !== "meas" ? " on" : ""), onClick: () => setSub("lifts") }, "Lifts"),
+                    React.createElement("button", { className: "il-chip" + (sub === "meas" ? " on" : ""), onClick: () => setSub("meas") }, "Body")),
+                sub === "meas"
+                    ? React.createElement(Measurements, { st, save, a, today, setSheet })
+                    : React.createElement(Progress, { st, a, today, setSheet }))),
             tab === "settings" && React.createElement(Settings, { st, save, today, setSheet, health }),
             tab === "fuel" && React.createElement(Fuel, { st, save, a, today, setSheet }),
             tab === "you" && React.createElement(You, { st, save, a, today, setSheet, go }),
@@ -8607,7 +8619,7 @@ function programState(st, today) {
     const done = (st.sessions || []).filter((x) => x.date >= from && x.finished !== false &&
         /* v287 wanted to stop a ghost session ticking the week off, but only
            caught sessions with ZERO seconds on them — and the wrap-up writes
-           a floor of 60. So Gary's ten-second Push ticked Push off his
+           a floor of 60. So a ten-second Push ticked Push off his
            programme. v309: the same test the rest of the app uses. It is a
            superset of the old rule, so the date-collision ghosts it was
            written for are still caught. Begun-and-in-progress still ticks. */
@@ -8692,7 +8704,7 @@ function routineMinutes(list) {
    rest between working sets. It is not how long you are actually in the room.
    The warm-up ramp the app now always adds, the rest after each last set
    before you move on, and the business of changing the dumbbells over are all
-   real minutes and none of them were counted. Gary clocked it: "the estimated
+   real minutes and none of them were counted. He clocked it: "the estimated
    time doesn't include any warm ups or rest periods". Both numbers now exist —
    the planner keeps using routineMinutes, the sheet shows both. */
 function sessionTime(list) {
@@ -13282,7 +13294,7 @@ function FuelSheet({ st, save, a, today, close, setSheet }) {
    One place he lives, rather than a button on six screens. He remembers
    what you have talked about, and anything you have marked as a bad
    record is kept out of what he sees.                                */
-/* v295: things Gary has handed the coach himself. Stored as a short distilled
+/* v295: things he has handed the coach himself. Stored as a short distilled
    brief rather than the whole document — a 30KB paper in every prompt is slow,
    expensive and mostly ignored, and the useful part is always a page. */
 function refsBrief(st) {
@@ -19575,9 +19587,8 @@ function Supplements({ st, save, a, today, setSheet }) {
                     React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "supppick" }) }, "Pick what I actually take"))))) : (React.createElement("div", { className: "il-note", style: { color: "#D9BAFF", fontSize: 13.5 } }, "Photograph what you've got and I'll tell you what each one does, what the evidence says, and \u2014 often \u2014 that you don't need it.")),
             React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 14 }, onClick: () => setSheet({ t: "suppshot" }) }, mine.length ? "Add more" : "Photograph what I take")),
         mine.length > 0 && React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-row", style: { margin: "18px 14px 9px" } },
-                React.createElement("span", { className: "il-lbl" }, "Today, in order"),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, left === 0 ? "all done" : `${left} to go`)),
+            React.createElement(BoxT, { t: "Today, in order", s: (left === 0 ? "All taken. " : `${left} still to take. `) +
+                    "The order comes from what each one is, so it sorts itself when you add something, and the ticks clear overnight" }),
             (() => {
                 /* Two tubs, one supplement: both vitamin D products carry the same
                    warning underneath, but nothing joined them up. Count the daily
@@ -19628,13 +19639,9 @@ function Supplements({ st, save, a, today, setSheet }) {
                                     })(),
                                     React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 2 } }, why),
                                     avoid && (React.createElement("div", { style: { fontSize: 11.5, marginTop: 4, color: "var(--red)", lineHeight: 1.45 } }, avoid)))))));
-                })))),
-            React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 4px" } }, "Ticks clear themselves overnight. The order is worked out from what each one is, so it updates on its own when you add something.")),
+                }))))),
         shelf.length > 0 && (React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
-                React.createElement("span", { className: "il-lbl" }, "MY CUPBOARD"),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, shelf.length)),
-            React.createElement("div", { className: "il-note", style: { fontSize: 12, margin: "0 16px 8px" } }, "Everything else you own. Still yours, still explained when you tap one \u2014 just not on today's list. Anything marked worth taking is one tap from being on it."),
+            React.createElement(BoxT, { t: "In the cupboard", s: `${shelf.length} more you own but do not take daily \u2014 still explained when you tap one, and one tap from today's list` }),
             shelf.map((s, i) => {
                 const b = suppBadge(s);
                 return (React.createElement(SwipeDelete, { key: i, onDelete: () => save({ ...st,
@@ -19651,9 +19658,9 @@ function Supplements({ st, save, a, today, setSheet }) {
                                 s.dose ? ` · ${s.dose}` : ""),
                             React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily")))));
             }))),
-        React.createElement("div", { className: "il-row", style: { margin: "20px 14px 9px" } },
-            React.createElement("span", { className: "il-lbl" }, "RECOMMENDED FOR YOU"),
-            rec.answered > 0 && React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, rec.list.length)),
+        React.createElement(BoxT, { t: "Worth adding", s: (rec.answered > 0 && rec.list.length
+                ? `${rec.list.length} suggestion${rec.list.length === 1 ? "" : "s"}. `
+                : "") + "Only things with strong or moderate evidence get suggested here, weighed against your answers, your training and what you actually eat" }),
         rec.answered === 0 ? (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Answer the ten questions below and I'll work out what is actually missing rather than reciting a list. Without them all I can tell you is what everybody gets told."))) : rec.list.length === 0 ? (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Nothing obvious missing. You already take everything your answers point at, which is a better place to be than a longer list."))) : rec.list.map((r, i) => {
@@ -19670,7 +19677,6 @@ function Supplements({ st, save, a, today, setSheet }) {
                             `I train four days a week at home and I'm after muscle. Give me the honest case against it as well as for it, ` +
                             `and tell me what I'd get from food instead.` }) }, "Argue it with the nutritionist")));
         }),
-        rec.list.length > 0 && (React.createElement("div", { className: "il-note", style: { fontSize: 11.5, margin: "0 16px 4px" } }, "Only things with strong or moderate evidence get suggested here.")),
         rec.nope.length > 0 && (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--red)" } },
             React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 6 } }, "Not worth the money"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } },
@@ -19679,7 +19685,7 @@ function Supplements({ st, save, a, today, setSheet }) {
                 ". The evidence for ",
                 rec.nope.length === 1 ? "it" : "these",
                 " is weak, and the money would do more in food or in the two strongest things on this page."))),
-        React.createElement("div", { className: "il-lbl", style: { margin: "20px 14px 9px" } }, "Advice"),
+        React.createElement(BoxT, { t: "Read and decide", s: "The questionnaire these suggestions come from, what to actually take, the protein shelf, and the evidence one by one" }),
         React.createElement("div", { className: "il-list", style: { margin: "0 12px 8px" } },
             React.createElement("div", { className: "il-li", onClick: () => setSheet({ t: "healthq" }) },
                 React.createElement("div", { style: { minWidth: 0 } },
@@ -20909,8 +20915,8 @@ const SEED_KITCHEN = [
    malt vinegar that make it what it is.                        */
 const SEED_RECIPES = [{ "n": "Dad's beef curry", "meal": "dinner", "cui": "British Indian", "mins": 105, "serves": 2, "tags": ["hp"], "heat": 3, "temp": "hot", "family": "Dad's", "ing": [[400, "g", "diced stewing beef"], [1, null, "onion, sliced"], [3, null, "garlic cloves, crushed"], [1, "tsp", "ground cumin"], [1, "tsp", "ground turmeric"], [1, "tsp", "hot curry powder"], [1, "tsp", "fennel seeds"], [1, "tsp", "cayenne pepper"], [1, "tsp", "mustard seeds"], [1, "tsp", "garam masala"], [1, "tsp", "ground ginger"], [1, "tsp", "ground coriander"], [1, "tsp", "ground fenugreek"], [1, "tsp", "paprika"], [1, "tbsp", "Worcestershire sauce"], [1, "tbsp", "malt vinegar"], [1, "tbsp", "vegetable oil"], [300, "ml", "water"], [1, "tsp", "salt"], [150, "g", "rice"]], "method": ["Brown the beef hard in the oil, in two batches. Crowding the pan steams it and you lose the crust.", "Set the beef aside. Onion into the same pan, ten minutes until properly soft and starting to colour.", "Garlic and the mustard and fennel seeds in for a minute, until the seeds start to pop.", "All the ground spices in with a splash of water, thirty seconds. This is the bit people rush — the spices need to cook or the curry tastes raw.", "Beef back in, then the Worcestershire, the vinegar and the water. Salt.", "Lid on, lowest heat, ninety minutes. Check it now and again and add a splash of water if it's tightening.", "Rice on for the last twenty minutes.", "Taste for salt at the end, not the start."], "note": "Eleven spices at a teaspoon each is a lot of spice for 400g of beef, and that's what makes it. The Worcestershire and malt vinegar are the unusual part — they give it a sharpness most curries haven't got.", "m": [818, 50, 76, 36], "mine": true, "found": false },
     { "n": "Firecracker chicken pasta box", "meal": "lunch", "cui": "British", "mins": 20, "serves": 1, "tags": ["hp", "lf", "mp"], "heat": 2, "temp": "cold", "family": "Mine", "ing": [[180, "g", "pasta, cooked"], [150, "g", "firecracker chicken"], [60, "g", "ham"], [60, "g", "peppers"], [60, "g", "cucumber"], [40, "g", "celery"], [30, "g", "red onion"], [50, "g", "Greek yoghurt"], [20, "g", "light mayonnaise"], [5, "g", "parsley"]], "method": ["Cook the pasta a minute past the packet time. It firms up in the fridge, and al dente tonight is chewy by lunchtime.", "Drain and rinse it under cold water to stop it cooking and wash off the surface starch that would otherwise glue it into a block.", "Dice the peppers, cucumber, celery and red onion small — about the size of the pasta, so every forkful gets a bit of everything.", "If the raw onion is fierce, soak the diced pieces in cold water for five minutes and drain. It takes the bite out without losing the crunch.", "Mix the yoghurt and light mayonnaise together and season it properly before it meets anything else. Two thirds yoghurt keeps it light without tasting of nothing.", "Fold the pasta, vegetables, ham and parsley through the dressing, then lay the firecracker chicken over the top rather than stirring it in — it stays in strips that way, and the glaze does not bleed pink through the whole box."], "note": "655g in the box, which matched the 649g on the scales. The dressing being mostly yoghurt is what keeps this at 14g of fat despite the mayonnaise. Keeps three days; the chicken on top rather than through it is the difference between day three looking appetising and not.", "m": [706, 64, 82, 14], "mine": true, "found": false },
-    { "n": "Nan's macaroni soup", "meal": "dinner", "cui": "Maltese", "mins": 40, "serves": 4, "tags": ["hc", "lf"], "heat": 0, "temp": "hot", "family": "Nan's", "ing": [[15, "g", "lard"], [3, null, "garlic cloves"], [1, null, "small onion"], [2, "tsp", "tomato puree"], [1, "tsp", "sugar"], [1, "tsp", "cornflour"], [400, "g", "potatoes"], [150, "g", "mixed pasta"], [1850, "ml", "water"]], "method": ["Melt a small bit of lard in a big pan over a medium heat.", "Fry three garlic cloves and one small onion, both chopped, and leave them until they are almost fully burnt. This is written exactly as she wrote it and it is the whole character of the soup — take it far darker than instinct says, well past softened and into properly caught.", "Add two teaspoons of tomato purée and 15 fl oz of water, then plenty of pepper, a bit of salt, the sugar and a little cornflour. Stir it smooth before it thickens into lumps.", "Cook for five minutes.", "Cut two or three small potatoes into eight pieces each and rinse them off — the surface starch would otherwise cloud the soup — then add them to the pan.", "Add 50 fl oz of water, bring it up on high for two minutes, then turn it to medium for twenty.", "Add two handfuls of mixed pasta, turn the heat to low and cover. It is ready when the pasta is tender and the potatoes are falling at the edges."], "note": "Written by Gary's Maltese grandmother. Assumptions where the card gives no amount: a small bit of lard is about 15g, the sugar and cornflour a teaspoon each, and two handfuls of pasta around 150g dry. The water is hers exactly — 15 fl oz at the start and 50 fl oz later, about 1.85 litres in total, which makes a big pot. The almost-burnt garlic and onion is not a mistake in the transcription.", "m": [287, 7, 54, 4], "mine": true, "found": false },
-    { "n": "Nan's burgers in hot gravy", "meal": "dinner", "cui": "Maltese", "mins": 25, "serves": 4, "tags": ["hp", "lc"], "heat": 2, "temp": "hot", "family": "Nan's", "ing": [[15, "g", "lard"], [3, null, "garlic cloves"], [450, "g", "beef burgers"], [400, "g", "tinned chopped tomatoes"], [2, "tsp", "tomato puree"], [200, "ml", "water"], [1, "tsp", "mixed spice"], [1, "tsp", "curry powder"], [1, "tbsp", "Worcestershire sauce"], [1, "tsp", "sugar"], [1, "tsp", "chilli powder"]], "method": ["Melt a small lump of lard in a wide pan and add three cloves of garlic.", "Fry the burgers in it, then cut them into pieces once they have taken some colour.", "Leave them to cook on high for ten minutes, so the cut edges catch as well as the outsides.", "Add a tin of chopped tomatoes, two teaspoons of tomato purée and half a tin of water.", "Season with salt and pepper, mixed spice, curry powder, a bit of Worcestershire sauce, a teaspoon of sugar, mixed chilli and a teaspoon of Dad's chilli.", "Cook on high for five minutes, then turn it down to medium and put a lid on."], "note": "Written by Gary's Maltese grandmother. Two things the card leaves open: it does not say how many burgers, so this assumes four (about 450g) to match the tin of tomatoes; and the last line reads \"mixed chilli / Dad's chilli + 1 teaspoon\", which could be a teaspoon of each or a teaspoon of Dad's on top of the mixed. It is recorded here as a teaspoon of each. Dad's chilli is a homemade thing, so substitute whatever you have and adjust.", "m": [347, 20, 6, 26], "mine": true, "found": false }].map((x) => ({ ...x, at: Date.now() }));
+    { "n": "Nan's macaroni soup", "meal": "dinner", "cui": "Maltese", "mins": 40, "serves": 4, "tags": ["hc", "lf"], "heat": 0, "temp": "hot", "family": "Nan's", "ing": [[15, "g", "lard"], [3, null, "garlic cloves"], [1, null, "small onion"], [2, "tsp", "tomato puree"], [1, "tsp", "sugar"], [1, "tsp", "cornflour"], [400, "g", "potatoes"], [150, "g", "mixed pasta"], [1850, "ml", "water"]], "method": ["Melt a small bit of lard in a big pan over a medium heat.", "Fry three garlic cloves and one small onion, both chopped, and leave them until they are almost fully burnt. This is written exactly as she wrote it and it is the whole character of the soup — take it far darker than instinct says, well past softened and into properly caught.", "Add two teaspoons of tomato purée and 15 fl oz of water, then plenty of pepper, a bit of salt, the sugar and a little cornflour. Stir it smooth before it thickens into lumps.", "Cook for five minutes.", "Cut two or three small potatoes into eight pieces each and rinse them off — the surface starch would otherwise cloud the soup — then add them to the pan.", "Add 50 fl oz of water, bring it up on high for two minutes, then turn it to medium for twenty.", "Add two handfuls of mixed pasta, turn the heat to low and cover. It is ready when the pasta is tender and the potatoes are falling at the edges."], "note": "Written by a Maltese grandmother. Assumptions where the card gives no amount: a small bit of lard is about 15g, the sugar and cornflour a teaspoon each, and two handfuls of pasta around 150g dry. The water is hers exactly — 15 fl oz at the start and 50 fl oz later, about 1.85 litres in total, which makes a big pot. The almost-burnt garlic and onion is not a mistake in the transcription.", "m": [287, 7, 54, 4], "mine": true, "found": false },
+    { "n": "Nan's burgers in hot gravy", "meal": "dinner", "cui": "Maltese", "mins": 25, "serves": 4, "tags": ["hp", "lc"], "heat": 2, "temp": "hot", "family": "Nan's", "ing": [[15, "g", "lard"], [3, null, "garlic cloves"], [450, "g", "beef burgers"], [400, "g", "tinned chopped tomatoes"], [2, "tsp", "tomato puree"], [200, "ml", "water"], [1, "tsp", "mixed spice"], [1, "tsp", "curry powder"], [1, "tbsp", "Worcestershire sauce"], [1, "tsp", "sugar"], [1, "tsp", "chilli powder"]], "method": ["Melt a small lump of lard in a wide pan and add three cloves of garlic.", "Fry the burgers in it, then cut them into pieces once they have taken some colour.", "Leave them to cook on high for ten minutes, so the cut edges catch as well as the outsides.", "Add a tin of chopped tomatoes, two teaspoons of tomato purée and half a tin of water.", "Season with salt and pepper, mixed spice, curry powder, a bit of Worcestershire sauce, a teaspoon of sugar, mixed chilli and a teaspoon of Dad's chilli.", "Cook on high for five minutes, then turn it down to medium and put a lid on."], "note": "Written by a Maltese grandmother. Two things the card leaves open: it does not say how many burgers, so this assumes four (about 450g) to match the tin of tomatoes; and the last line reads \"mixed chilli / Dad's chilli + 1 teaspoon\", which could be a teaspoon of each or a teaspoon of Dad's on top of the mixed. It is recorded here as a teaspoon of each. Dad's chilli is a homemade thing, so substitute whatever you have and adjust.", "m": [347, 20, 6, 26], "mine": true, "found": false }].map((x) => ({ ...x, at: Date.now() }));
 /* Read off thirteen photographs — four fridge shelves, four cupboards,
    the shelf of decanted powders, and four supplement screenshots. */
 const SEED_KITCHEN2 = [
@@ -23978,13 +23984,13 @@ function Staples({ st, save, close, setSheet }) {
    numbers land. Everything read off a screenshot is marked as read rather
    than typed, so the review knows where it came from. */
 const SHOTS = [
-    { id: "rings", label: "Activity rings", app: "Apple Fitness", every: 1,
+    { id: "rings", label: "Activity rings", app: "Apple Fitness", every: 7, on: 0,
         what: "Move, Exercise, Stand and steps",
         hint: "The Summary screen with the three rings and the numbers under them." },
-    { id: "burn", label: "Energy burned", app: "Google Fit or Fitbit", every: 1,
+    { id: "burn", label: "Energy burned", app: "Google Fit or Fitbit", every: 7, on: 0,
         what: "Total calories out for the day",
         hint: "The day view with the total at the top." },
-    { id: "scale", label: "Weight and composition", app: "Withings", every: 7,
+    { id: "scale", label: "Weight and composition", app: "Withings", every: 7, on: 0,
         what: "Weight, muscle and fat percentages",
         hint: "The home screen card, or the body composition detail." },
     { id: "tape", label: "Tape measurements", app: "Renpho", every: 17,
@@ -23997,6 +24003,15 @@ function shotDue(st, id, today) {
     if (!last)
         return { due: true, days: null, spec };
     const days = Math.round((new Date(today + "T12:00") - new Date(last.date + "T12:00")) / 864e5);
+    /* v334: he asked for these weekly rather than nightly, on a Sunday. A
+       spec with `on` waits for that weekday — but if the Sunday is missed it
+       still comes due, so a slip does not park it for another whole week. */
+    if (spec.on != null) {
+        const wd = new Date(today + "T12:00").getDay();
+        /* on the day itself it is due unless it is already done; off the day
+           it only nags once the week has actually been missed */
+        return { due: wd === spec.on ? days >= 1 : days > spec.every, days, spec, last };
+    }
     return { due: days >= spec.every, days, spec, last };
 }
 const SHOT_READ = `You are reading a screenshot from a health or fitness app. Pull the numbers off it.
@@ -24060,7 +24075,7 @@ function shotDate(read, today) {
         return { date: today, why: `It read the date as ${read}, which is ${Math.round(days / 30)} months ago. That is almost certainly a misread, so this is logged today — change it if it really is that old.` };
     return { date: read, why: "" };
 }
-/* v296: a weight is only believable inside human range. Gary's app took a
+/* v296: a weight is only believable inside human range. The app took a
    12.5 straight into the kilos column — a stones figure that had come through
    a converter which only knew kg and lb — and every trend after it read as a
    66kg gain. Nothing writes a weight now without passing through here. */
@@ -24215,7 +24230,7 @@ function importHealthJson(st, parsed, today) {
             const g = day(d);
             if (name === "weight_body_mass") {
                 /* v296: Apple Health hands UK users stones. Reading that as
-                   kilos is exactly how a 12.5 got into Gary's weigh-ins. */
+                   kilos is exactly how a 12.5 got into the weigh-ins. */
                 const kg = asKg(q, units);
                 if (plausibleKg(kg)) {
                     g.w = kg;
@@ -24814,10 +24829,64 @@ function RingsSheet({ st, save, today, close }) {
 }
 /* ---------------- BODY ---------------- */
 function Body({ st, save, a, today, setSheet }) {
-    const [view, setView] = useState("model");
     const [shapeAt, setShapeAt] = useState(null); // which set of measurements the model is drawn from
     const last = st.meas[st.meas.length - 1], prev = st.meas[st.meas.length - 2];
+    /* v333: the tape and the scales moved to Progress. What is left is the
+       one question this half answers — what am I actually covering. */
+    const view = "model";
+    return (React.createElement(React.Fragment, null, view === "model" && (React.createElement(React.Fragment, null,
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Last 4 weeks"),
+            React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Forty-one muscles, each with its own useful weekly range. Green is inside it, amber is short, red is barely touched, purple is more than pays."),
+            (() => {
+                /* the model is shaped by whichever set of measurements you are
+                   looking at, so dragging back through the dates is dragging back
+                   through your own shape */
+                const dates = bodyDates(st);
+                const at = dates.includes(shapeAt) ? shapeAt : dates[dates.length - 1] || null;
+                const sh = bodyShape(st, at);
+                return (React.createElement(React.Fragment, null,
+                    React.createElement(Body3D, { weekly: a.anatMap, shape: sh, onPick: (m) => setSheet({ t: "anatmus", m }) }),
+                    dates.length > 0 && (React.createElement("div", { style: { marginTop: 10 } },
+                        React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
+                            React.createElement("span", { className: "il-lbl" },
+                                "Shaped by ",
+                                sh.from),
+                            React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, sh.date ? dtiny(sh.date) : "")),
+                        dates.length > 1 && (React.createElement("input", { type: "range", min: 0, max: dates.length - 1, step: 1, value: Math.max(0, dates.indexOf(at)), style: { width: "100%" }, onChange: (e) => setShapeAt(dates[Number(e.target.value)]) })),
+                        React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6 } },
+                            dates.length > 1
+                                ? `Drag back through your ${dates.length} sets of measurements and watch it change.`
+                                : "Measure again and this becomes a slider you can drag through.",
+                            sh.lopsided.length
+                                ? ` Your ${sh.lopsided.join(" and ")} are not the same size — turn it round and you can see it.`
+                                : "")))));
+            })(),
+            React.createElement(MuscleList, { weekly: a.anatMap, sel: null, onPick: (m) => setSheet({ t: "anatmus", m }) }),
+            React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "niggle" }) }, "Something's grumbling"),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "volume" }) }, "What volume actually works for me"),
+                React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "ask", ctx: "body" }) }, "Ask coach about my coverage"))),
+        React.createElement("div", { className: "il-lbl", style: { margin: "16px 14px 9px" } }, "Every muscle"),
+        React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, [...a.weekly].sort((x, y) => y.sets - x.sets).map((w) => {
+            const s = w.sets > 0 ? status(w.sets) : "red";
+            return (React.createElement("div", { key: w.m, className: "il-li", onClick: () => setSheet({ t: "muscle", m: w.m }) },
+                React.createElement("div", { style: { display: "flex", alignItems: "center" } },
+                    React.createElement("i", { className: "il-dot", style: { background: w.sets > 0 ? SCOL[s] : SCOL.none } }),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 14 } }, w.label),
+                        React.createElement("div", { className: "il-sub" }, a.freq[w.m] ? `${a.freq[w.m]} days a week` : "Not trained"))),
+                React.createElement("div", { style: { textAlign: "right" } },
+                    React.createElement("div", { className: "il-n", style: { fontSize: 14 } }, w.sets),
+                    React.createElement("div", { className: "il-sub", style: { color: SCOL[s] } }, w.sets > 0 ? SWORD[s] : "None"))));
+        }))))));
+}
+/* v333: the measuring half of the old Body screen, now living on Progress
+   next to the lifts. Same cards, same order, same sheets. */
+function Measurements({ st, save, a, today, setSheet }) {
+    const last = st.meas[st.meas.length - 1], prev = st.meas[st.meas.length - 2];
     const jump = weightJump(st, a, today || iso(new Date()));
+    const view = "meas";
     return (React.createElement(React.Fragment, null,
         (() => {
             /* the number this tab is about: where you are, and how long since */
@@ -24899,57 +24968,9 @@ function Body({ st, save, a, today, setSheet }) {
                 React.createElement("span", { style: { position: "absolute", left: 0, color: "var(--tint)" } }, "\u2022"),
                 r))),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Weigh in at the same time of day and read the fortnight, not the morning."))),
-        React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } },
-            React.createElement("button", { className: "il-chip" + (view === "model" ? " on" : ""), onClick: () => setView("model") }, "Coverage"),
-            React.createElement("button", { className: "il-chip" + (view === "meas" ? " on" : ""), onClick: () => setView("meas") }, "Measurements")),
-        view === "model" && (React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Last 4 weeks"),
-                React.createElement("div", { className: "il-note", style: { marginBottom: 6 } }, "Forty-one muscles, each with its own useful weekly range. Green is inside it, amber is short, red is barely touched, purple is more than pays."),
-                (() => {
-                    /* the model is shaped by whichever set of measurements you are
-                       looking at, so dragging back through the dates is dragging back
-                       through your own shape */
-                    const dates = bodyDates(st);
-                    const at = dates.includes(shapeAt) ? shapeAt : dates[dates.length - 1] || null;
-                    const sh = bodyShape(st, at);
-                    return (React.createElement(React.Fragment, null,
-                        React.createElement(Body3D, { weekly: a.anatMap, shape: sh, onPick: (m) => setSheet({ t: "anatmus", m }) }),
-                        dates.length > 0 && (React.createElement("div", { style: { marginTop: 10 } },
-                            React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                                React.createElement("span", { className: "il-lbl" },
-                                    "Shaped by ",
-                                    sh.from),
-                                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, sh.date ? dtiny(sh.date) : "")),
-                            dates.length > 1 && (React.createElement("input", { type: "range", min: 0, max: dates.length - 1, step: 1, value: Math.max(0, dates.indexOf(at)), style: { width: "100%" }, onChange: (e) => setShapeAt(dates[Number(e.target.value)]) })),
-                            React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 6 } },
-                                dates.length > 1
-                                    ? `Drag back through your ${dates.length} sets of measurements and watch it change.`
-                                    : "Measure again and this becomes a slider you can drag through.",
-                                sh.lopsided.length
-                                    ? ` Your ${sh.lopsided.join(" and ")} are not the same size — turn it round and you can see it.`
-                                    : "")))));
-                })(),
-                React.createElement(MuscleList, { weekly: a.anatMap, sel: null, onPick: (m) => setSheet({ t: "anatmus", m }) }),
-                React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 12 } },
-                    React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "niggle" }) }, "Something's grumbling"),
-                    React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "volume" }) }, "What volume actually works for me"),
-                    React.createElement("button", { className: "il-btn g sm", onClick: () => setSheet({ t: "ask", ctx: "body" }) }, "Ask coach about my coverage"))),
-            React.createElement("div", { className: "il-lbl", style: { margin: "16px 14px 9px" } }, "Every muscle"),
-            React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, [...a.weekly].sort((x, y) => y.sets - x.sets).map((w) => {
-                const s = w.sets > 0 ? status(w.sets) : "red";
-                return (React.createElement("div", { key: w.m, className: "il-li", onClick: () => setSheet({ t: "muscle", m: w.m }) },
-                    React.createElement("div", { style: { display: "flex", alignItems: "center" } },
-                        React.createElement("i", { className: "il-dot", style: { background: w.sets > 0 ? SCOL[s] : SCOL.none } }),
-                        React.createElement("div", null,
-                            React.createElement("div", { style: { fontSize: 14 } }, w.label),
-                            React.createElement("div", { className: "il-sub" }, a.freq[w.m] ? `${a.freq[w.m]} days a week` : "Not trained"))),
-                    React.createElement("div", { style: { textAlign: "right" } },
-                        React.createElement("div", { className: "il-n", style: { fontSize: 14 } }, w.sets),
-                        React.createElement("div", { className: "il-sub", style: { color: SCOL[s] } }, w.sets > 0 ? SWORD[s] : "None"))));
-            })))),
         view === "meas" && (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
+            React.createElement(BoxT, { t: "The tape and the scales", s: "Logging a weigh-in or a set of measurements, your photos, and the record of everything so far" }),
+            React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
                 React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log a screenshot from Withings, Renpho, Apple or Google"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "meas" }) }, "Add measurements by hand"),
                 React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "sides" }) }, "Left and right"),
@@ -25032,7 +25053,8 @@ function Progress({ st, a, today, setSheet }) {
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "askme" }) }, "Ask about your own training")),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["lift", "By exercise"], ["when", "What helps"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (view === k ? " on" : ""), onClick: () => setView(k) }, l)))),
         view === "lift" && (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: { padding: "12px 12px 0" } },
+            React.createElement(BoxT, { t: "Exercise by exercise", s: "What you have lifted for each movement, the most you have ever handled, and which way it is going" }),
+            React.createElement("div", { style: { padding: "0 12px" } },
                 React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search exercise\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", onFocus: (e) => setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 260), value: q, onChange: (e) => setQ(e.target.value) })),
             React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
                 React.createElement("button", { className: "il-chip" + (grp === "all" ? " on" : ""), onClick: () => setGrp("all") }, "All"),
@@ -25090,6 +25112,7 @@ function Progress({ st, a, today, setSheet }) {
                         React.createElement(Trend, { points: r.spark }),
                         React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))))))),
         view === "when" && (React.createElement(React.Fragment, null,
+            React.createElement(BoxT, { t: "What actually helps", s: "Time of day, sleep, how you felt and the carbs the day before \u2014 each judged against your own sessions, not a rule of thumb" }),
             React.createElement("div", { className: "il-card" },
                 React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Time of day"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 10 } }, "Strength sessions only. 100 is your normal."),
@@ -26382,14 +26405,14 @@ function You({ st, save, a, today, setSheet, go }) {
                 return null;
             return (React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
                 React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                    React.createElement("div", { className: "il-lbl" }, "Screenshots to log tonight"),
+                    React.createElement("div", { className: "il-lbl" }, "Screenshots to log this week"),
                     React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
                         due.length,
                         " due")),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
                     due.map((x) => x.label).join(", "),
                     " \u2014 photograph the screens and it reads them off for you."),
-                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log tonight's screenshots")));
+                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "nightly" }) }, "Log this week's screenshots")));
         })(),
         (() => {
             const open = openCommitments(st);
@@ -26501,6 +26524,7 @@ function Settings({ st, save, today, setSheet, health }) {
        That is why a fully answered questionnaire read "0 of 23". */
     const done = answered(st.profile);
     return (React.createElement(React.Fragment, null,
+        React.createElement(BoxT, { t: "Your preferences", s: "What you have ruled out of your food, whether it makes a noise, and the answers everything else is worked out from" }),
         React.createElement("div", { className: "il-menu", style: { marginBottom: 10 } },
             React.createElement("button", { className: "il-mrow", onClick: () => setSheet({ t: "rules" }) },
                 React.createElement("span", { style: { minWidth: 0 } },
@@ -26541,15 +26565,33 @@ function Settings({ st, save, today, setSheet, health }) {
                 done < ALLQ.length ? " The more he has, the less he has to assume." : "",
                 " ",
                 "Changing an answer recalculates your targets, what the coach reads and what he suggests next.")),
-        React.createElement("div", { className: "il-lbl", style: { margin: "22px 14px 9px" } }, "Settings & tools"),
+        React.createElement(BoxT, { t: "How it works for you", s: "Units, the key the coach needs, and what you have ruled out of your food" }),
         React.createElement("div", { className: "il-menu" }, [
-            ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }, null],
-            ["Sticking to it", (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions this month`; })(), { t: "adhere" }, null],
+            ["Units", `${UNIT.bw === "st" ? "Stones" : UNIT.bw === "lb" ? "Pounds" : "Kilograms"}, ${UNIT.ht === "ftin" ? "feet" : "centimetres"}, lifting in ${LU()}`, { t: "units" }, null],
+            ["AI features", st.apiKey ? "Key added — everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
+        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
+            React.createElement("span", { style: { minWidth: 0 } },
+                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
+                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
+            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                tag && React.createElement("span", { className: "il-tag t2" }, tag),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        React.createElement(BoxT, { t: "Bringing data in", s: "Anything you already have somewhere else — a CSV, screenshots of an old app, or the health apps on your phone" }),
+        React.createElement("div", { className: "il-menu" }, [
             ["Import from another app", "Withings, Hevy, MacroFactor — any CSV", { t: "importcsv" }, null],
             ["Import past workouts", "From screenshots of your old app", { t: "importwo" }, null],
             ["Health apps", "Apple Health and Health Connect", { t: "health" }, null],
-            ["Units", `${UNIT.bw === "st" ? "Stones" : UNIT.bw === "lb" ? "Pounds" : "Kilograms"}, ${UNIT.ht === "ftin" ? "feet" : "centimetres"}, lifting in ${LU()}`, { t: "units" }, null],
-            ["AI features", st.apiKey ? "Key added — everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
+        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
+            React.createElement("span", { style: { minWidth: 0 } },
+                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
+                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
+            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                tag && React.createElement("span", { className: "il-tag t2" }, tag),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        React.createElement(BoxT, { t: "Looking back", s: "Every review I have written you, how well you have stuck to the plan, and the list of things to fix next" }),
+        React.createElement("div", { className: "il-menu" }, [
+            ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }, null],
+            ["Sticking to it", (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions this month`; })(), { t: "adhere" }, null],
             ["Notes for the next update", `${(st.bugs || []).length} on the list`, { t: "diag" }, null],
         ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
             React.createElement("span", { style: { minWidth: 0 } },
@@ -26558,6 +26600,7 @@ function Settings({ st, save, today, setSheet, health }) {
             React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
                 tag && React.createElement("span", { className: "il-tag t2" }, tag),
                 React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        React.createElement(BoxT, { t: "This app", s: "Which version you are on, and what it is and is not" }),
         React.createElement("div", { className: "il-card", style: { textAlign: "center" } },
             React.createElement("div", { className: "il-d", style: { fontSize: 17, fontWeight: 600, marginBottom: 3 } },
                 "My Bible ",
@@ -26565,6 +26608,7 @@ function Settings({ st, save, today, setSheet, health }) {
             React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "If this doesn't match the version I've just sent you, you're still on the old one \u2014 pull down to refresh, or delete the home screen icon and add it again.")),
         React.createElement("div", { style: { padding: "6px 12px 4px" } },
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, color: "var(--faint)" } }, "This is general information built from your own logs and published research. It isn't medical or dietetic advice, and it can't diagnose anything. For pain, medication or a health condition, see a professional.")),
+        React.createElement(BoxT, { t: "Clearing data", s: "Back up first \u2014 Save and lock it in, on the You tab. None of this can be undone from inside the app." }),
         React.createElement("div", { style: { padding: 12, display: "grid", gap: 8 } },
             (() => {
                 const d = demoCount(st);
@@ -26579,6 +26623,24 @@ function Settings({ st, save, today, setSheet, health }) {
                             d.foods && `${d.foods} days of food`, d.meas && `${d.meas} tape sets`]
                             .filter(Boolean).join(", "),
                         " \u2014 none of it yours.")),
+                    (() => {
+                        /* v334: he asked for training history older than three weeks
+                           cleared out. It is his call, but the numbers that go with it
+                           are worth saying out loud rather than after the event. */
+                        const cut = addDays(today, -21);
+                        const old = (st.sessions || []).filter((x) => x.date < cut);
+                        if (!old.length)
+                            return null;
+                        return (React.createElement(React.Fragment, null,
+                            React.createElement("button", { className: "il-btn g", onClick: () => {
+                                    if (!window.confirm(`Delete ${old.length} session${old.length === 1 ? "" : "s"} from before ${dlong(cut)}? Your heaviest-ever lifts, your lifetime totals and everything the coach reads about your training history go with them. Back up first from the top of this screen. This cannot be undone.`))
+                                        return;
+                                    save({ ...st, sessions: (st.sessions || []).filter((x) => x.date >= cut) });
+                                } }, `Clear the ${old.length} session${old.length === 1 ? "" : "s"} older than three weeks`),
+                            React.createElement("div", { className: "il-note", style: { fontSize: 12 } }, "Keeps the last three weeks. Your lifetime records and the coach's read on your training come from the full history, so they will change.")));
+                    })(),
+                    React.createElement("div", { style: { borderTop: "1px solid var(--line)", margin: "6px 0 2px", paddingTop: 10 } },
+                        React.createElement("div", { className: "il-lbl", style: { fontSize: 10, color: "var(--red)" } }, "Everything, not just the old")),
                     React.createElement("button", { className: "il-btn g", onClick: () => {
                             if (!window.confirm("Empty everything you have logged? Profile and kit stay. This cannot be undone."))
                                 return;
@@ -26799,15 +26861,15 @@ function Guide({ st, close, go }) {
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "Plan a day asks where you will be \u2014 at home, at a desk with no microwave, in the car \u2014 and only offers food that survives it. A desk lunch will never be something that has to be eaten hot.")),
         React.createElement(Part, { id: "shots", title: "I track things in other apps", sub: "Screenshots from Withings, Renpho, Apple, Google" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 4 } }, "You don't have to type any of it. Photograph the screen in the other app and it reads the numbers off and files them \u2014 weight and body composition from Withings, tape measurements from Renpho, rings from Apple Fitness, calories out from Google or Fitbit."),
-            React.createElement(Link, { tab: "body", sh: { t: "nightly" } }, "Log a screenshot"),
+            React.createElement(Link, { tab: "meas", sh: { t: "nightly" } }, "Log a screenshot"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "It knows which app each screenshot came from and how often each one is worth doing \u2014 the rings nightly, the scales weekly, the tape every couple of weeks \u2014 and only asks for what is due. Every number it reads is shown to you in a box you can correct before anything is saved. The full read-back is the button underneath it."),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "You'll find it on Body, on the You screen, and as a prompt when something is due.")),
         React.createElement(Part, { id: "body", title: "I want to track my body", sub: "Weight, tape, photos" },
             React.createElement(Step, { n: "1" }, "Weigh yourself at the same time of day, ideally first thing. Day to day it jumps around; it is the direction over a fortnight that means anything."),
             React.createElement(Step, { n: "2" }, "Tape measurements every few weeks. Each one tells you exactly where to put the tape."),
             React.createElement(Step, { n: "3" }, "Photos in the same light and the same spot. They show what the scales miss."),
-            React.createElement(Link, { tab: "body", sh: { t: "meas" } }, "Measurements"),
-            React.createElement(Link, { tab: "body", sh: { t: "photos" } }, "Progress photos"),
+            React.createElement(Link, { tab: "meas", sh: { t: "meas" } }, "Measurements"),
+            React.createElement(Link, { tab: "meas", sh: { t: "photos" } }, "Progress photos"),
             React.createElement(Link, { tab: "body", sh: { t: "goal" } }, "Change my goal")),
         React.createElement(Part, { id: "ask", title: "I want to ask something", sub: "The coach, and the weekly review" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 4 } }, "Ask it anything in normal words. It answers about your numbers, not in general."),
@@ -26828,7 +26890,7 @@ function Guide({ st, close, go }) {
                 " keeps the record but hides it from every calculation, and ",
                 React.createElement("b", null, "delete"),
                 " removes it for good."),
-            React.createElement(Link, { tab: "body", sh: { t: "records" } }, "Edit or delete a session, weigh-in or measurement"),
+            React.createElement(Link, { tab: "meas", sh: { t: "records" } }, "Edit or delete a session, weigh-in or measurement"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, "You can also swipe left on a day in the diary, on a session in the list, or on a single set while you are logging, and a bin appears.")),
         React.createElement(Part, { id: "find", title: "I can't find something", sub: "One search covers the lot" },
             React.createElement("div", { className: "il-note" }, "Search looks through exercises, foods, recipes, your kitchen and everything you have logged, all at once. If you half remember a word, that is enough."),
@@ -29817,7 +29879,7 @@ Return ONLY JSON: { "read": "the three or four sentences", "call": "the one line
    EntrySheet and had a bug that only bit real data — the fallback that finds
    a recipe by name was gated behind `per1 || e.ing`, which is exactly what an
    entry logged BEFORE v300 does not have. So the one case the fallback was
-   written for was the one case it skipped, and Gary's oats kept showing the
+   written for was the one case it skipped, and his oats kept showing the
    multiplier. Out here it can be tested against a real old-shaped entry
    rather than asserted about in the source. */
 function entrySource(st, e) {
