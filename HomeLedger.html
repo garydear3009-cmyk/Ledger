@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v344 · 6 Aug</div>
+  <div class="v">v345 · 6 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -254,6 +254,7 @@ const CSS = `
 .il-scroll{display:flex;gap:7px;overflow-x:auto;padding:2px 12px 8px;scrollbar-width:none;}
 .il-scroll::-webkit-scrollbar{display:none;}
 .sheet-open .il-b3d{visibility:hidden;}
+.il-sheet .il-b3d{visibility:visible;}
 .il-sheet{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:40;transform:translateZ(0);display:flex;align-items:flex-end;
  justify-content:center;padding-top:env(safe-area-inset-top);box-sizing:border-box;}
 .il-si{background:var(--bg);width:100%;max-width:460px;max-height:100%;overflow-y:auto;overflow-x:hidden;border-radius:18px 18px 0 0;
@@ -5819,7 +5820,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v344 · 6 Aug";
+const APP_VERSION = "v345 · 6 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -12363,7 +12364,10 @@ function AnatMuscle({ sheet, st, a, close, setSheet }) {
                         : `Above ${m.hi}. Past that the returns flatten while the fatigue doesn't, so the extra is mostly costing you recovery.`)),
         prime.length > 0 && React.createElement(React.Fragment, null,
             React.createElement(BoxT, { t: "Trains it directly", s: "Best first. The grade is my read of the evidence \u2014 load at full stretch counts most \u2014 and the line under each one says why it got it." }),
-            prime.map(({ e }) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => setSheet({ t: "info", exId: e.id }) },
+            prime.map(({ e }, pi) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => setSheet({ t: "info", exId: e.id }) },
+                pi < 3 && React.createElement("span", { style: { background: pi === 0 ? "#2A2410" : "#1A1D22",
+                        color: pi === 0 ? "#E5C87E" : "var(--dim)", fontSize: 11, fontWeight: 700,
+                        padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginRight: 8, alignSelf: "center" } }, pi === 0 ? "1st" : pi === 1 ? "2nd" : "3rd"),
                 (() => {
                     const t = exTier(e), [bg, fg] = TIER_COLOUR[t.grade] || ["#1E2024", "#8E949E"];
                     return (React.createElement("span", { style: { background: bg, color: fg, fontSize: 12, fontWeight: 700,
@@ -27493,14 +27497,17 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
    chip list, "Use this kit and close" on the catalogue — and a second generic
    Done that closed WITHOUT applying the staged choice read as two exits that
    disagree. He asked for it gone. */
-const NO_DONE = ["kit", "equip", "recipe", "recipes", "tastes",
+/* v345: anatmus and info are look-at screens whose sticky header already
+   carries the way out (X, and info's own Back link) — the bottom bar only
+   covered the rows he was reading */
+const NO_DONE = ["anatmus", "info", "kit", "equip", "recipe", "recipes", "tastes",
     "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
     "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood",
     "addrec", "scan", "saveit", "cookmode"];
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
-const BACK_ONLY = ["tdee", "reports", "protein", "scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
+const BACK_ONLY = ["tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
     "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
