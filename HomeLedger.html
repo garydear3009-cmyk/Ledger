@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v353 · 7 Aug</div>
+  <div class="v">v354 · 7 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5844,7 +5844,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v353 · 7 Aug";
+const APP_VERSION = "v354 · 7 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -7720,21 +7720,60 @@ function offFood(p) {
 }
 /* Search by name. Asks for UK products first, because "crisps" worldwide is
    a different shop to "crisps" here. */
+/* v354: he could add a product by barcode but searching for one always
+   failed with "Load failed". The barcode lookup and the text search are two
+   different Open Food Facts services, and only one of them still works:
+   the legacy Perl search behind /cgi/search.pl is deprecated and returns 503
+   globally, while /api/v2/product (the barcode route) is untouched. Their
+   replacement for text search is Search-a-licious, a separate host.
+   Both are kept: the new one first, the old one as a fallback in case
+   Search-a-licious is the one having a bad day. */
+const OFF_SEARCH2 = "https://search.openfoodfacts.org/search";
 const OFF_SEARCH = "https://world.openfoodfacts.org/cgi/search.pl";
+/* The two services want different query strings and answer in different
+   shapes \u2014 hits from Search-a-licious, products from the legacy one. Both
+   are pure, so both can be checked without a network. */
+const OFF_FIELDS = "code,product_name,brands,quantity,serving_size,nutriments";
+function offSearchUrls(term) {
+    const q = encodeURIComponent(String(term || "").trim());
+    return [
+        OFF_SEARCH2 + "?q=" + q + "&page_size=24&page=1&fields=" + OFF_FIELDS,
+        OFF_SEARCH + "?search_terms=" + q +
+            "&search_simple=1&action=process&json=1&page_size=24" +
+            "&tagtype_0=countries&tag_contains_0=contains&tag_0=united-kingdom" +
+            "&fields=" + OFF_FIELDS,
+    ];
+}
+function offRows(j) {
+    const list = j && (j.hits || j.products);
+    return Array.isArray(list) ? list : null;
+}
 async function searchFoodDB(term, fetcher) {
     const q = String(term || "").trim();
     if (q.length < 2)
         throw new Error("Type a bit more than that.");
-    const url = OFF_SEARCH + "?search_terms=" + encodeURIComponent(q) +
-        "&search_simple=1&action=process&json=1&page_size=24" +
-        "&tagtype_0=countries&tag_contains_0=contains&tag_0=united-kingdom" +
-        "&fields=code,product_name,brands,quantity,serving_size,nutriments";
     const get = fetcher || ((u) => fetch(u));
-    const r = await get(url);
-    if (!r || !r.ok)
-        throw new Error("Couldn't reach the food database.");
-    const j = await r.json();
-    const found = (j && j.products) || [];
+    const rows = async (u) => {
+        const r = await get(u);
+        if (!r || !r.ok)
+            return null;
+        return offRows(await r.json());
+    };
+    const urls = offSearchUrls(q);
+    const fresh = urls[0], legacy = urls[1];
+    let found = null;
+    try {
+        found = await rows(fresh);
+    }
+    catch { /* fall through to the old one */ }
+    if (!found) {
+        try {
+            found = await rows(legacy);
+        }
+        catch { /* both down */ }
+    }
+    if (!found)
+        throw new Error("The food database didn't answer. It does go down sometimes — the barcode scanner uses a different service and usually still works.");
     /* offFood returns null for anything with no usable nutrition, which is a
        good chunk of a crowd-sourced database — drop those rather than showing
        a row that logs as nothing. */
@@ -30063,7 +30102,9 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
                     }
                     setDbBusy(false);
                 } }, dbBusy ? "Looking…" : `Search the food database for "${q.trim()}"`),
-            dbErr && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 8, color: "var(--gold)" } }, dbErr))),
+            dbErr && React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 8, color: "var(--gold)" } }, /^(load failed|failed to fetch|networkerror)/i.test(dbErr)
+                ? "Couldn't reach the food database — it may be down, or your signal dropped. The barcode scanner uses a different service and usually still works."
+                : dbErr))),
         dbHits && dbHits.length > 0 && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-row", style: { marginBottom: 10 } },
                 React.createElement("div", { className: "il-lbl" }, "From the food database"),
@@ -30102,9 +30143,7 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
                             shopExtra: [...(st.shopExtra || []), { name: h.name, cat: "other", at: Date.now() + i }] }) }, "Add to the shopping list"))))),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Open Food Facts \u2014 crowd-sourced, so a figure can be out of date or entered wrong. The barcode on the packet is the one to trust."))),
         React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("button", { className: "il-btn", style: { marginBottom: 8 }, onClick: () => setScan(true) }, "Scan the barcode or the label"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed"),
-            React.createElement("button", { className: "il-btn g", style: { marginTop: 8 }, onClick: () => setScan(true) }, "Scan the label instead")));
+            React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed")));
 }
 function Photos({ st, save, close }) {
     const [pose, setPose] = useState("front");
