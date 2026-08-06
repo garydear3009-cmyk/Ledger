@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v341 · 5 Aug</div>
+  <div class="v">v342 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5818,7 +5818,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v341 · 5 Aug";
+const APP_VERSION = "v342 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -12345,7 +12345,7 @@ function AnatMuscle({ sheet, st, a, close, setSheet }) {
     const rows = EX.map((e) => ({ e, share: (anatOf(e)[m.id] || 0) }))
         .filter((x) => x.share > 0 && x.e.kit.every((k) => st.kit.includes(k)))
         .sort((x, y) => y.share - x.share);
-    const prime = rows.filter((x) => x.share >= 1);
+    const prime = byTier(rows.filter((x) => x.share >= 1).map((x) => x.e)).map((e) => ({ e }));
     const help = rows.filter((x) => x.share < 1);
     const tone = v === 0 ? "var(--faint)" : v < m.lo ? "var(--gold)" : v <= m.hi ? "var(--grn)" : "#7F5AF0";
     return React.createElement(React.Fragment, null,
@@ -12361,8 +12361,14 @@ function AnatMuscle({ sheet, st, a, close, setSheet }) {
                     : v <= m.hi ? `Inside the ${m.lo} to ${m.hi} range. Leave it alone.`
                         : `Above ${m.hi}. Past that the returns flatten while the fatigue doesn't, so the extra is mostly costing you recovery.`)),
         prime.length > 0 && React.createElement(React.Fragment, null,
-            React.createElement("div", { className: "il-lbl", style: { margin: "18px 14px 9px" } }, "Trains it directly"),
+            React.createElement(BoxT, { t: "Trains it directly", s: "Best first. The grade is my read of the evidence \u2014 load at full stretch counts most \u2014 and the line under each one says why it got it." }),
             prime.map(({ e }) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => setSheet({ t: "info", exId: e.id }) },
+                (() => {
+                    const t = exTier(e), [bg, fg] = TIER_COLOUR[t.grade] || ["#1E2024", "#8E949E"];
+                    return (React.createElement("span", { style: { background: bg, color: fg, fontSize: 12, fontWeight: 700,
+                            padding: "4px 9px", borderRadius: 7, minWidth: 30, textAlign: "center",
+                            flexShrink: 0, marginRight: 10, alignSelf: "center" } }, t.grade));
+                })(),
                 React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center" } },
                     React.createElement("div", { style: { width: 42, height: 50, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
                         React.createElement(FormDemo, { ex: e, h: 50 })),
