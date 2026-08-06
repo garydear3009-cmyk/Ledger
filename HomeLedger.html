@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v357 · 7 Aug</div>
+  <div class="v">v362 · 7 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -434,6 +434,48 @@ function status(s) {
 }
 const SCOL = { green: "#35C26B", amber: "#E5B94E", red: "#FF5A4E", none: "#3A3D43" };
 const SWORD = { green: "Right amount", amber: "Short", red: "Needs work" };
+/* ============ WHAT IS GETTING TRAINED, BY AREA ============
+   His ask: chest graphs together, arms together, a tile for upper and one
+   for lower, coloured by how much each is being done.
+
+   The seventeen training muscles fall into six groups, and the groups into
+   three areas. A group's colour is the SAME status() the rest of the app
+   uses — 10 to 20 sets a week is the productive range, so green means that,
+   amber means near it, red means not enough. One rule, so the tile and the
+   muscle screen behind it can never disagree.
+
+   An area is coloured by its WORST group rather than its average, because
+   an average hides the neglected one — which is the thing worth seeing. */
+const MGROUPS = [
+    { key: "chest", label: "Chest", area: "upper", icon: "body2", muscles: ["chest"] },
+    { key: "back", label: "Back", area: "upper", icon: "build", muscles: ["lats", "uback", "traps", "lback"] },
+    { key: "shoulders", label: "Shoulders", area: "upper", icon: "kit", muscles: ["fdelt", "sdelt", "rdelt"] },
+    { key: "arms", label: "Arms", area: "upper", icon: "swap", muscles: ["bi", "tri", "fore"] },
+    { key: "core", label: "Core", area: "core", icon: "stretch", muscles: ["abs", "obl"] },
+    { key: "legs", label: "Legs", area: "lower", icon: "play", muscles: ["glute", "quad", "ham", "calf"] },
+];
+const MAREAS = [
+    { key: "upper", label: "Upper body", icon: "body2" },
+    { key: "core", label: "Core", icon: "stretch" },
+    { key: "lower", label: "Lower body", icon: "play" },
+];
+/* the sets a group got this week, and how that reads */
+function groupVol(a, g) {
+    const map = (a && a.weeklyMap) || {};
+    const rows = g.muscles.map((m) => ({ m, label: M[m] || m, sets: Math.round(map[m] ?? 0) }));
+    /* a group is judged on its BEST-served muscle — chest is one muscle, but
+       back is four, and summing them would call four light muscles a good
+       week while every one of them was under-trained */
+    const best = rows.reduce((x, r) => Math.max(x, r.sets), 0);
+    return { rows, sets: rows.reduce((x, r) => x + r.sets, 0), best, status: status(best) };
+}
+const RANK = { red: 0, amber: 1, green: 2 };
+function areaVol(a, areaKey) {
+    const groups = MGROUPS.filter((g) => g.area === areaKey).map((g) => ({ ...g, ...groupVol(a, g) }));
+    /* the worst group, because an average hides the neglected one */
+    const worst = groups.reduce((x, g) => (RANK[g.status] < RANK[x] ? g.status : x), "green");
+    return { groups, sets: groups.reduce((x, g) => x + g.sets, 0), status: groups.length ? worst : "red" };
+}
 /* ============ WHAT YOU CAN ACTUALLY LOAD ============
    A 2.5kg step is only right if your kit moves in 2.5kg jumps. Adjustable
    dumbbells have a floor set by the handle, fixed ones exist only at the
@@ -4863,13 +4905,26 @@ function analyse(st) {
     const maint = tdee.ok ? tdee.kcal : null;
     const trendKgWk = tdee.trendKgWk;
     const c30 = iso(new Date(Date.now() - 30 * 864e5)), c60 = iso(new Date(Date.now() - 60 * 864e5));
+    /* four weeks: the window the graphs draw */
+    const c28 = iso(new Date(Date.now() - 28 * 864e5));
     const review = Object.entries(byEx).map(([id, a]) => {
         const now = a.filter((h) => h.date >= c30), before = a.filter((h) => h.date >= c60 && h.date < c30);
-        const ex = exOf(id), latest = a[a.length - 1], spark = a.slice(-10).map((h) => h.top);
+        /* v362, his ask: the graph shows the last FOUR WEEKS and no more, so
+           the line means something recent. It used to be the last ten
+           sessions whenever they happened — on a lift he trains fortnightly
+           that was five months of history drawn as though it were current.
+           The all-time bests below are untouched: those are meant to reach
+           back, the line is not. */
+        const ex = exOf(id), latest = a[a.length - 1];
+        const recent = a.filter((h) => h.date >= c28);
+        const spark = recent.map((h) => h.top);
         if (!now.length || !before.length)
-            return { id, name: ex.name, ex, group: ex.group, change: null, latest, spark, sessions: a.length };
+            return { id, name: ex.name, ex, group: ex.group, change: null, latest, spark,
+                recentSessions: recent.length, sessions: a.length };
         const m = (x) => x.reduce((p, q) => p + q.top, 0) / x.length;
-        return { id, name: ex.name, ex, group: ex.group, now: m(now), before: m(before), change: (m(now) / m(before) - 1) * 100, sessions: now.length, latest, spark };
+        return { id, name: ex.name, ex, group: ex.group, now: m(now), before: m(before),
+            change: (m(now) / m(before) - 1) * 100, sessions: now.length,
+            recentSessions: recent.length, latest, spark };
     });
     const pumpCount = sessions.filter((s) => s.date >= cut && isPump(s)).length;
     return { byEx, base, perf, buckets, cGroups, readyGroups, sleepGroups, anatWeekly, anatMap, weekly, weeklyMap, freq, avgP, avgC, avgF, avgKcal, maint, trendKgWk, review, pumpCount };
@@ -5912,7 +5967,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v357 · 7 Aug";
+const APP_VERSION = "v362 · 7 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -13777,20 +13832,27 @@ function CoachTab({ st, save, a, today, setSheet }) {
             React.createElement("span", { style: { fontSize: 14.5, minWidth: 0 } }, label),
             React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))),
         React.createElement(BoxT, { t: "The longer jobs", s: "Reviews, feedback on a session, and showing him photos or video" }),
-        React.createElement("div", { className: "il-menu" }, [
-            ["Full review and next week", rev ? `Last one ${dtiny(iso(new Date(rev.at)))}` : "Twelve weeks of data, then a plan", { t: "review" }],
-            ["Feedback on a session", lastSess ? `Latest: ${lastSess.routineName || "Session"} · ${dtiny(lastSess.date)}` : "Nothing finished yet", lastSess ? { t: "pickSess" } : { t: "ctalk" }],
-            ["Build around a muscle", "Pick from the 3D body and he'll write it", { t: "cbuild" }],
-            ["Show him a photo", "Which areas are behind, checked against your logs", { t: "showhim", kind: "photo" }],
-            ["Show him a video", "A set filmed from the side, and he'll watch your technique", { t: "showhim", kind: "video" }],
-            ["What's changed over time", "Two to six pictures from different months, compared honestly", { t: "overtime" }],
-            ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }],
-            ["What he's working from", ex ? `${ex} records excluded` : "Every record he can see", { t: "records" }],
-        ].map(([label, sub, dest], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
-            React.createElement("span", { style: { minWidth: 0 } },
-                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
-                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
-            React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))),
+        React.createElement(TileGrid, { colour: "var(--t-coach)", items: [
+                { label: "Full review", icon: "note",
+                    sub: rev ? `last ${dtiny(iso(new Date(rev.at)))}` : "twelve weeks",
+                    onClick: () => setSheet({ t: "review" }) },
+                { label: "Session feedback", icon: "clock",
+                    sub: lastSess ? dtiny(lastSess.date) : "none finished",
+                    onClick: () => setSheet(lastSess ? { t: "pickSess" } : { t: "ctalk" }) },
+                { label: "Around a muscle", icon: "body2", sub: "pick on the body",
+                    onClick: () => setSheet({ t: "cbuild" }) },
+                { label: "Show him a photo", icon: "camera", sub: "what is behind",
+                    onClick: () => setSheet({ t: "showhim", kind: "photo" }) },
+                { label: "Show him a video", icon: "play", sub: "your technique",
+                    onClick: () => setSheet({ t: "showhim", kind: "video" }) },
+                { label: "Over time", icon: "chart", sub: "months compared",
+                    onClick: () => setSheet({ t: "overtime" }) },
+                { label: "Past reviews", icon: "book", sub: `${(st.reviews || []).length} kept`,
+                    onClick: () => setSheet({ t: "pastrev" }) },
+                { label: "What he sees", icon: "list",
+                    sub: ex ? `${ex} excluded` : "every record",
+                    onClick: () => setSheet({ t: "records" }) },
+            ] }),
         React.createElement(BoxT, { t: "Your setup", s: "Which tracker you wear, and what is realistic for a man your age and training age" }),
         React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
             React.createElement("div", { className: "il-lbl" }, "My tracker"),
@@ -25446,6 +25508,82 @@ function MeasChart({ meas }) {
         React.createElement("div", { className: "il-scroll", style: { padding: "10px 0 0" } }, SITES.map((s) => React.createElement("button", { key: s.id, className: "il-chip" + (site === s.id ? " on" : ""), onClick: () => setSite(s.id) }, s.label)))));
 }
 /* ---------------- PROGRESS ---------------- */
+/* v361, his words: "put these in a separate tile so it's not endless
+   scrolling on the screen". The per-exercise graphs were the whole bottom
+   half of the Progress tab; they are a thing you go and look at, not
+   something to scroll past on the way to everything else. */
+function Lifts({ sheet, st, a, today, close, setSheet }) {
+    const stats = useMemo(() => liftStats(st, a), [st, a]);
+    const [grp, setGrp] = useState("all");
+    const [q, setQ] = useState("");
+    const [sort, setSort] = useState((sheet && sheet.sort) || "change");
+    const list = a.review
+        .filter((r) => grp === "all" || r.group === grp)
+        .filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase()))
+        .sort((x, y) => sort === "change" ? ((y.change ?? -999) - (x.change ?? -999))
+        : sort === "heavy" ? (((stats.bestBy[y.id] || {}).e1rm || 0) - ((stats.bestBy[x.id] || {}).e1rm || 0))
+            : x.name.localeCompare(y.name));
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Every exercise", sub: `${a.review.length} tracked \u00b7 the line is the last 4 weeks, the best is all time`, close: close }),
+        React.createElement("div", { style: { padding: "0 12px" } },
+            React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search exercise\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", onFocus: (e) => setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 260), value: q, onChange: (e) => setQ(e.target.value) })),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
+            React.createElement("button", { className: "il-chip" + (grp === "all" ? " on" : ""), onClick: () => setGrp("all") }, "All"),
+            Object.entries(GROUPS).filter(([k]) => k !== "cardio").map(([k, g]) => (React.createElement("button", { key: k, className: "il-chip" + (grp === k ? " on" : ""), onClick: () => setGrp(k) }, g.label))),
+            React.createElement("span", { style: { width: 8, flexShrink: 0 } }),
+            React.createElement("button", { className: "il-chip", onClick: () => setSort(sort === "change" ? "heavy" : sort === "heavy" ? "name" : "change") }, sort === "change" ? "Moving most" : sort === "heavy" ? "Heaviest" : "A–Z")),
+        stats.exercises > 0 && (React.createElement("div", { className: "il-card lead" },
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Everything you've lifted"),
+            React.createElement("div", { className: "il-ring", style: { marginBottom: 10 } },
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, stats.sessions),
+                    React.createElement("div", { className: "l" }, "sessions")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, stats.sets),
+                    React.createElement("div", { className: "l" }, "working sets")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, stats.volume >= 1000 ? Math.round(stats.volume / 1000) + "t" : VOL(stats.volume)),
+                    React.createElement("div", { className: "l" }, "lifted")),
+                React.createElement("div", { className: "il-mini" },
+                    React.createElement("div", { className: "v" }, stats.exercises),
+                    React.createElement("div", { className: "l" }, "exercises"))),
+            stats.heaviest && React.createElement("div", { className: "il-row", style: { paddingTop: 10, borderTop: "1px solid var(--line)" } },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 2 } }, "Heaviest you've handled"),
+                    React.createElement("div", { style: { fontSize: 14 } }, stats.heaviest.name),
+                    React.createElement("div", { className: "il-sub il-n", style: { margin: 0 } },
+                        W(stats.heaviest.kg),
+                        stats.heaviest.reps ? " \u00D7 " + stats.heaviest.reps : "",
+                        stats.heaviest.perSide ? " each side" : "",
+                        " \u00B7 ",
+                        dtiny(stats.heaviest.date))),
+                React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "exprog", id: stats.heaviest.id }) }, "See it")))),
+        React.createElement("div", { className: "il-card", style: { padding: "12px 16px" } },
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, sort === "heavy"
+                ? "Sorted by the most you have ever lifted on each one, as an estimated one-rep max. The figure on each row is still your latest."
+                : "The line is your best set in each of the last 4 weeks. Change compares the last 30 days with the 30 before, and the best underneath is all time. Pump and ring sessions are left out.")),
+        list.length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing matches."),
+        React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((r) => (React.createElement("div", { key: r.id, className: "il-li", style: { padding: "4px 14px" }, onClick: () => setSheet({ t: "exprog", id: r.id }) },
+            React.createElement("div", { className: "il-metric", style: { flex: 1, minWidth: 0, borderTop: 0 } },
+                React.createElement("span", { className: "nm" },
+                    React.createElement("b", null, r.name),
+                    React.createElement("span", { className: "il-hero sm", style: { fontSize: 22, display: "block",
+                            color: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" } }, r.latest ? W(r.latest.top, 0) : "\u2014"),
+                    (() => {
+                        /* v298: the best you have ever done on it, so the list answers
+                           "what do I lift" as well as "which way is it going" */
+                        const b = stats.bestBy[r.id];
+                        return b && b.kg ? React.createElement("span", { className: "il-sub il-n", style: { margin: 0, display: "block" } },
+                            "best ",
+                            W(b.kg),
+                            b.reps ? " \u00D7 " + b.reps : "") : null;
+                    })()),
+                r.spark.length ? React.createElement(BigSpark, { points: r.spark, colour: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" })
+                    : React.createElement("span", { className: "il-sub", style: { flex: 1, minWidth: 0, textAlign: "center", fontSize: 11.5 } }, "not in the last 4 weeks"),
+                React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
+                    React.createElement(Trend, { points: r.spark }),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))))));
+}
 function Progress({ st, a, today, setSheet }) {
     const stats = useMemo(() => liftStats(st, a), [st, a]);
     const [view, setView] = useState("lift");
@@ -25479,64 +25617,23 @@ function Progress({ st, a, today, setSheet }) {
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "askme" }) }, "Ask about your own training")),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "flex", gap: 7 } }, [["lift", "By exercise"], ["when", "What helps"]].map(([k, l]) => (React.createElement("button", { key: k, className: "il-chip" + (view === k ? " on" : ""), onClick: () => setView(k) }, l)))),
         view === "lift" && (React.createElement(React.Fragment, null,
-            React.createElement(BoxT, { t: "Exercise by exercise", s: "What you have lifted for each movement, the most you have ever handled, and which way it is going" }),
-            React.createElement("div", { style: { padding: "0 12px" } },
-                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Search exercise\u2026", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", spellCheck: "false", onFocus: (e) => setTimeout(() => e.target.scrollIntoView({ block: "center", behavior: "smooth" }), 260), value: q, onChange: (e) => setQ(e.target.value) })),
-            React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
-                React.createElement("button", { className: "il-chip" + (grp === "all" ? " on" : ""), onClick: () => setGrp("all") }, "All"),
-                Object.entries(GROUPS).filter(([k]) => k !== "cardio").map(([k, g]) => (React.createElement("button", { key: k, className: "il-chip" + (grp === k ? " on" : ""), onClick: () => setGrp(k) }, g.label))),
-                React.createElement("span", { style: { width: 8, flexShrink: 0 } }),
-                React.createElement("button", { className: "il-chip", onClick: () => setSort(sort === "change" ? "heavy" : sort === "heavy" ? "name" : "change") }, sort === "change" ? "Moving most" : sort === "heavy" ? "Heaviest" : "A–Z")),
-            stats.exercises > 0 && (React.createElement("div", { className: "il-card lead" },
-                React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Everything you've lifted"),
-                React.createElement("div", { className: "il-ring", style: { marginBottom: 10 } },
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, stats.sessions),
-                        React.createElement("div", { className: "l" }, "sessions")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, stats.sets),
-                        React.createElement("div", { className: "l" }, "working sets")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, stats.volume >= 1000 ? Math.round(stats.volume / 1000) + "t" : VOL(stats.volume)),
-                        React.createElement("div", { className: "l" }, "lifted")),
-                    React.createElement("div", { className: "il-mini" },
-                        React.createElement("div", { className: "v" }, stats.exercises),
-                        React.createElement("div", { className: "l" }, "exercises"))),
-                stats.heaviest && React.createElement("div", { className: "il-row", style: { paddingTop: 10, borderTop: "1px solid var(--line)" } },
-                    React.createElement("div", { style: { minWidth: 0 } },
-                        React.createElement("div", { className: "il-lbl", style: { fontSize: 10, marginBottom: 2 } }, "Heaviest you've handled"),
-                        React.createElement("div", { style: { fontSize: 14 } }, stats.heaviest.name),
-                        React.createElement("div", { className: "il-sub il-n", style: { margin: 0 } },
-                            W(stats.heaviest.kg),
-                            stats.heaviest.reps ? " \u00D7 " + stats.heaviest.reps : "",
-                            stats.heaviest.perSide ? " each side" : "",
-                            " \u00B7 ",
-                            dtiny(stats.heaviest.date))),
-                    React.createElement("button", { className: "il-chip", style: { flexShrink: 0 }, onClick: () => setSheet({ t: "exprog", id: stats.heaviest.id }) }, "See it")))),
-            React.createElement("div", { className: "il-card", style: { padding: "12px 16px" } },
-                React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } }, sort === "heavy"
-                    ? "Sorted by the most you have ever lifted on each one, as an estimated one-rep max. The figure on each row is still your latest."
-                    : "Change is your best set over the last 30 days against the 30 before. Pump and ring sessions are left out.")),
-            list.length === 0 && React.createElement("div", { className: "il-empty" }, "Nothing matches."),
-            React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((r) => (React.createElement("div", { key: r.id, className: "il-li", style: { padding: "4px 14px" }, onClick: () => setSheet({ t: "exprog", id: r.id }) },
-                React.createElement("div", { className: "il-metric", style: { flex: 1, minWidth: 0, borderTop: 0 } },
-                    React.createElement("span", { className: "nm" },
-                        React.createElement("b", null, r.name),
-                        React.createElement("span", { className: "il-hero sm", style: { fontSize: 22, display: "block",
-                                color: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" } }, r.latest ? W(r.latest.top, 0) : "\u2014"),
-                        (() => {
-                            /* v298: the best you have ever done on it, so the list answers
-                               "what do I lift" as well as "which way is it going" */
-                            const b = stats.bestBy[r.id];
-                            return b && b.kg ? React.createElement("span", { className: "il-sub il-n", style: { margin: 0, display: "block" } },
-                                "best ",
-                                W(b.kg),
-                                b.reps ? " \u00D7 " + b.reps : "") : null;
-                        })()),
-                    React.createElement(BigSpark, { points: r.spark, colour: r.change == null ? "var(--dim)" : r.change > 1 ? "var(--grn)" : r.change < -1 ? "var(--red)" : "var(--txt)" }),
-                    React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
-                        React.createElement(Trend, { points: r.spark }),
-                        React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))))))),
+            React.createElement(BoxT, { t: "What you are training", s: "By area this week \u2014 green is the productive range, red is not enough" }),
+            React.createElement(TileGrid, { items: MAREAS.map((ar) => {
+                    const v = areaVol(a, ar.key);
+                    return { label: ar.label, icon: ar.icon, colour: SCOL[v.status],
+                        sub: `${v.sets} sets \u00b7 ${SWORD[v.status].toLowerCase()}`,
+                        onClick: () => setSheet({ t: "byarea", area: ar.key }) };
+                }) }),
+            React.createElement(TileGrid, { items: [
+                    { label: "Every exercise", icon: "chart",
+                        sub: a.review.length ? `${a.review.length} tracked` : "once you have lifted",
+                        onClick: () => setSheet({ t: "lifts" }) },
+                    { label: "Heaviest first", icon: "kit",
+                        sub: stats.volume > 0
+                            ? `${(stats.volume / 1000).toFixed(1)} tonnes lifted`
+                            : "nothing logged yet",
+                        onClick: () => setSheet({ t: "lifts", sort: "heavy" }) },
+                ] }))),
         view === "when" && (React.createElement(React.Fragment, null,
             React.createElement(BoxT, { t: "What actually helps", s: "Time of day, sleep, how you felt and the carbs the day before \u2014 each judged against your own sessions, not a rule of thumb" }),
             React.createElement("div", { className: "il-card" },
@@ -25782,23 +25879,34 @@ function Fuel({ st, save, a, today, setSheet }) {
                 React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")));
             return (React.createElement(React.Fragment, null,
                 React.createElement(BoxT, { t: "Kitchen and planning", s: "The nutritionist, your recipes, the week's plan, the shopping list and what you have in" }),
-                React.createElement("div", { className: "il-menu" },
-                    React.createElement(Row, { to: { t: "nut" }, colour: "var(--grn)", title: "Nutritionist", sub: (st.nutChat || []).length ? "Chat \u2014 or jump in below" : "Ask her anything, or tell her what you ate" }),
-                    React.createElement(Row, { to: { t: "recipes" }, title: "Recipes", sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them, filterable` }),
-                    React.createElement(Row, { to: { t: "planner" }, title: "Plan the week", sub: (() => {
-                            const n = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
-                            return n ? `${n} meals planned` : "And the shopping writes itself";
-                        })() }),
-                    React.createElement(Row, { to: { t: "list" }, title: "Shopping list", sub: (() => {
-                            const sh = shopLines(st, weekStart(today));
-                            const n = sh.need.length + sh.ranOut.length + sh.added.length;
-                            return n ? `${n} thing${n === 1 ? "" : "s"} on it` : "Nothing on it yet";
-                        })() }),
-                    React.createElement(Row, { to: { t: "kitchen" }, title: "My kitchen", sub: (() => {
-                            const c = (st.cupboard || []).length;
-                            const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
-                            return c ? `${c} in it${soon ? `, ${soon} going off soon` : ""}` : "Tell me what you've got in";
-                        })() }))));
+                React.createElement(TileGrid, { colour: "var(--t-fuel)", items: [
+                        { label: "Nutritionist", icon: "coachhat",
+                            sub: (st.nutChat || []).length ? "carry on" : "ask her anything",
+                            onClick: () => setSheet({ t: "nut" }) },
+                        { label: "Recipes", icon: "book",
+                            sub: `${COOK.length + COOK2.length + COOK3.length + (st.myRecipes || []).length} of them`,
+                            onClick: () => setSheet({ t: "recipes" }) },
+                        { label: "Plan the week", icon: "list",
+                            sub: (() => {
+                                const n = Object.keys((st.mealPlan || {})[weekStart(today)] || {}).length;
+                                return n ? `${n} meals in` : "and it shops for you";
+                            })(),
+                            onClick: () => setSheet({ t: "planner" }) },
+                        { label: "Shopping list", icon: "basket",
+                            sub: (() => {
+                                const sh = shopLines(st, weekStart(today));
+                                const n = sh.need.length + sh.ranOut.length + sh.added.length;
+                                return n ? `${n} thing${n === 1 ? "" : "s"}` : "nothing on it";
+                            })(),
+                            onClick: () => setSheet({ t: "list" }) },
+                        { label: "My kitchen", icon: "bowl",
+                            sub: (() => {
+                                const c = (st.cupboard || []).length;
+                                const soon = (st.cupboard || []).filter((x) => { const d = daysLeft(x.exp); return d != null && d <= 3; }).length;
+                                return c ? (soon ? `${soon} going off` : `${c} in it`) : "what's in?";
+                            })(),
+                            onClick: () => setSheet({ t: "kitchen" }) },
+                    ] })));
         })(),
         sug.macro && (() => {
             const label = { p: "protein", c: "carbs", f: "fat" }[sug.macro];
@@ -27277,17 +27385,19 @@ function You({ st, save, a, today, setSheet, go }) {
                 T.perMeal,
                 "g of protein across four meals.")),
         React.createElement(BoxT, { t: "Your reports", s: "Every review, record and comparison the app has written about you, gathered by subject" }),
-        React.createElement("div", { className: "il-menu" },
-            React.createElement("button", { className: "il-mrow", onClick: () => setSheet({ t: "reports" }) },
-                React.createElement("span", { style: { minWidth: 0 } },
-                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, "All your reports"),
-                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, "Training, your body, food and supplements")),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
+        React.createElement(TileGrid, { colour: "var(--t-you)", items: [
+                { label: "All your reports", sub: "by subject", icon: "note",
+                    onClick: () => setSheet({ t: "reports" }) },
+            ] }),
         React.createElement(BoxT, { t: "Setup and housekeeping", s: "Bringing old workouts in, saving a copy, and how the app works" }),
-        React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "importwo" }) }, "Import past workouts from screenshots"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "saveit" }) }, "Save and lock it in"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "guide" }) }, "How this works"))));
+        React.createElement(TileGrid, { colour: "var(--t-you)", items: [
+                { label: "Import workouts", sub: "from screenshots", icon: "camera",
+                    onClick: () => setSheet({ t: "importwo" }) },
+                { label: "Save and lock it in", sub: "back it up", icon: "heart",
+                    onClick: () => setSheet({ t: "saveit" }) },
+                { label: "How this works", sub: "the guide", icon: "book",
+                    onClick: () => setSheet({ t: "guide" }) },
+            ] })));
 }
 /* Everything that is a setting, a tool or a one-off job. It was the bottom
    third of the You tab, below the things you open the app to do. */
@@ -27339,40 +27449,33 @@ function Settings({ st, save, today, setSheet, health }) {
                 " ",
                 "Changing an answer recalculates your targets, what the coach reads and what he suggests next.")),
         React.createElement(BoxT, { t: "How it works for you", s: "Units, the key the coach needs, and what you have ruled out of your food" }),
-        React.createElement("div", { className: "il-menu" }, [
-            ["Units", `${UNIT.bw === "st" ? "Stones" : UNIT.bw === "lb" ? "Pounds" : "Kilograms"}, ${UNIT.ht === "ftin" ? "feet" : "centimetres"}, lifting in ${LU()}`, { t: "units" }, null],
-            ["AI features", st.apiKey ? "Key added — everything works" : "The coach and scanning need a key", { t: "aikey" }, st.apiKey ? null : "Set up"],
-        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
-            React.createElement("span", { style: { minWidth: 0 } },
-                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
-                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
-            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
-                tag && React.createElement("span", { className: "il-tag t2" }, tag),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
-        React.createElement(BoxT, { t: "Bringing data in", s: "Anything you already have somewhere else — a CSV, screenshots of an old app, or the health apps on your phone" }),
-        React.createElement("div", { className: "il-menu" }, [
-            ["Import from another app", "Withings, Hevy, MacroFactor — any CSV", { t: "importcsv" }, null],
-            ["Import past workouts", "From screenshots of your old app", { t: "importwo" }, null],
-            ["Health apps", "Apple Health and Health Connect", { t: "health" }, null],
-        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
-            React.createElement("span", { style: { minWidth: 0 } },
-                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
-                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
-            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
-                tag && React.createElement("span", { className: "il-tag t2" }, tag),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        React.createElement(TileGrid, { colour: "var(--acc)", items: [
+                { label: "Units", icon: "gear",
+                    sub: `${UNIT.bw === "st" ? "stones" : UNIT.bw === "lb" ? "pounds" : "kg"}, lifting in ${LU()}`,
+                    onClick: () => setSheet({ t: "units" }) },
+                { label: "AI features", icon: "coachhat",
+                    sub: st.apiKey ? "key added" : "needs a key",
+                    onClick: () => setSheet({ t: "aikey" }) },
+            ] }),
+        React.createElement(BoxT, { t: "Bringing data in", s: "Anything you already have somewhere else \u2014 a CSV, screenshots of an old app, or the health apps on your phone" }),
+        React.createElement(TileGrid, { colour: "var(--acc)", items: [
+                { label: "From another app", icon: "list", sub: "any CSV",
+                    onClick: () => setSheet({ t: "importcsv" }) },
+                { label: "Past workouts", icon: "camera", sub: "from screenshots",
+                    onClick: () => setSheet({ t: "importwo" }) },
+                { label: "Health apps", icon: "heart", sub: "Apple and Google",
+                    onClick: () => setSheet({ t: "health" }) },
+            ] }),
         React.createElement(BoxT, { t: "Looking back", s: "Every review I have written you, how well you have stuck to the plan, and the list of things to fix next" }),
-        React.createElement("div", { className: "il-menu" }, [
-            ["Past reviews", `${(st.reviews || []).length} kept`, { t: "pastrev" }, null],
-            ["Sticking to it", (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned} sessions this month`; })(), { t: "adhere" }, null],
-            ["Notes for the next update", `${(st.bugs || []).length} on the list`, { t: "diag" }, null],
-        ].map(([label, sub, dest, tag], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
-            React.createElement("span", { style: { minWidth: 0 } },
-                React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
-                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
-            React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } },
-                tag && React.createElement("span", { className: "il-tag t2" }, tag),
-                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A")))))),
+        React.createElement(TileGrid, { colour: "var(--acc)", items: [
+                { label: "Past reviews", icon: "book", sub: `${(st.reviews || []).length} kept`,
+                    onClick: () => setSheet({ t: "pastrev" }) },
+                { label: "Sticking to it", icon: "chart",
+                    sub: (() => { const ad = adherence(st); return `${ad.sessions} of ${ad.planned}`; })(),
+                    onClick: () => setSheet({ t: "adhere" }) },
+                { label: "Notes for next time", icon: "note", sub: `${(st.bugs || []).length} on the list`,
+                    onClick: () => setSheet({ t: "diag" }) },
+            ] }),
         React.createElement(BoxT, { t: "This app", s: "Which version you are on, and what it is and is not" }),
         React.createElement("div", { className: "il-card", style: { textAlign: "center" } },
             React.createElement("div", { className: "il-d", style: { fontSize: 17, fontWeight: 600, marginBottom: 3 } },
@@ -27779,6 +27882,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "takeaway" && React.createElement(Takeaway, { st, save, today, close }),
             sheet.t === "meals" && React.createElement(MealFinder, { st, save, a, today, close }),
             sheet.t === "pick" && React.createElement(Pick, { st, close, setSheet }),
+            sheet.t === "lifts" && React.createElement(Lifts, { sheet, st, a, today, close, setSheet }),
+            sheet.t === "byarea" && React.createElement(ByArea, { sheet, st, a, close, setSheet }),
             sheet.t === "muscle" && React.createElement(MuscleSheet, { sheet, st, a, close, setSheet }),
             sheet.t === "anatmus" && React.createElement(AnatMuscle, { sheet, st, a, close, setSheet }),
             sheet.t === "exprog" && React.createElement(ExProgress, { sheet, a, close, setSheet }),
@@ -27966,7 +28071,7 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
 /* v357: the food screen ends in "Log the bowl". A Done bar under it meant
    two bottom buttons that did different things, one of which threw the work
    away — the header X is the way out. */
-const NO_DONE = ["food", "tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
+const NO_DONE = ["lifts", "byarea", "food", "tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
     "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos",
     "anatmus", "info", "kit", "equip", "recipe", "recipes", "tastes",
     "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
@@ -28900,6 +29005,63 @@ function HealthSheet({ st, close }) {
                     "Android: ",
                     React.createElement("span", { style: { color: "var(--dim)" } }, a4))))),
             React.createElement("div", { className: "il-note", style: { fontSize: 12, marginTop: 10 } }, "Writing active calories is what would let a ring-closer session actually move the ring, rather than just telling you it should.")));
+}
+/* His ask: the graphs grouped — chest together, arms together — behind a
+   tile for upper and one for lower, coloured by how much each is getting.
+   Two levels: the areas, then the groups inside one, then each muscle's own
+   page, which already existed. */
+function ByArea({ sheet, st, a, close, setSheet }) {
+    const areaKey = sheet && sheet.area;
+    const area = MAREAS.find((x) => x.key === areaKey);
+    if (!area) {
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "What you are training", sub: "By area, and how much each is getting this week", close: close }),
+            React.createElement("div", { className: "il-card", style: { background: "color-mix(in srgb,var(--tint) 14%,var(--card))" } },
+                React.createElement("div", { className: "il-note", style: { color: "#B9CBEC" } }, "Ten to twenty working sets a week is the productive range for a muscle. Green is in it, amber is near it, red is not enough. An area takes the colour of its WORST group, because an average hides the one being missed.")),
+            MAREAS.map((ar) => {
+                const v = areaVol(a, ar.key);
+                return (React.createElement("div", { key: ar.key },
+                    React.createElement(BoxT, { t: ar.label, s: `${v.sets} working sets this week \u00b7 ${SWORD[v.status]}` }),
+                    React.createElement(TileGrid, { items: v.groups.map((g) => ({
+                            label: g.label, icon: g.icon, colour: SCOL[g.status],
+                            sub: `${g.best} sets \u00b7 ${SWORD[g.status].toLowerCase()}`,
+                            onClick: () => setSheet({ t: "byarea", area: ar.key, group: g.key }),
+                        })) })));
+            }));
+    }
+    const gKey = sheet.group;
+    const av = areaVol(a, areaKey);
+    const g = av.groups.find((x) => x.key === gKey);
+    if (!g) {
+        /* the middle level: which groups make up this area, and how each is
+           doing. One group (core, legs) still gets its own tile rather than
+           skipping a step, so the way back is always the same. */
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: area.label, sub: `${av.sets} working sets this week \u00b7 ${SWORD[av.status]}`, close: close }),
+            React.createElement("button", { className: "il-chip", style: { margin: "0 12px 10px" }, onClick: () => setSheet({ t: "byarea", area: null }) }, "\u2039 All areas"),
+            React.createElement(TileGrid, { items: av.groups.map((x) => ({
+                    label: x.label, icon: x.icon, colour: SCOL[x.status],
+                    sub: `${x.best} sets \u00b7 ${SWORD[x.status].toLowerCase()}`,
+                    onClick: () => setSheet({ t: "byarea", area: areaKey, group: x.key }),
+                })) }));
+    }
+    return React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: g.label, sub: `${g.best} sets this week \u00b7 ${SWORD[g.status]}`, close: close }),
+        React.createElement("button", { className: "il-chip", style: { margin: "0 12px 10px" }, onClick: () => setSheet({ t: "byarea", area: areaKey }) },
+            "\u2039 ",
+            area.label),
+        React.createElement("div", { className: "il-list", style: { margin: "0 12px 12px" } }, g.rows.map((r) => {
+            const st2 = status(r.sets);
+            return (React.createElement("div", { key: r.m, className: "il-li", onClick: () => setSheet({ t: "muscle", m: r.m }) },
+                React.createElement("div", { style: { minWidth: 0 } },
+                    React.createElement("div", { style: { fontSize: 14.5 } }, r.label),
+                    React.createElement("div", { className: "il-sub", style: { margin: "2px 0 0" } },
+                        r.sets,
+                        " sets this week \u00b7 ",
+                        SWORD[st2])),
+                React.createElement("span", { style: { width: 10, height: 10, borderRadius: 5, background: SCOL[st2], flexShrink: 0 } })));
+        })),
+        React.createElement("div", { className: "il-note", style: { fontSize: 12, padding: "0 14px" } }, "Tap one for what trains it, ranked, and its own history."));
 }
 function MuscleSheet({ sheet, st, a, close, setSheet }) {
     const m = sheet.m, sets = a.weeklyMap[m] ?? 0, s = sets > 0 ? status(sets) : "red";
