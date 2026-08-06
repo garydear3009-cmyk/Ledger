@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v354 · 7 Aug</div>
+  <div class="v">v355 · 7 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5844,7 +5844,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v354 · 7 Aug";
+const APP_VERSION = "v355 · 7 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -7384,6 +7384,18 @@ function Train({ st, save, a, today, setSheet }) {
    it, so one logged without falls to the top of the meal with a blank where
    the time should be. */
 const nowHM = () => { const d = new Date(); return hhmm(d.getHours(), d.getMinutes()); };
+/* v355: THE REASON FOOD WOULD NOT LOG. This lived inside AddFood, but
+   FoodSheet's logBowl called it too — a different component, so every press
+   of "Log the bowl" threw "mealFor is not defined" and saved nothing at all.
+   No error reached the screen; the bowl simply emptied. One copy, at module
+   level, reachable from both. */
+function mealFor(t) {
+    const h = parseInt(String(t).slice(0, 2), 10);
+    /* the small hours belong to the night before, not to breakfast */
+    if (h < 4)
+        return "Snacks";
+    return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
+}
 const mealNow = () => {
     const h = new Date().getHours();
     return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
@@ -7400,7 +7412,9 @@ const dishMacros = (d, pool, portions = 1) => {
     return { kcal: (per.kcal / n) * portions, p: (per.p / n) * portions, c: (per.c / n) * portions, f: (per.f / n) * portions,
         whole: per, grams: Math.round((d.items.reduce((a, it) => a + it.g, 0) / n) * portions) };
 };
-function DishBuilder({ st, save, close, editId, seed }) {
+/* v355: it opened a recipe card from its search results but was never
+   handed setSheet, so that tap threw — the same shape as the logging bug */
+function DishBuilder({ st, save, close, editId, seed, setSheet }) {
     const pool = [...FOODS, ...(st.myFoods || [])];
     const existing = editId ? (st.dishes || []).find((d) => d.id === editId) : null;
     const [d, setD] = useState(existing || { id: "d" + Date.now(), name: seed?.name || "", servings: seed?.servings || 1, items: seed?.items || [] });
@@ -27709,7 +27723,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "kit" && React.createElement(KitSheet, { st, save, close }),
             sheet.t === "units" && React.createElement(UnitsSheet, { st, save, close }),
             sheet.t === "intake" && React.createElement(Intake, { st, save, close }),
-            sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, editId: sheet.id, seed: sheet.seed }),
+            sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, setSheet, editId: sheet.id, seed: sheet.seed }),
             sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }),
             sheet.t === "protein" && React.createElement(ProteinFinder, { st, save, today, close, setSheet }),
             sheet.t === "reports" && React.createElement(Reports, { close, setSheet }),
@@ -29580,13 +29594,6 @@ function AddFood({ st, save, a, today, close, setSheet, sheet }) {
     const [busy, setBusy] = useState(false);
     const [err, setErr] = useState("");
     const [found, setFound] = useState(null);
-    const mealFor = (t) => {
-        const h = parseInt(String(t).slice(0, 2), 10);
-        /* the small hours belong to the night before, not to breakfast */
-        if (h < 4)
-            return "Snacks";
-        return h < 11 ? "Breakfast" : h < 15 ? "Lunch" : h < 21 ? "Dinner" : "Snacks";
-    };
     /* null means "follow the clock". Pick one and it stays picked, even if you
        then change the time — you have said what this was. */
     const [meal, setMeal] = useState(null);
