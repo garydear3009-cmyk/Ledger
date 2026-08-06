@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v342 · 5 Aug</div>
+  <div class="v">v344 · 6 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -206,7 +206,7 @@ const CSS = `
 .il-stick{position:sticky;top:calc(57px + env(safe-area-inset-top));z-index:18;background:var(--bg);padding:10px 12px 8px;border-bottom:1px solid var(--line);}
 /* Five across, then the last two centred underneath. A grid left them stuck
    to the left edge with three empty cells for company. */
-.il-tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:460px;display:flex;
+.il-tabs{position:fixed;bottom:0;left:0;right:0;margin:0 auto;width:100%;max-width:460px;display:flex;
  flex-wrap:wrap;justify-content:center;background:rgba(11,11,13,.96);backdrop-filter:blur(14px);
  border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom);}
 .il-tab{flex:0 0 25%;background:none;border:0;color:var(--faint);padding:9px 2px 10px;cursor:pointer;font-family:'Outfit';
@@ -253,7 +253,8 @@ const CSS = `
 .il-tag.t1{background:#10281A;color:#6FDC9B;} .il-tag.t2{background:#241F12;color:#E5C87E;} .il-tag.t3{background:#2A1414;color:#FF9A90;}
 .il-scroll{display:flex;gap:7px;overflow-x:auto;padding:2px 12px 8px;scrollbar-width:none;}
 .il-scroll::-webkit-scrollbar{display:none;}
-.il-sheet{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:40;display:flex;align-items:flex-end;
+.sheet-open .il-b3d{visibility:hidden;}
+.il-sheet{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:40;transform:translateZ(0);display:flex;align-items:flex-end;
  justify-content:center;padding-top:env(safe-area-inset-top);box-sizing:border-box;}
 .il-si{background:var(--bg);width:100%;max-width:460px;max-height:100%;overflow-y:auto;overflow-x:hidden;border-radius:18px 18px 0 0;
  padding-bottom:calc(26px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch;}
@@ -1630,7 +1631,7 @@ function Form3D({ ex, h = 260, controls = true }) {
             React.createElement("span", { className: "il-note" }, "Loading\u2026"));
     const face = (v, r) => { setView(v); api.current.snap = r; };
     return (React.createElement("div", null,
-        React.createElement("div", { ref: host, style: { width: "100%", height: h, cursor: "grab" } }),
+        React.createElement("div", { ref: host, className: "il-b3d", style: { width: "100%", height: h, cursor: "grab" } }),
         controls && React.createElement(React.Fragment, null,
             React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", padding: "8px 0 0" } },
                 [["Front", 0], ["Side", -Math.PI / 2], ["Back", Math.PI], ["Other", Math.PI / 2]].map(([l, r]) => (React.createElement("button", { key: l, className: "il-chip" + (view === l ? " on" : ""), onClick: () => face(l, r) }, l))),
@@ -5818,7 +5819,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v342 · 5 Aug";
+const APP_VERSION = "v344 · 6 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6133,7 +6134,7 @@ function HomeLedgerInner() {
     const hb = HEADBTN[view];
     return (React.createElement("div", { className: "il" },
         React.createElement("style", null, CSS),
-        React.createElement("div", { className: "il-shell", "data-tab": view },
+        React.createElement("div", { className: "il-shell" + (sheet && sheet.t ? " sheet-open" : ""), "data-tab": view },
             React.createElement("header", { className: "il-top" },
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("h1", { className: "il-d", style: { display: "flex", alignItems: "center", gap: 8 } },
@@ -6209,7 +6210,7 @@ function HomeLedgerInner() {
             tab === "fuel" && React.createElement(Fuel, { st, save, a, today, setSheet }),
             tab === "you" && React.createElement(You, { st, save, a, today, setSheet, go }),
             tab === "supps" && React.createElement(Supplements, { st, save, a, today, setSheet }),
-            React.createElement("nav", { className: "il-tabs" }, ["you", "train", "progress", "fuel", "supps", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : ""), onClick: () => {
+            !(sheet && sheet.t) && React.createElement("nav", { className: "il-tabs" }, ["you", "train", "progress", "fuel", "supps", "settings"].map((k) => (React.createElement("button", { key: k, "data-k": k, className: "il-tab" + (tab === k ? " on" : ""), onClick: () => {
                     if (k === "train" && tab !== "train")
                         setSub("train");
                     setTab(k);
@@ -26477,7 +26478,10 @@ function TdeeSheet({ st, a, today, close, setSheet }) {
    A grade is therefore an argument, not a fact, and every one shows its
    reasoning. `reviewed` says whether the exercise was scored individually or
    inherited its movement pattern's defaults. */
-const TIER_CUTS = [[92, "A+"], [84, "A"], [76, "B+"], [68, "B"], [58, "C+"], [46, "C"], [34, "D"], [0, "F"]];
+/* v343: the old A+ needed 46 of 50, which nothing honest could reach — a
+   top grade nothing can earn is decoration. 88 still demands top marks on
+   stretch and strength everywhere else. */
+const TIER_CUTS = [[88, "A+"], [80, "A"], [72, "B+"], [64, "B"], [54, "C+"], [42, "C"], [30, "D"], [0, "F"]];
 /* per movement pattern: [stretch, curve, focus, loadable] out of 5 each.
    stretch = how loaded the muscle is at long length; curve = how well the
    resistance matches where you are strong; focus = how much of the effort
@@ -26499,7 +26503,7 @@ const MOVE_TIER = {
 };
 /* individually reviewed, where the pattern default would be wrong */
 const EX_TIER = {
-    "Dumbbell fly": [5, 3, 5, 3], "Incline dumbbell fly": [5, 3, 5, 3], "Floor fly": [3, 3, 5, 3],
+    "Dumbbell fly": [5, 4, 5, 3], "Incline dumbbell fly": [5, 4, 5, 3], "Floor fly": [3, 3, 5, 3],
     "Chest dip": [5, 3, 4, 3], "Parallel bar dip": [5, 3, 4, 3], "Bench dip": [3, 2, 4, 2],
     "Dumbbell pullover": [5, 4, 4, 4], "Straight-arm pullover": [5, 4, 4, 4],
     "Pulley straight-arm pulldown": [5, 5, 5, 4], "Pulley lat pulldown": [4, 4, 4, 4],
@@ -26546,7 +26550,13 @@ function exTier(e) {
     }
     const f = EX_TIER[e.name] || MOVE_TIER[e.move] || [3, 3, 3, 3];
     const reviewed = !!EX_TIER[e.name];
-    const [stretch, curve, focus, loadable] = f;
+    let [stretch, curve, focus, loadable] = f;
+    /* v343: a pulley keeps even tension through the whole stroke, where a
+       band ramps at the end and a dumbbell falls away at both. That is a
+       real resistance-curve advantage and the grade should carry it. */
+    const cable = e.kit.includes("pulley");
+    if (cable)
+        curve = Math.min(5, curve + 1);
     /* stretch carries the most weight because it carries the most evidence */
     let score = Math.round(((stretch * 4 + curve * 2 + focus * 2 + loadable * 2) / 50) * 100);
     const why = [];
@@ -26554,7 +26564,9 @@ function exTier(e) {
         why.push("loads the muscle at full stretch — the position with the best evidence behind it");
     else if (stretch <= 2)
         why.push("hardest at the short end, where the evidence for growth is weakest");
-    if (curve >= 4)
+    if (cable)
+        why.push("the stack keeps even tension through the whole stroke");
+    else if (curve >= 4)
         why.push("the resistance matches where you are strong");
     if (focus >= 5)
         why.push("almost all the effort reaches the target muscle");
@@ -26579,9 +26591,14 @@ const TIER_COLOUR = { "A+": ["#10281A", "#6FDC9B"], A: ["#10281A", "#6FDC9B"],
     "B+": ["#132241", "#7FA8F0"], B: ["#132241", "#7FA8F0"], "C+": ["#241F12", "#E5C87E"],
     C: ["#241F12", "#E5C87E"], D: ["#2A1A1A", "#F09A9A"], F: ["#2A1A1A", "#F09A9A"] };
 const TIER_ORDER = ["A+", "A", "B+", "B", "C+", "C", "D", "F"];
+/* purposes do not compete: growth work first, then bracing, then mobility,
+   then conditioning — each ranked within itself. A conditioning A+ is not a
+   better chest exercise than a fly A+; it is a different job. */
+const PURPOSE_ORDER = { muscle: 0, stability: 1, mobility: 2, condition: 3 };
 const byTier = (list) => [...list].sort((a, b) => {
     const ta = exTier(a), tb = exTier(b);
-    return (tb.score - ta.score) || String(a.name).localeCompare(String(b.name));
+    return ((PURPOSE_ORDER[ta.purpose] ?? 9) - (PURPOSE_ORDER[tb.purpose] ?? 9)) ||
+        (tb.score - ta.score) || String(a.name).localeCompare(String(b.name));
 });
 function BoxT({ t, s }) {
     return (React.createElement("div", { style: { margin: "22px 14px 10px" } },
@@ -28404,6 +28421,7 @@ function Pick({ st, close, setSheet }) {
     const list = EX.filter((e) => e.kit.every((k) => st.kit.includes(k)))
         .filter((e) => g === "all" || e.group === g)
         .filter((e) => !q || e.name.toLowerCase().includes(q.toLowerCase()) || [...e.primary, ...e.secondary].map((m) => M[m]).join(" ").toLowerCase().includes(q.toLowerCase()));
+    const ranked = byTier(list);
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add exercise", sub: `${list.length} you can do with your kit`, close: close }),
         React.createElement("div", { className: "il-stick" },
@@ -28411,8 +28429,13 @@ function Pick({ st, close, setSheet }) {
         React.createElement("div", { className: "il-scroll", style: { paddingTop: 10 } },
             React.createElement("button", { className: "il-chip" + (g === "all" ? " on" : ""), onClick: () => setG("all") }, "All"),
             Object.entries(GROUPS).map(([k, gg]) => React.createElement("button", { key: k, className: "il-chip" + (g === k ? " on" : ""), onClick: () => setG(k) }, gg.label))),
-        React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, list.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
+        React.createElement("div", { className: "il-list", style: { marginBottom: 14 } }, ranked.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
             React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", minWidth: 0 } },
+                (() => {
+                    const t = exTier(e), [bg, fg] = TIER_COLOUR[t.grade] || ["#1E2024", "#8E949E"];
+                    return (React.createElement("span", { style: { background: bg, color: fg, fontSize: 11.5, fontWeight: 700,
+                            padding: "3px 7px", borderRadius: 6, minWidth: 26, textAlign: "center", flexShrink: 0 } }, t.grade));
+                })(),
                 React.createElement("div", { style: { width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
                     React.createElement(FormDemo, { ex: e, h: 44 })),
                 React.createElement("div", { style: { minWidth: 0 } },
