@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v339 · 5 Aug</div>
+  <div class="v">v341 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -5818,7 +5818,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v339 · 5 Aug";
+const APP_VERSION = "v341 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -26449,6 +26449,134 @@ function TdeeSheet({ st, a, today, close, setSheet }) {
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "nightly" }) }, "Log a weigh-in"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "targets" }) }, "See the targets built on it"))));
 }
+/* ============ THE TIER SYSTEM ============
+   What the research actually supports, and what it does not.
+
+   SUPPORTED, and weighted heaviest here: training a muscle in its LENGTHENED
+   position grows it more. Seated leg curls beat prone (14% vs 9%), calf
+   raises from a deep stretch beat full range (15.2% vs 6.7%), deep-position
+   partials beat full range for quads. Where the resistance is heaviest across
+   the range matters for the same reason.
+
+   ALSO SUPPORTED: exercise choice changes WHERE a muscle grows — incline
+   presses grow the upper chest, flat the lower; leg extensions the rectus
+   femoris, squats the vastus lateralis. So a muscle needs more than one good
+   exercise, not one winner.
+
+   NOT SUPPORTED, and deliberately almost unused: EMG "activation" rankings.
+   Amplitude is a poor indicator of actual muscle force between exercises and
+   is specifically unvalidated for comparing growth. It is a tiebreaker at
+   most, and any grade leaning on it says so.
+
+   A grade is therefore an argument, not a fact, and every one shows its
+   reasoning. `reviewed` says whether the exercise was scored individually or
+   inherited its movement pattern's defaults. */
+const TIER_CUTS = [[92, "A+"], [84, "A"], [76, "B+"], [68, "B"], [58, "C+"], [46, "C"], [34, "D"], [0, "F"]];
+/* per movement pattern: [stretch, curve, focus, loadable] out of 5 each.
+   stretch = how loaded the muscle is at long length; curve = how well the
+   resistance matches where you are strong; focus = how much of the effort
+   reaches the target rather than stabilisers; loadable = how easily you can
+   add weight week to week. */
+const MOVE_TIER = {
+    bench: [4, 3, 4, 5], incline: [4, 3, 4, 5], fly: [5, 3, 4, 3], pushup: [3, 2, 3, 2],
+    dip: [5, 3, 4, 3], ohp: [3, 3, 4, 4], lateral: [2, 2, 5, 3], front: [2, 2, 4, 3],
+    reardelt: [2, 2, 4, 3], row: [4, 3, 4, 4], pullover: [5, 4, 4, 4], pulldown: [4, 4, 4, 4],
+    pullup: [5, 3, 4, 3], shrug: [3, 2, 5, 5], curl: [3, 3, 5, 4], hammer: [3, 3, 5, 4],
+    skull: [4, 3, 5, 4], ohtri: [5, 3, 5, 4], kickback: [1, 2, 4, 2], wrist: [3, 2, 5, 3],
+    squat: [4, 3, 3, 5], lunge: [4, 3, 3, 4], stepup: [3, 3, 3, 4], hinge: [5, 3, 3, 5],
+    goodmorn: [5, 3, 3, 4], thrust: [1, 4, 4, 5], legext: [2, 3, 5, 4], legcurl: [3, 3, 5, 4],
+    calf: [5, 3, 5, 4], abduction: [2, 3, 4, 3], upright: [2, 2, 4, 3], facepull: [2, 3, 4, 3],
+    plank: [1, 1, 3, 1], hold: [1, 1, 3, 1], crunch: [2, 2, 4, 2], legraise: [3, 2, 4, 2],
+    rollout: [5, 3, 4, 2], sidebend: [3, 2, 4, 3], twist: [2, 2, 3, 3], rotation: [2, 2, 3, 3],
+    farmer: [1, 3, 3, 5], getup: [2, 2, 2, 3], press: [3, 3, 4, 4], extension: [4, 3, 4, 4],
+    raise: [2, 2, 4, 3], march: [1, 2, 3, 2],
+};
+/* individually reviewed, where the pattern default would be wrong */
+const EX_TIER = {
+    "Dumbbell fly": [5, 3, 5, 3], "Incline dumbbell fly": [5, 3, 5, 3], "Floor fly": [3, 3, 5, 3],
+    "Chest dip": [5, 3, 4, 3], "Parallel bar dip": [5, 3, 4, 3], "Bench dip": [3, 2, 4, 2],
+    "Dumbbell pullover": [5, 4, 4, 4], "Straight-arm pullover": [5, 4, 4, 4],
+    "Pulley straight-arm pulldown": [5, 5, 5, 4], "Pulley lat pulldown": [4, 4, 4, 4],
+    "Overhead triceps extension": [5, 3, 5, 4], "Band overhead triceps extension": [5, 3, 5, 3],
+    "Triceps kickback": [1, 2, 4, 2], "Pulley triceps pushdown": [2, 4, 5, 4],
+    "Incline curl": [5, 3, 5, 4], "Concentration curl": [2, 3, 5, 3], "Dumbbell curl": [3, 3, 5, 4],
+    "Dumbbell Romanian deadlift": [5, 3, 4, 5], "Single-leg Romanian deadlift": [5, 3, 3, 3],
+    "Bulgarian split squat": [5, 3, 3, 4],
+    "Calf raise": [5, 3, 5, 4], "Seated calf raise": [4, 3, 5, 4], "Single-leg calf raise": [5, 3, 5, 3],
+    "Ab wheel rollout": [5, 3, 4, 2],
+    "Dumbbell hip thrust": [1, 4, 5, 5], "Single-leg hip thrust": [1, 4, 5, 3],
+    "Seated lateral raise": [2, 2, 5, 3], "Standing lateral raise": [2, 2, 5, 3],
+    "Leaning lateral raise": [3, 3, 5, 3], "Pulley lateral raise": [3, 4, 5, 4],
+    "Band face pull": [2, 3, 4, 3], "Pulley face pull": [2, 3, 4, 4],
+};
+/* conditioning and agility are a different job, so they are graded on their
+   own terms: how hard they drive the engine, whether they demand quick feet
+   and coordination, and whether you can keep them going long enough to count */
+const AGILITY = ["skater", "fastfeet", "climber", "bearcrawl", "burpee", "starjump", "highknee", "boxing", "squatjump"];
+function exTier(e) {
+    if (!e)
+        return null;
+    const cond = !!e.cardio || e.group === "aerobic" || e.group === "cardio";
+    if (cond) {
+        const agile = AGILITY.includes(e.move);
+        const engine = Math.min(5, Math.max(1, Math.round((e.met || 5) / 2)));
+        const keepable = e.aerobic || e.dist ? 5 : e.timed ? 4 : 3;
+        const score = Math.round(((engine * 3 + (agile ? 5 : 2) * 3 + keepable * 2) / 40) * 100);
+        const why = [engine >= 4 ? "hard on the engine" : "steady rather than hard",
+            agile ? "quick feet and change of direction" : "straight-ahead effort",
+            keepable === 5 ? "you can hold it for a real stretch of time" : "short bursts"];
+        return { grade: gradeFor(score), score, purpose: "condition",
+            purposeLabel: agile ? "Agility and conditioning" : "Conditioning",
+            why, reviewed: false, cap: null };
+    }
+    if (!e.loaded && e.timed && (e.move === "plank" || e.move === "hold" || e.move === "march")) {
+        /* holds are graded for what they are for — bracing under load — not
+           for growth, which they were never going to win */
+        const score = e.isCompound ? 78 : 68;
+        return { grade: gradeFor(score), score, purpose: "stability",
+            purposeLabel: "Bracing and stability", reviewed: false, cap: null,
+            why: ["holds position under tension rather than moving through a range",
+                "judged on bracing, not growth \u2014 a different job"] };
+    }
+    const f = EX_TIER[e.name] || MOVE_TIER[e.move] || [3, 3, 3, 3];
+    const reviewed = !!EX_TIER[e.name];
+    const [stretch, curve, focus, loadable] = f;
+    /* stretch carries the most weight because it carries the most evidence */
+    let score = Math.round(((stretch * 4 + curve * 2 + focus * 2 + loadable * 2) / 50) * 100);
+    const why = [];
+    if (stretch >= 5)
+        why.push("loads the muscle at full stretch — the position with the best evidence behind it");
+    else if (stretch <= 2)
+        why.push("hardest at the short end, where the evidence for growth is weakest");
+    if (curve >= 4)
+        why.push("the resistance matches where you are strong");
+    if (focus >= 5)
+        why.push("almost all the effort reaches the target muscle");
+    else if (focus <= 2)
+        why.push("a lot of the effort goes into holding yourself steady");
+    if (loadable >= 5)
+        why.push("easy to add weight to, week after week");
+    else if (loadable <= 2)
+        why.push("hard to load progressively once you are strong");
+    /* a middling exercise scores no extremes, and a grade with no reason
+       attached is exactly what this system is supposed to avoid */
+    if (!why.length)
+        why.push("sound in every respect without standing out in any of them");
+    return { grade: gradeFor(score), score, purpose: "muscle", purposeLabel: "Building muscle",
+        why, reviewed, cap: null };
+}
+function gradeFor(score) {
+    const hit = TIER_CUTS.find(([n]) => score >= n);
+    return hit ? hit[1] : "F";
+}
+const TIER_COLOUR = { "A+": ["#10281A", "#6FDC9B"], A: ["#10281A", "#6FDC9B"],
+    "B+": ["#132241", "#7FA8F0"], B: ["#132241", "#7FA8F0"], "C+": ["#241F12", "#E5C87E"],
+    C: ["#241F12", "#E5C87E"], D: ["#2A1A1A", "#F09A9A"], F: ["#2A1A1A", "#F09A9A"] };
+const TIER_ORDER = ["A+", "A", "B+", "B", "C+", "C", "D", "F"];
+const byTier = (list) => [...list].sort((a, b) => {
+    const ta = exTier(a), tb = exTier(b);
+    return (tb.score - ta.score) || String(a.name).localeCompare(String(b.name));
+});
 function BoxT({ t, s }) {
     return (React.createElement("div", { style: { margin: "22px 14px 10px" } },
         React.createElement("div", { className: "il-h2" }, t),
@@ -28214,7 +28342,7 @@ function HealthSheet({ st, close }) {
 function MuscleSheet({ sheet, st, a, close, setSheet }) {
     const m = sheet.m, sets = a.weeklyMap[m] ?? 0, s = sets > 0 ? status(sets) : "red";
     const own = (e) => e.kit.every((k) => st.kit.includes(k));
-    const main = EX.filter((e) => e.primary.includes(m) && own(e) && !e.cardio);
+    const main = byTier(EX.filter((e) => e.primary.includes(m) && own(e) && !e.cardio));
     const also = EX.filter((e) => (e.secondary.includes(m) || (e.cardio && e.primary.includes(m))) && own(e));
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: M[m], sub: `${sets} sets a week · ${a.freq[m] || 0} days a week`, close: close }),
@@ -28228,7 +28356,7 @@ function MuscleSheet({ sheet, st, a, close, setSheet }) {
                 : sets === 0 ? "Nothing in four weeks. Even two sets a week stops this going backwards."
                     : sets < 10 ? `${Math.round((10 - sets) * 10) / 10} more sets a week gets you into the growth range.`
                         : "Above the useful range. Trim a couple of sets.")),
-        React.createElement("div", { className: "il-lbl", style: { margin: "16px 14px 9px" } }, "Main exercises for this"),
+        React.createElement(BoxT, { t: "Main exercises for this", s: "Best first. The grade is my read of the evidence \u2014 how much load sits at full stretch counts most \u2014 and tapping one shows why it got it." }),
         React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, main.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
             React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center", minWidth: 0 } },
                 React.createElement("div", { style: { width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0 } },
@@ -28242,8 +28370,20 @@ function MuscleSheet({ sheet, st, a, close, setSheet }) {
                         " ",
                         e.timed ? "sec" : "reps",
                         " \u00B7 ",
-                        e.isCompound ? "compound" : "isolation"))),
-            React.createElement("span", { className: "il-chip" }, "Log"))))),
+                        e.isCompound ? "compound" : "isolation"),
+                    (() => {
+                        const t = exTier(e);
+                        return (React.createElement("div", { className: "il-sub", style: { marginTop: 3, color: "var(--faint)" } },
+                            t.purpose === "muscle" ? t.why[0] : t.purposeLabel + " \u2014 " + t.why[0],
+                            t.reviewed ? "" : " (graded from its movement pattern)"));
+                    })())),
+            (() => {
+                const t = exTier(e), [bg, fg] = TIER_COLOUR[t.grade] || ["#1E2024", "#8E949E"];
+                return (React.createElement("span", { style: { flexShrink: 0, display: "flex", alignItems: "center", gap: 8 } },
+                    React.createElement("span", { style: { background: bg, color: fg, fontSize: 12, fontWeight: 700, letterSpacing: ".02em",
+                            padding: "4px 9px", borderRadius: 7, minWidth: 30, textAlign: "center" } }, t.grade),
+                    React.createElement("span", { className: "il-chip" }, "Log")));
+            })())))),
         also.length > 0 && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-lbl", style: { margin: "4px 14px 9px" } }, "Also works it (half credit)"),
             React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, also.map((e) => (React.createElement("div", { key: e.id, className: "il-li", onClick: () => setSheet({ t: "log", exId: e.id }) },
