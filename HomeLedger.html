@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v337 · 5 Aug</div>
+  <div class="v">v339 · 5 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -4658,6 +4658,59 @@ const DEFAULT_STATE = () => {
     };
 };
 /* ---------------- analytics ---------------- */
+/* ============ WHAT HE ACTUALLY BURNS ============
+   Maintenance calories are not a formula. If you know what somebody ate and
+   what their weight did over the same stretch, the burn is the only unknown
+   left: intake minus the energy that went on or came off the body.
+
+   The old rule inside analyse() wanted TEN weigh-ins in 28 days, and worked
+   the trend out from how many readings there were rather than the dates they
+   fell on. He weighs about five times a month, so it never fired — and had it
+   fired, sparse readings would have made the slope wrong. This works on dates
+   and says how much it trusts itself. */
+const KCAL_PER_KG = 7700; /* the usual figure for a kilo of body tissue */
+function tdeeRead(st, today, win) {
+    const days = win || 28;
+    const from = addDays(today, -(days - 1));
+    const ws = (st.weights || [])
+        .filter((w) => w && w.date >= from && w.date <= today && plausibleKg(asKg(w.kg)))
+        .map((w) => ({ d: Math.round((new Date(w.date + "T12:00") - new Date(from + "T12:00")) / 864e5),
+        kg: asKg(w.kg) }))
+        .sort((a, b) => a.d - b.d);
+    const fed = (st.foods || [])
+        .filter((f) => f.date >= from && f.date <= today && (f.entries || []).length)
+        .map((f) => f.entries.reduce((a, e) => a + (e.kcal || 0), 0))
+        .filter((k) => k > 0);
+    const out = { ok: false, kcal: null, trendKgWk: null, windowDays: days, from, to: today,
+        weighIns: ws.length, spanDays: ws.length > 1 ? ws[ws.length - 1].d - ws[0].d : 0,
+        loggedDays: fed.length, coverage: Math.round((fed.length / days) * 100),
+        avgKcal: fed.length ? Math.round(fed.reduce((a, k) => a + k, 0) / fed.length) : 0,
+        confidence: null, why: null };
+    if (ws.length < 3)
+        return { ...out, why: "I need at least three weigh-ins in the window — there " +
+                (ws.length === 1 ? "is one" : `are ${ws.length}`) + "." };
+    if (out.spanDays < 14)
+        return { ...out, why: `Your weigh-ins only span ${out.spanDays} days. Two weeks apart is the minimum before the trend means anything.` };
+    if (fed.length < 10)
+        return { ...out, why: `Only ${fed.length} days of food are logged in there. Ten is the least I can average honestly.` };
+    /* least squares through the readings, by DATE — so a fortnight's gap
+       counts as a fortnight rather than as one reading */
+    const n = ws.length;
+    const mx = ws.reduce((a, w) => a + w.d, 0) / n, my = ws.reduce((a, w) => a + w.kg, 0) / n;
+    let top = 0, bot = 0;
+    ws.forEach((w) => { top += (w.d - mx) * (w.kg - my); bot += (w.d - mx) * (w.d - mx); });
+    if (!bot)
+        return { ...out, why: "Every weigh-in is on the same day, so there is no trend to read." };
+    const perDay = top / bot;
+    const trendKgWk = Math.round(perDay * 7 * 100) / 100;
+    const kcal = Math.round(out.avgKcal - (perDay * KCAL_PER_KG));
+    /* a number outside human range means the logging is wrong, not the man */
+    if (kcal < 1200 || kcal > 5500)
+        return { ...out, trendKgWk,
+            why: `The sums come out at ${kcal} calories a day, which is not a real person. Either a lot of food is unlogged or a weigh-in is wrong.` };
+    const good = ws.length >= 5 && out.spanDays >= 21 && out.coverage >= 75;
+    return { ...out, ok: true, kcal, trendKgWk, confidence: good ? "good" : "rough" };
+}
 function analyse(st) {
     const { sessions, foods, weights } = st;
     const strength = sessions.filter((s) => !isPump(s));
@@ -4756,15 +4809,12 @@ function analyse(st) {
     const avgC = rf.length ? Math.round(sum(rf, "c") / rf.length) : 0;
     const avgF = rf.length ? Math.round(sum(rf, "f") / rf.length) : 0;
     const avgKcal = rf.length ? Math.round(sum(rf, "kcal") / rf.length) : 0;
-    const w28 = weights.filter((w) => w.date >= cut);
-    let maint = null, trendKgWk = null;
-    if (w28.length >= 10 && avgKcal > 0) {
-        const half = Math.floor(w28.length / 2);
-        const a1 = w28.slice(0, half).reduce((a, w) => a + w.kg, 0) / half;
-        const a2 = w28.slice(half).reduce((a, w) => a + w.kg, 0) / (w28.length - half);
-        trendKgWk = Math.round(((a2 - a1) / ((w28.length / 2) / 7)) * 100) / 100;
-        maint = Math.round(avgKcal - (trendKgWk * 7700) / 7);
-    }
+    /* v339: one engine, and everything that quotes a maintenance number now
+       quotes the same one. The old rule needed ten weigh-ins in 28 days and
+       read the trend off their COUNT rather than their dates. */
+    const tdee = tdeeRead(st, iso(new Date()), 28);
+    const maint = tdee.ok ? tdee.kcal : null;
+    const trendKgWk = tdee.trendKgWk;
     const c30 = iso(new Date(Date.now() - 30 * 864e5)), c60 = iso(new Date(Date.now() - 60 * 864e5));
     const review = Object.entries(byEx).map(([id, a]) => {
         const now = a.filter((h) => h.date >= c30), before = a.filter((h) => h.date >= c60 && h.date < c30);
@@ -5768,7 +5818,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v337 · 5 Aug";
+const APP_VERSION = "v339 · 5 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -19210,6 +19260,15 @@ function suppKnown(s) {
         null;
 }
 /* the badge that goes on the row: what the evidence says, in one word */
+/* v338: strong, then some, then thin, then anything unrated — one order,
+   used wherever a shelf of supplements is put in front of him. */
+const SUPP_RANK = { strong: 0, moderate: 1, weak: 2 };
+const byEvidence = (list) => [...list].sort((a, b) => {
+    const ka = suppKnown(a), kb = suppKnown(b);
+    const ra = ka ? (SUPP_RANK[ka.strength] ?? 3) : 3;
+    const rb = kb ? (SUPP_RANK[kb.strength] ?? 3) : 3;
+    return ra - rb || String(a.name || "").localeCompare(String(b.name || ""));
+});
 function suppBadge(s) {
     const k = suppKnown(s);
     if (!k)
@@ -19554,6 +19613,7 @@ function Supplements({ st, save, a, today, setSheet }) {
     mine.forEach((x) => { const { slot, why, avoid } = suppSlot(x); (bySlot[slot] = bySlot[slot] || []).push({ x, why, avoid }); });
     const left = mine.length - done.length;
     const rec = suppSuggestions(st, a);
+    const [shelfOpen, setShelfOpen] = useState(false);
     return (React.createElement(React.Fragment, null,
         !st.suppOff && (st.supps || []).length > 8 && (React.createElement("div", { className: "il-card lead", style: { borderLeft: "3px solid var(--gold)" } },
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 12 } },
@@ -19641,8 +19701,18 @@ function Supplements({ st, save, a, today, setSheet }) {
                                     avoid && (React.createElement("div", { style: { fontSize: 11.5, marginTop: 4, color: "var(--red)", lineHeight: 1.45 } }, avoid)))))));
                 }))))),
         shelf.length > 0 && (React.createElement(React.Fragment, null,
-            React.createElement(BoxT, { t: "In the cupboard", s: `${shelf.length} more you own but do not take daily \u2014 still explained when you tap one, and one tap from today's list` }),
-            shelf.map((s, i) => {
+            React.createElement("button", { style: { all: "unset", display: "block", width: "100%", cursor: "pointer" }, onClick: () => setShelfOpen(!shelfOpen) },
+                React.createElement("div", { style: { margin: "22px 14px 10px", display: "flex", alignItems: "flex-start", gap: 10 } },
+                    React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                        React.createElement("div", { className: "il-h2" },
+                            "In the cupboard",
+                            React.createElement("span", { className: "il-tag", style: { background: "#1A1D22", color: "var(--dim)", marginLeft: 8 } }, shelf.length)),
+                        React.createElement("div", { className: "il-sub", style: { marginTop: 3, maxWidth: 330 } }, shelfOpen
+                            ? "Best evidence first. Tap one for what it actually does, or put it on today's list."
+                            : `${shelf.length} more you own but do not take daily \u2014 open it for the lot, best evidence first`)),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0, marginTop: 2,
+                            transform: shelfOpen ? "rotate(90deg)" : "none", transition: "transform .15s" } }, "\u203A"))),
+            shelfOpen && byEvidence(shelf).map((s, i) => {
                 const b = suppBadge(s);
                 return (React.createElement(SwipeDelete, { key: i, onDelete: () => save({ ...st,
                         supps: (st.supps || []).filter((y) => y.name !== s.name),
@@ -26302,6 +26372,83 @@ function Welcome({ st, a, today, setSheet }) {
 /* v329: every box on a tab is introduced by one of these — the category in
    full size and weight, and underneath in smaller, lighter type what is
    actually inside it, so you never have to open a box to find out. */
+/* v338: everything the app has WRITTEN about him, in one place, by subject.
+   The individual screens still live on their own tabs — this is a hub, not
+   a second copy of them, which is the distinction v297 was about. */
+const REPORTS = [
+    ["Training", "What you have done and whether it is working", [
+            ["The full review", "Everything at once, and next week written for you", { t: "review" }],
+            ["Past reviews", "Every one I have written, oldest to newest", { t: "pastrev" }],
+            ["Sticking to it", "Sessions planned against sessions done", { t: "adhere" }],
+            ["This week", "The week so far, session by session", { t: "week" }],
+        ]],
+    ["Your body", "What the tape, the scales and the camera say", [
+            ["Every weigh-in and measurement", "The full record, editable", { t: "records" }],
+            ["Left against right", "Where the two sides disagree", { t: "sides" }],
+            ["Progress photos", "Side by side, in date order", { t: "photos" }],
+            ["What has changed over time", "Two to six photos compared honestly", { t: "overtime" }],
+        ]],
+    ["Food", "What you have actually eaten", [
+            ["The diary", "Every day you have logged, day by day", { t: "diary" }],
+        ]],
+    ["Supplements", "What is worth taking, and what the evidence says", [
+            ["What should I actually take?", "Read against your answers and your training", { t: "suppadvice" }],
+            ["The evidence, one by one", "Every supplement, sorted by how well it stands up", { t: "supplist" }],
+        ]],
+];
+function Reports({ close, setSheet }) {
+    return (React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "Your reports", sub: "Everything written about you, by subject", close: close }),
+        REPORTS.map(([head, blurb, rows]) => (React.createElement("div", { key: head },
+            React.createElement(BoxT, { t: head, s: blurb }),
+            React.createElement("div", { className: "il-menu" }, rows.map(([label, sub, dest], i) => (React.createElement("button", { key: i, className: "il-mrow", onClick: () => setSheet(dest) },
+                React.createElement("span", { style: { minWidth: 0 } },
+                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, label),
+                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, sub)),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))))))))));
+}
+function TdeeSheet({ st, a, today, close, setSheet }) {
+    const r = tdeeRead(st, today, 28);
+    const est = estMaint(st.profile);
+    const Row = ({ k, v, note }) => (React.createElement("div", { className: "il-row", style: { padding: "10px 0", borderTop: "1px solid var(--line)" } },
+        React.createElement("div", { style: { minWidth: 0 } },
+            React.createElement("div", { style: { fontSize: 13.5 } }, k),
+            note && React.createElement("div", { className: "il-sub" }, note)),
+        React.createElement("span", { className: "il-n", style: { flexShrink: 0, fontSize: 14 } }, v)));
+    return (React.createElement(React.Fragment, null,
+        React.createElement(SH, { title: "What you actually burn", sub: "Worked back from your own food and your own weight", close: close }),
+        React.createElement("div", { className: "il-card lead" }, r.ok ? (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-hero", style: { color: "var(--grn)" } }, r.kcal),
+            React.createElement("div", { className: "il-dh", style: { fontSize: 15, marginTop: 4 } }, "calories a day to hold your weight"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 8 } }, r.confidence === "good"
+                ? `Measured, not estimated \u2014 and there is enough behind it to lean on. A formula would have guessed ${est}.`
+                : `Measured rather than estimated, but it is still rough \u2014 more weigh-ins and fewer missed days will tighten it. A formula would have guessed ${est}.`))) : (React.createElement(React.Fragment, null,
+            React.createElement("div", { className: "il-dh", style: { fontSize: 15 } }, "Not enough to work it out yet"),
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, marginTop: 6 } },
+                r.why,
+                " Until then I am using ",
+                est,
+                ", which is a formula off your age, height and weight rather than anything you have done.")))),
+        React.createElement(BoxT, { t: "The arithmetic", s: "Every number here is yours \u2014 nothing is assumed, and you can check the lot" }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement(Row, { k: "Days looked at", v: r.windowDays, note: `${r.from} to ${r.to}` }),
+            React.createElement(Row, { k: "Days of food logged", v: `${r.loggedDays} of ${r.windowDays}`, note: `${r.coverage}% of the window` }),
+            React.createElement(Row, { k: "Average day, as logged", v: r.avgKcal ? `${r.avgKcal} cal` : "\u2014" }),
+            React.createElement(Row, { k: "Weigh-ins", v: r.weighIns, note: r.spanDays ? `spanning ${r.spanDays} days` : "not enough to span anything" }),
+            React.createElement(Row, { k: "Weight trend", v: r.trendKgWk == null ? "\u2014" : `${r.trendKgWk > 0 ? "+" : ""}${r.trendKgWk} kg/wk`, note: r.trendKgWk == null ? null : r.trendKgWk > 0.05 ? "gaining" : r.trendKgWk < -0.05 ? "losing" : "holding" }),
+            r.ok && React.createElement(Row, { k: "So the burn is", v: `${r.kcal} cal`, note: `${r.avgKcal} eaten, ${r.trendKgWk >= 0 ? "minus" : "plus"} what went ${r.trendKgWk >= 0 ? "on" : "off"} you` })),
+        React.createElement(BoxT, { t: "Where it can be wrong", s: "Three honest caveats, because a confident wrong number is worse than none" }),
+        React.createElement("div", { className: "il-card" },
+            React.createElement("div", { className: "il-note", style: { fontSize: 12.5, lineHeight: 1.6 } },
+                "\u2022 If you under-log \u2014 the handful of crisps, the splash of oil \u2014 this reads LOW, and it reads low by exactly what you missed.",
+                React.createElement("br", null),
+                "\u2022 A kilo of body is taken as 7,700 calories. Water shifts, a big carb day or a bad night's sleep all move the scales without moving that.",
+                React.createElement("br", null),
+                "\u2022 It describes the last four weeks. Change how much you train and it needs a few weeks to catch up.")),
+        React.createElement("div", { style: { padding: "0 12px 4px", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "nightly" }) }, "Log a weigh-in"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "targets" }) }, "See the targets built on it"))));
+}
 function BoxT({ t, s }) {
     return (React.createElement("div", { style: { margin: "22px 14px 10px" } },
         React.createElement("div", { className: "il-h2" }, t),
@@ -26503,6 +26650,7 @@ function You({ st, save, a, today, setSheet, go }) {
                 React.createElement("div", { className: "il-mini" },
                     React.createElement("div", { className: "v" }, T.fat),
                     React.createElement("div", { className: "l" }, "fat g"))),
+            React.createElement("button", { className: "il-chip", style: { margin: "0 0 10px" }, onClick: () => setSheet({ t: "tdee" }) }, a.maint ? "How I worked this out" : "Why these are still an estimate"),
             React.createElement("div", { className: "il-note", style: { fontSize: 12.5 } },
                 a.maint ? `Worked back from your own weight trend rather than a formula — ${a.maint} maintenance, adjusted for ${P.goal === "lean" ? "a deficit" : P.goal === "muscle" ? "a small surplus" : "your goal"}.`
                     : `Estimated from your ${P.sex === "female" ? "sex, " : ""}age, height, weight and ${P.job === "desk" ? "desk job" : "daily activity"} — about ${estMaint(P)} maintenance. Log food and weigh-ins for two weeks and I'll replace this with your real number, which is usually 200 to 500 different.`,
@@ -26510,6 +26658,13 @@ function You({ st, save, a, today, setSheet, go }) {
                 "That's ",
                 T.perMeal,
                 "g of protein across four meals.")),
+        React.createElement(BoxT, { t: "Your reports", s: "Every review, record and comparison the app has written about you, gathered by subject" }),
+        React.createElement("div", { className: "il-menu" },
+            React.createElement("button", { className: "il-mrow", onClick: () => setSheet({ t: "reports" }) },
+                React.createElement("span", { style: { minWidth: 0 } },
+                    React.createElement("span", { style: { display: "block", fontSize: 14.5 } }, "All your reports"),
+                    React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, "Training, your body, food and supplements")),
+                React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A"))),
         React.createElement(BoxT, { t: "Setup and housekeeping", s: "Bringing old workouts in, saving a copy, and how the app works" }),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "importwo" }) }, "Import past workouts from screenshots"),
@@ -27023,6 +27178,8 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "dish" && React.createElement(DishBuilder, { st, save, close, editId: sheet.id, seed: sheet.seed }),
             sheet.t === "logdish" && React.createElement(LogDish, { st, save, today, sheet, close, dishId: sheet.id }),
             sheet.t === "protein" && React.createElement(ProteinFinder, { st, save, today, close, setSheet }),
+            sheet.t === "reports" && React.createElement(Reports, { close, setSheet }),
+            sheet.t === "tdee" && React.createElement(TdeeSheet, { st, a, today, close, setSheet }),
             sheet.t === "scan" && React.createElement(ScanLabel, { st, save, today, sheet, close, setSheet }),
             sheet.t === "scalephoto" && React.createElement(ScalePhoto, { st, save, today, sheet, close }),
             sheet.t === "importwo" && React.createElement(ImportWorkouts, { st, save, close }),
@@ -27192,7 +27349,7 @@ const NO_DONE = ["kit", "equip", "recipe", "recipes", "tastes",
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
-const BACK_ONLY = ["protein", "scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
+const BACK_ONLY = ["tdee", "reports", "protein", "scalephoto", "info", "exprog", "anatmus", "mguide", "pastrev",
     "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos"];
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
