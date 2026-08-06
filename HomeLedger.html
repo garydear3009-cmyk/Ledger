@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v345 · 6 Aug</div>
+  <div class="v">v353 · 7 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -1963,7 +1963,11 @@ RAW.push(...ATTACH_RAW);
 const EX = [
     ...RAW.map(([name, kit, move, primary, secondary, lo, hi, perSide, cues], i) => ({
         id: "x" + i, name, kit, move, primary, secondary, lo, hi, cues, perSide: !!perSide,
-        loaded: kit.includes("db") || kit.includes("kb"), timed: move === "plank" || move === "hold" || move === "farmer" || name === "Wall sit" || HELD.includes(name),
+        /* v353: this said db-or-kb only, so every one of the sixteen pulley
+       exercises added at v317 came out unloaded — the weight box was
+       disabled, the set counted as zero volume, and no best could ever be
+       set on the machine he actually bought. A stack is load. */
+        loaded: kit.includes("db") || kit.includes("kb") || kit.includes("pulley"), timed: move === "plank" || move === "hold" || move === "farmer" || name === "Wall sit" || HELD.includes(name),
         /* held or carried rather than repped. A carry asking for "30 reps" is the
            app telling you to count something you cannot count. */
         isCompound: primary.length + secondary.length >= 3, cardio: false, quiet: 1,
@@ -3208,6 +3212,25 @@ const clock = (s) => s >= 3600
    two lets a strong right arm hide a weak left one in every number the app
    produces. */
 const sideReps = (s) => (s && s.repsL != null && s.repsR != null ? Math.min(s.repsL, s.repsR) : s ? s.reps : 0);
+/* v353, his words: "Pulley lateral raises — single arm not double. Same for
+   most exercises. Maybe give the option to switch between one and two."
+
+   Until now whether an exercise was done a limb at a time was guessed from
+   its NAME, so a lateral raise could never be one-armed however he actually
+   did it. st.sideMode is his own answer per exercise, and it beats the
+   guess in both directions — he can also decide a split squat is being done
+   as a pair. The name pattern stays as the default for everything he has
+   not had an opinion about. Note this is NOT the catalogue's `perSide`,
+   which means the printed weight is per dumbbell; the two are unrelated and
+   both still apply. */
+const sidedFor = (st, ex) => {
+    if (!ex)
+        return false;
+    const m = (st && st.sideMode) || {};
+    return m[ex.id] === "one" ? true : m[ex.id] === "two" ? false : oneSided(ex);
+};
+const setSideMode = (st, exId, one) => ({ ...st,
+    sideMode: { ...(st.sideMode || {}), [exId]: one ? "one" : "two" } });
 const setVol = (ex, s) => (s.warm || !ex.loaded || ex.aerobic ? 0 : s.w * sideReps(s) * (ex.perSide ? 2 : 1));
 const exVol = (ex, sets) => sets.reduce((a, s) => a + setVol(ex, s), 0);
 const sessVol = (s) => s.exercises.reduce((a, e) => { const x = exOf(e.exId); return a + (x ? exVol(x, e.sets) : 0); }, 0);
@@ -4951,6 +4974,7 @@ function RestTimer({ secs, onClose }) {
         React.createElement("div", { style: { flex: 1, minWidth: 0 } },
             React.createElement("div", { className: "il-d il-n", style: { fontSize: 19, fontWeight: 600 } }, left <= 0 ? "Go" : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`),
             React.createElement("div", { className: "il-sub", style: { margin: 0 } }, left <= 0 ? "Rest is up" : "Resting")),
+        React.createElement("button", { className: "il-chip", onClick: () => addTime(90 - left) }, "1:30"),
         React.createElement("button", { className: "il-chip", onClick: () => addTime(30) }, "+30s"),
         React.createElement("button", { className: "il-x", onClick: onClose }, "\u00D7")));
 }
@@ -5820,7 +5844,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v345 · 6 Aug";
+const APP_VERSION = "v353 · 7 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -6601,6 +6625,8 @@ function LiveSession({ st, save, s, setSheet }) {
     /* v288: rest is a deadline, not a trigger — the focus screen reads the
        remaining seconds every tick instead of a child owning the countdown */
     const [restEnd, setRestEnd] = useState(0);
+    const [editing, setEditing] = useState(false);
+    const [bail, setBail] = useState(false);
     const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const [fi, setFi] = useState(0);
     const [foc, setFoc] = useState(!FOCUS_UI.min);
@@ -6729,12 +6755,39 @@ function LiveSession({ st, save, s, setSheet }) {
         return sess;
     });
     // remove a single set or warm-up
+    /* v348: taking out the LAST set used to be refused silently, which made
+       every v347 stretch undeletable — they carry one set each. The last set
+       leaving means you are done with that exercise, so it goes with it. */
     const dropSet = (exId, j) => write((sess) => {
         const e = sess.exercises.find((x) => x.exId === exId);
-        if (e && e.sets.length > 1)
+        if (!e)
+            return sess;
+        if (e.sets.length > 1)
             e.sets.splice(j, 1);
+        else
+            sess.exercises = sess.exercises.filter((x) => x !== e);
         return sess;
     });
+    /* v348: he asked to be able to stop at any point and still choose what
+       it meant. Keeping trims to what was actually ticked and then goes to
+       the same wrap-up every session ends at, so nothing downstream is
+       special-cased; binning removes it outright. If he keeps a session in
+       which nothing was ticked, abandoned() catches it at the wrap-up and
+       offers the bin there — the v308 path, unchanged. */
+    const keepSoFar = () => {
+        write((sess) => {
+            sess.exercises = sess.exercises
+                .map((e) => ({ ...e, sets: e.sets.filter((q) => q.done) }))
+                .filter((e) => e.sets.length);
+            return sess;
+        });
+        setBail(false);
+        setSheet({ t: "wrapup", id: s.id });
+    };
+    const binSession = () => {
+        setBail(false);
+        save({ ...st, sessions: st.sessions.filter((x) => x.id !== s.id) });
+    };
     // add a warm-up to an exercise mid-session
     const addWarm = (exId) => write((sess) => {
         const e = sess.exercises.find((x) => x.exId === exId);
@@ -6792,8 +6845,18 @@ function LiveSession({ st, save, s, setSheet }) {
                     fin ? "" : nextEx ? ` · up next ${exOf(nextEx.exId)?.name}` : " · last one")),
             !fin && React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
                 React.createElement("button", { className: "il-chip" + (paused ? " on" : ""), onClick: togglePause }, paused ? "Resume" : "Pause"),
+                React.createElement("button", { className: "il-chip" + (bail ? " on" : ""), onClick: () => setBail(!bail) }, "Cancel"),
                 React.createElement("button", { className: "il-btn sm", onClick: () => setSheet({ t: "wrapup", id: s.id }) }, "Finish"))),
-        !fin && React.createElement("div", { style: { margin: "2px 0 10px" } },
+        !fin && bail && (React.createElement("div", { className: "il-card", style: { margin: "2px 0 10px" } },
+            React.createElement("div", { style: { fontSize: 14.5, fontWeight: 600, marginBottom: 2 } }, "Stopping here?"),
+            React.createElement("div", { className: "il-sub", style: { margin: "0 0 10px" } }, doneSets > 0
+                ? `You have ${doneSets} set${doneSets === 1 ? "" : "s"} done. Keep them and they count towards everything \u2014 bin it and the session never happened.`
+                : "Nothing is ticked off yet, so there is nothing to keep."),
+            React.createElement("div", { style: { display: "grid", gap: 8 } },
+                doneSets > 0 && React.createElement("button", { className: "il-btn", onClick: () => { keepSoFar(); } }, "Log what I've done"),
+                React.createElement("button", { className: "il-btn g", style: { color: "var(--red)" }, onClick: () => { binSession(); } }, "Bin it \u2014 it never happened"),
+                React.createElement("button", { className: "il-btn g", onClick: () => setBail(false) }, "Never mind, keep going")))),
+        !fin && !bail && React.createElement("div", { style: { margin: "2px 0 10px" } },
             React.createElement("button", { className: "il-chip on", onClick: focusOn }, "\u26F6 Full screen")),
         s.exercises.map((e, i) => {
             const ex = exOf(e.exId);
@@ -6846,7 +6909,7 @@ function LiveSession({ st, save, s, setSheet }) {
                         React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "info", exId: ex.id }) },
                             "\u24D8 ",
                             "How to")),
-                    oneSided(ex) && (() => {
+                    sidedFor(st, ex) && (() => {
                         const g = liftGaps(st).find((x) => x.ex.id === ex.id);
                         const tape = ex.group === "legs" ? tapeGaps(st).find((x) => x.plain === "thigh")
                             : tapeGaps(st).find((x) => x.plain === "arm");
@@ -6858,15 +6921,19 @@ function LiveSession({ st, save, s, setSheet }) {
                             weak,
                             ", then match it on the other side and stop there \u2014 that is how a gap closes rather than holds."));
                     })(),
-                    !ex.aerobic && !e.sets.some((q) => q.warm) && (React.createElement("button", { className: "il-chip", style: { marginBottom: 8 }, onClick: () => addWarm(e.exId) }, "+ Warm-up sets")),
+                    React.createElement("span", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 } },
+                        !ex.aerobic && !e.sets.some((q) => q.warm) && (React.createElement("button", { className: "il-chip", onClick: () => addWarm(e.exId) }, "+ Warm-up sets")),
+                        !ex.aerobic && (React.createElement("button", { className: "il-chip" + (editing ? " on" : ""), onClick: () => setEditing(!editing) }, editing ? "Done editing" : "Edit sets")),
+                        !ex.aerobic && ex.loaded && (React.createElement("button", { className: "il-chip" + (sidedFor(st, ex) ? " on" : ""), onClick: () => save(setSideMode(st, ex.exId || e.exId, !sidedFor(st, ex))) }, sidedFor(st, ex) ? "One arm at a time" : "Both together"))),
+                    editing && !ex.aerobic && React.createElement("div", { className: "il-sub", style: { margin: "0 0 8px" } }, "Tap \u2715 to take a set out \u2014 the last one takes the exercise with it. You can also slide a row left."),
                     !ex.aerobic && e.sets.map((x, j) => (React.createElement(SwipeDelete, { key: j, inCard: true, onDelete: () => dropSet(e.exId, j) },
                         React.createElement("div", { className: "il-lrow" + (x.done ? " il-done" : ""), style: { background: "var(--card)" } },
                             React.createElement("button", { className: "il-badge" + (x.warm ? " w" : ""), style: { cursor: "pointer" }, onClick: () => setField(e.exId, j, "warm", !x.warm) }, x.warm ? "W" : e.sets.slice(0, j + 1).filter((q) => !q.warm).length),
                             React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: stepDisp(), disabled: !ex.loaded, value: ex.loaded ? wn(x.w) : "", onChange: (v) => setField(e.exId, j, "w", wkg(v)) }),
-                            oneSided(ex) ? (React.createElement("span", { style: { display: "flex", gap: 5, minWidth: 0 } },
+                            sidedFor(st, ex) ? (React.createElement("span", { style: { display: "flex", gap: 5, minWidth: 0 } },
                                 React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, placeholder: "L", value: x.repsL != null ? x.repsL : x.reps, onChange: (v) => setField(e.exId, j, "repsL", v) }),
                                 React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, placeholder: "R", value: x.repsR != null ? x.repsR : x.reps, onChange: (v) => setField(e.exId, j, "repsR", v) }))) : (React.createElement(NumIn, { className: "il-lin", onBlurOnly: true, step: 1, value: x.reps, onChange: (v) => setField(e.exId, j, "reps", v) })),
-                            React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713"))))),
+                            editing ? (React.createElement("button", { className: "il-tick", style: { color: "var(--red)", borderColor: "var(--red)" }, onClick: () => dropSet(e.exId, j) }, "\u2715")) : (React.createElement("button", { className: "il-tick" + (x.done ? " on" : ""), onClick: () => toggle(e.exId, j) }, "\u2713")))))),
                     (() => {
                         if (ex.aerobic || st.rirOff)
                             return null;
@@ -7877,7 +7944,7 @@ function ScanLabel({ st, save, today, sheet, close, setSheet }) {
         React.createElement(SH, { title: "Scan a label", sub: stage === "check" ? "Check these against the pack" : "Point it at the nutrition table", close: close }),
         stage === "start" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card" },
-                React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Photograph the nutrition table"),
+                React.createElement("div", { className: "il-h2", style: { marginBottom: 8 } }, "Photograph the barcode or the label"),
                 React.createElement("div", { className: "il-note", style: { marginBottom: 14 } }, "Either works: the grid on the back with Energy, Fat, Carbohydrate and Protein down the side, or the barcode. If the barcode is legible it goes to a free public food database, which is steadier than reading a creased wrapper."),
                 note && React.createElement("div", { className: "il-note", style: { color: "var(--gold)", marginBottom: 12 } }, note),
                 React.createElement("button", { className: "il-btn", onClick: () => file.current?.click() }, "Open the camera"),
@@ -8406,6 +8473,34 @@ function coachCtx(sheet, st, a, today) {
             asks: ["Is this the right shape for what I am after?", "What would you change first?",
                 "Would four days beat three for me?", "Am I doing too much of anything?"],
         };
+    }
+    /* v349: "Ask coach to change it" used to hand him the generic training
+       brief — he could not see the routine he was being asked about, so he
+       could not discuss the order or name a swap. Now he gets the list. */
+    if (sheet && sheet.routineId) {
+        const rt = (st.routines || []).find((r) => r.id === sheet.routineId);
+        if (rt) {
+            const lines = rt.exercises.map((x, i) => {
+                const ex = exOf(x.exId);
+                if (!ex)
+                    return null;
+                const n = typeof x.sets === "number" ? x.sets : (x.sets || []).filter((q) => !q.warm).length;
+                return `${i + 1}. ${ex.name} — ${n} sets, ${ex.lo}-${ex.hi} reps, ${ex.isCompound ? "compound" : "isolation"}, trains ${ex.primary.map((m) => M[m]).join(" and ")}`;
+            }).filter(Boolean);
+            const kit = (st.kit || []).join(", ");
+            return {
+                title: rt.name || "This routine", routineId: rt.id,
+                blurb: `They are looking at their routine "${rt.name}" and want it changed. It is ${rt.exercises.length} exercises, about ${rt.minutes || routineMinutes(rt.exercises)} minutes, intent ${rt.intent}.`,
+                detail: [
+                    "The routine, in the order it is written:",
+                    lines.join("\n"),
+                    `Equipment they have: ${kit || "nothing recorded"}.`,
+                    "They train alone at home. Suggest changes by naming the exercise to drop and the one to put in its place, and say where in the order it should sit and why.",
+                ].join("\n"),
+                suggestions: ["Is this in the right order?", "What should I swap out?",
+                    "Is anything missing from this?", "Make it shorter without losing much"],
+            };
+        }
     }
     if (sheet === "train") {
         return { title: "Training", blurb: "They are on the training screen.",
@@ -12813,20 +12908,21 @@ function WrapUp({ sheet, st, save, close, setSheet }) {
             React.createElement("button", { className: "il-btn g", onClick: () => { commit(); setTimeout(() => setSheet({ t: "feedback", id: s.id }), 60); } }, "Finish, and get the coach's read on it"),
             React.createElement("button", { className: "il-btn g", onClick: close }, "Not yet, carry on")));
 }
-function SwapExercise({ sheet, st, save, close }) {
-    const cur = exOf(sheet.exId);
-    const sess = st.sessions.find((x) => x.id === sheet.sessionId);
-    const [q, setQ] = useState("");
-    if (!cur || !sess)
-        return React.createElement(React.Fragment, null,
-            React.createElement(SH, { title: "Swap", close: close }),
-            React.createElement("div", { className: "il-empty" }, "Gone."));
+/* How close another exercise is to this one: how much of the same muscle
+   work it does, nudged for the same movement pattern and the same kind of
+   lift. Lifted out of the mid-session swapper at v349 so the routine editor
+   ranks identically — two lists of "what could I do instead" that disagree
+   would be worse than none. */
+function swapPicks(cur, st, taken, q) {
+    if (!cur)
+        return [];
     const mine = anatOf(cur);
     const owned = (id) => exOf(id).kit.every((k) => st.kit.includes(k));
-    const already = new Set(sess.exercises.map((x) => x.exId));
-    /* closest first: how much of the same muscle work it does, then whether
-       it is the same kind of movement */
-    const scored = EX.filter((e) => e.id !== cur.id && !already.has(e.id) && !e.aerobic && owned(e.id))
+    const already = new Set(taken || []);
+    if (q)
+        return EX.filter((e) => e.id !== cur.id && !already.has(e.id) && owned(e.id) &&
+            e.name.toLowerCase().includes(q.toLowerCase())).map((e) => ({ e, share: 0 }));
+    return EX.filter((e) => e.id !== cur.id && !already.has(e.id) && !e.aerobic && owned(e.id))
         .map((e) => {
         const his = anatOf(e);
         let overlap = 0, total = 0;
@@ -12840,10 +12936,18 @@ function SwapExercise({ sheet, st, save, close }) {
     })
         .filter((x) => x.share > 0.15)
         .sort((x, y) => (y.share + (y.same ? 0.3 : 0) + (y.comp ? 0.1 : 0)) - (x.share + (x.same ? 0.3 : 0) + (x.comp ? 0.1 : 0)));
-    const list = q
-        ? EX.filter((e) => e.id !== cur.id && !already.has(e.id) && owned(e.id) && e.name.toLowerCase().includes(q.toLowerCase()))
-            .map((e) => ({ e, share: 0 }))
-        : scored.slice(0, 14);
+}
+function SwapExercise({ sheet, st, save, close }) {
+    const cur = exOf(sheet.exId);
+    const sess = st.sessions.find((x) => x.id === sheet.sessionId);
+    const [q, setQ] = useState("");
+    if (!cur || !sess)
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: "Swap", close: close }),
+            React.createElement("div", { className: "il-empty" }, "Gone."));
+    const taken = sess.exercises.map((x) => x.exId);
+    const picks = swapPicks(cur, st, taken, q);
+    const list = q ? picks : picks.slice(0, 14);
     const doSwap = (e) => {
         const sessions = st.sessions.map((x) => x.id !== sess.id ? x : ({
             ...x, exercises: x.exercises.map((y) => {
@@ -16420,6 +16524,7 @@ function RecipeBook({ st, save, a, today, close, setSheet, sheet }) {
                 " possible double",
                 dubs.length === 1 ? "" : "s"))),
         React.createElement("div", { style: { padding: "10px 12px 0", display: "grid", gap: 8 } },
+            React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "addrec", sw: true }) }, "\U0001F4F7  Photograph a Slimming World recipe"),
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "addrec" }) }, "Add from a photo"),
                 React.createElement("button", { className: "il-btn g", style: { flex: 1 }, onClick: () => setSheet({ t: "rules" }) },
@@ -17381,6 +17486,21 @@ function recipeReady(r) {
         missing.push("a method");
     return { ok: missing.length === 0, missing };
 }
+/* v351: he photographed five cards and a nutrition page and got two
+   recipes back, one of them incomplete. The cause was not the reading — it
+   was the budget: every answer was capped at 3,000 tokens, which is one
+   full recipe, maybe two. The rest was cut off mid-sentence and the JSON
+   repair quietly salvaged the fragment. Room now scales with the pile. */
+function recipeTokens(nPhotos) {
+    return Math.max(3000, Math.min(16000, 2000 + (nPhotos || 1) * 1500));
+}
+/* A recipe that arrived whole. A cut-off answer usually loses the tail of
+   the last entry — the method, or the macros — so those are what to check. */
+function wholeRecipe(r) {
+    return !!(r && r.n && Array.isArray(r.ing) && r.ing.length &&
+        Array.isArray(r.method) && r.method.length &&
+        Array.isArray(r.m) && r.m.length === 4 && r.m.every((x) => typeof x === "number"));
+}
 const READ_RECIPE = `You are reading photographs of a recipe. They might be a printed card, a page from
 a book, a meal-kit card, a screenshot, or a handwritten note.
 
@@ -17447,7 +17567,7 @@ Rules on the numbers:
 Keep the method steps close to as written. Don't rewrite somebody else's recipe into your own words.
 Where the card writes a step as a fragment, make it a full instruction — the wording stays theirs,
 but "chicken flattened" becomes "Flatten the chicken". Never merge two of the card's steps into one.`;
-function AddRecipe({ st, save, a, today, close, setSheet }) {
+function AddRecipe({ sheet, st, save, a, today, close, setSheet }) {
     const pool = [...FOODS, ...(st.myFoods || [])];
     const [imgs, setImgs] = useState([]);
     const [fromVideo, setFromVideo] = useState(false);
@@ -17455,7 +17575,21 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
     const [stage, setStage] = useState("in");
     const [res, setRes] = useState(null);
     const [err, setErr] = useState("");
-    const [source, setSource] = useState("");
+    const [short, setShort] = useState("");
+    /* v351: arriving from the Slimming World shortcut the source is already
+       decided and the camera should open itself — those are the cards he
+       photographs far more than anything else */
+    const [source, setSource] = useState(sheet && sheet.sw ? "Slimming World" : "");
+    const opened = useRef(false);
+    useEffect(() => {
+        if (!(sheet && sheet.sw) || opened.current)
+            return;
+        opened.current = true;
+        /* the tap that got here is the gesture iOS wants, but the hidden input
+           has to exist first, so it goes just after the first paint */
+        const t = setTimeout(() => fileRef.current?.click(), 120);
+        return () => clearTimeout(t);
+    }, [sheet && sheet.sw]);
     const [all, setAll] = useState([]); // every recipe found in the photos
     const [which, setWhich] = useState(0); // the one being checked
     const [filed, setFiled] = useState([]); // the ones already in the book
@@ -17506,12 +17640,22 @@ function AddRecipe({ st, save, a, today, close, setSheet }) {
                         ? "\n\nThese are frames taken at even intervals through a cooking video, in order."
                         : imgs.length > 1 ? "\n\nThere may be SEVERAL different recipe cards across these photos, and one card's front and its nutrition table may be separate photos. Group the photos into recipes and return every distinct recipe, with each one's photo indexes." : ""}` },
             ];
-            const txt = await callClaude(content, 3000, "mid");
+            const txt = await callClaude(content, recipeTokens(imgs.length), "mid");
             const j = looseJson(txt);
             if (!j || !j.found)
                 throw new Error("That doesn't look like a recipe. Try a clearer photo of the whole card.");
             /* one card or five, it comes back as a list; an older flat answer still works */
-            const list = Array.isArray(j.recipes) && j.recipes.length ? j.recipes : [j];
+            const raw = Array.isArray(j.recipes) && j.recipes.length ? j.recipes : [j];
+            /* v351: a half-read recipe must never reach the book quietly. Only
+               the whole ones go through, and he is told what was dropped. */
+            const list = raw.filter(wholeRecipe);
+            if (!list.length)
+                throw new Error(raw.length
+                    ? `She started ${raw.length === 1 ? "it" : "them"} but ran out of room before finishing. Try fewer cards at once \u2014 about four.`
+                    : "That doesn't look like a recipe. Try a clearer photo of the whole card.");
+            setShort(list.length < raw.length
+                ? `${list.length} of ${raw.length} came back complete. The rest ran out of room \u2014 photograph those separately, about four cards at a time.`
+                : "");
             setAll(list);
             setWhich(0);
             setFiled([]);
@@ -17580,14 +17724,16 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
         setTimeout(() => setSheet({ t: "recipe", name: rec.n }), 60);
     };
     return React.createElement(React.Fragment, null,
+        React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: add }),
+        React.createElement("input", { type: "file", accept: "video/*", ref: vidRef, style: { display: "none" }, onChange: addClip }),
         React.createElement(SH, { title: "Add a recipe", sub: "Photograph it and she'll write it down", close: close }),
         stage === "in" && React.createElement(React.Fragment, null,
             React.createElement("div", { className: "il-card", style: { background: "#14301F" } },
                 React.createElement("div", { className: "il-note", style: { color: "#A8D8BC" } }, "A recipe card, a page from a book, a screenshot. If the nutrition is printed she'll use those numbers exactly; if it isn't she'll work them out and tell you which she did."),
                 React.createElement("div", { className: "il-note", style: { color: "#A8D8BC", marginTop: 10 } }, "Meal-kit books like Slimming World put the nutrition on its own page in a table. Photograph both \u2014 the recipe card and that table \u2014 and she'll match the recipe number to the right row.")),
+            React.createElement("div", { style: { padding: "0 12px 10px" } },
+                React.createElement("button", { className: "il-chip" + (source === "Slimming World" ? " on" : ""), onClick: () => setSource(source === "Slimming World" ? "" : "Slimming World") }, source === "Slimming World" ? "\u2713 Slimming World" : "Mark as Slimming World")),
             React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
-                React.createElement("input", { type: "file", accept: "image/*", multiple: true, ref: fileRef, style: { display: "none" }, onChange: add }),
-                React.createElement("input", { type: "file", accept: "video/*", ref: vidRef, style: { display: "none" }, onChange: addClip }),
                 React.createElement("button", { className: "il-btn g", onClick: () => vidRef.current?.click() }, fromVideo ? `Use a different video · ${imgs.length} frames` : "Read it off a video"),
                 React.createElement("button", { className: "il-btn g", disabled: imgs.length >= 12 && !fromVideo, onClick: () => { setFromVideo(false); fileRef.current?.click(); } }, imgs.length >= 12 ? "Twelve is the most she can read at once"
                     : imgs.length ? `Add another card or page · ${imgs.length} of 12` : "Photograph the recipe")),
@@ -17619,6 +17765,8 @@ Method: ${(res.method || []).join(" ")}`, 900, "mid");
         stage === "thinking" && React.createElement("div", { className: "il-card", style: { textAlign: "center", padding: 40 } },
             React.createElement("div", { className: "il-note" }, "Reading it\u2026")),
         stage === "out" && res && React.createElement(React.Fragment, null,
+            short && React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--gold)" } },
+                React.createElement("div", { className: "il-note", style: { color: "var(--gold)" } }, short)),
             React.createElement("div", { className: "il-card", style: { borderLeft: "3px solid var(--tint)" } },
                 all.length > 1 && (React.createElement("div", { style: { marginBottom: 12 } },
                     React.createElement("div", { className: "il-row", style: { marginBottom: 8 } },
@@ -19274,6 +19422,31 @@ function suppKnown(s) {
 /* v338: strong, then some, then thin, then anything unrated — one order,
    used wherever a shelf of supplements is put in front of him. */
 const SUPP_RANK = { strong: 0, moderate: 1, weak: 2 };
+/* v350, his words: "protein shakes here are unnecessary as they are a food.
+   Only have tablets etc." Whey and casein are eaten for their macros and
+   belong in the food diary; the amino acids stay, because you do not log
+   them for calories. */
+const SUPP_ASFOOD = ["whey protein", "casein protein"];
+const isFoodSupp = (x) => {
+    const k = suppKnown(x);
+    const n = String((k && k.name) || (x && (x.what || x.name)) || x || "").toLowerCase();
+    return SUPP_ASFOOD.some((f) => n.includes(f));
+};
+/* Their own categories, best evidence first inside each. The order is fixed
+   rather than alphabetical so the same heading is always in the same place. */
+const SUPP_CATS = ["Performance", "Health", "Protein"];
+const byCategory = (list) => {
+    const out = [];
+    SUPP_CATS.forEach((cat) => {
+        const rows = list.filter((x) => { const k = suppKnown(x); return k && k.cat === cat; });
+        if (rows.length)
+            out.push({ cat, rows: byEvidence(rows) });
+    });
+    const rest = list.filter((x) => { const k = suppKnown(x); return !k || !SUPP_CATS.includes(k.cat); });
+    if (rest.length)
+        out.push({ cat: "Everything else", rows: byEvidence(rest) });
+    return out;
+};
 const byEvidence = (list) => [...list].sort((a, b) => {
     const ka = suppKnown(a), kb = suppKnown(b);
     const ra = ka ? (SUPP_RANK[ka.strength] ?? 3) : 3;
@@ -19542,6 +19715,34 @@ function ProteinFinder({ st, save, today, close, setSheet }) {
         save({ ...st, foods });
         setLogged([...logged, x.id]);
     };
+    /* v350, his ask: logging one is not the same as keeping it. Adding to my
+       foods makes it searchable for good; the list is for the next shop. The
+       row is PER SERVING, so serv is 1 and the label is the scoop or bar. */
+    const inFoods = (x) => (st.myFoods || []).some((f) => f.name === x.n);
+    const onList = (x) => (st.shopExtra || []).some((f) => f.name === x.n);
+    const keep = (x) => {
+        if (inFoods(x))
+            return;
+        /* A food row is PER 100 with serv as the size of one serving — the
+           product table is per serving, so it has to be converted or the
+           whole thing logs at roughly a quarter of the truth. Every row in
+           the table carries a real gram or millilitre figure (25g scoop,
+           60g bar); if one ever does not, it is not offered. */
+        const m = String(x.serv).match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i);
+        if (!m)
+            return;
+        const size = +m[1];
+        const per100 = (v) => Math.round((v * 100 / size) * 10) / 10;
+        const f = { id: "my" + Date.now() + Math.random().toString(36).slice(2, 6), name: x.n,
+            cat: -1, kcal: Math.round(per100(x.kcal)), p: per100(x.p), c: per100(x.c), f: per100(x.f),
+            serv: size, servLabel: bareLabel(x.serv), unit: m[2].toLowerCase() === "ml" ? "ml" : "g", mine: true };
+        save({ ...st, myFoods: [...(st.myFoods || []), f] });
+    };
+    const shop = (x) => {
+        if (onList(x))
+            return;
+        save({ ...st, shopExtra: [...(st.shopExtra || []), { name: x.n, cat: "supplement", at: Date.now() }] });
+    };
     return (React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Protein products", sub: browsing ? `${PROTEIN.length} products, by type` : `${list.length} of ${PROTEIN.length} shown`, close: close }),
         React.createElement("div", { className: "il-card" },
@@ -19590,33 +19791,40 @@ function ProteinFinder({ st, save, today, close, setSheet }) {
                 React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } }, list.length)),
             React.createElement("div", { className: "il-card", style: { padding: 0 } },
                 list.length === 0 && React.createElement("div", { className: "il-note", style: { padding: 14 } }, "Nothing matches \u2014 loosen a filter."),
-                list.map((x) => (React.createElement("div", { key: x.id, className: "il-li", style: { alignItems: "center" } },
-                    React.createElement("div", { style: { minWidth: 0, flex: 1 } },
-                        React.createElement("div", { style: { fontSize: 14 } },
-                            x.n,
-                            x.tags.includes("checked") && React.createElement("span", { style: { fontSize: 9.5, fontWeight: 600, letterSpacing: ".05em",
-                                    textTransform: "uppercase", marginLeft: 7, padding: "2px 6px", borderRadius: 5,
-                                    background: "rgba(46,160,110,.16)", color: "var(--grn)", whiteSpace: "nowrap" } }, "checked")),
-                        React.createElement("div", { className: "il-sub" },
-                            x.serv,
-                            " \u00b7 ",
-                            x.kcal,
-                            " kcal \u00b7 ",
-                            x.p,
-                            "P ",
-                            x.c,
-                            "C ",
-                            x.f,
-                            "F \u00b7 ",
-                            proteinValue(x),
-                            "g protein per 100 kcal")),
-                    React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0, marginLeft: 8 }, onClick: () => log(x) }, logged.includes(x.id) ? "\u2713" : "Log one"))))),
+                list.map((x) => (React.createElement("div", { key: x.id },
+                    React.createElement("div", { className: "il-li", style: { alignItems: "center" } },
+                        React.createElement("div", { style: { minWidth: 0, flex: 1 } },
+                            React.createElement("div", { style: { fontSize: 14 } },
+                                x.n,
+                                x.tags.includes("checked") && React.createElement("span", { style: { fontSize: 9.5, fontWeight: 600, letterSpacing: ".05em",
+                                        textTransform: "uppercase", marginLeft: 7, padding: "2px 6px", borderRadius: 5,
+                                        background: "rgba(46,160,110,.16)", color: "var(--grn)", whiteSpace: "nowrap" } }, "checked")),
+                            React.createElement("div", { className: "il-sub" },
+                                x.serv,
+                                " \u00b7 ",
+                                x.kcal,
+                                " kcal \u00b7 ",
+                                x.p,
+                                "P ",
+                                x.c,
+                                "C ",
+                                x.f,
+                                "F \u00b7 ",
+                                proteinValue(x),
+                                "g protein per 100 kcal")),
+                        React.createElement("button", { className: "il-btn g sm", style: { flexShrink: 0, marginLeft: 8 }, onClick: () => log(x) }, logged.includes(x.id) ? "\u2713" : "Log one")),
+                    React.createElement("div", { style: { display: "flex", gap: 7, padding: "0 12px 11px", flexWrap: "wrap" } },
+                        React.createElement("button", { className: "il-chip" + (inFoods(x) ? " on" : ""), onClick: () => keep(x) }, inFoods(x) ? "\u2713 In my foods" : "Add to my foods"),
+                        React.createElement("button", { className: "il-chip" + (onList(x) ? " on" : ""), onClick: () => shop(x) }, onList(x) ? "\u2713 On the list" : "Add to shopping list")))))),
             React.createElement("button", { className: "il-chip", style: { margin: "2px 14px 0" }, onClick: () => { setForm("all"); setQ(""); setHiP(false); setLoK(false); setVeg(false); setChk(false); } }, "\u2039 All types")))));
 }
 function Supplements({ st, save, a, today, setSheet }) {
     /* what you take daily, and what is merely in the cupboard */
     const mine = takingList(st);
-    const shelf = cupboardOnly(st);
+    const allShelf = cupboardOnly(st);
+    /* v350: the shakes come out of the cupboard entirely — they are food */
+    const shelf = allShelf.filter((x) => !isFoodSupp(x));
+    const shakes = allShelf.filter(isFoodSupp);
     const health = st.healthQ || {};
     const answered = Object.keys(health).length;
     const done = tickedToday(st, today);
@@ -19723,22 +19931,36 @@ function Supplements({ st, save, a, today, setSheet }) {
                             : `${shelf.length} more you own but do not take daily \u2014 open it for the lot, best evidence first`)),
                     React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0, marginTop: 2,
                             transform: shelfOpen ? "rotate(90deg)" : "none", transition: "transform .15s" } }, "\u203A"))),
-            shelfOpen && byEvidence(shelf).map((s, i) => {
-                const b = suppBadge(s);
-                return (React.createElement(SwipeDelete, { key: i, onDelete: () => save({ ...st,
-                        supps: (st.supps || []).filter((y) => y.name !== s.name),
-                        suppOff: (st.suppOff || []).filter((y) => y !== s.name) }) },
-                    React.createElement("div", { className: "il-rt" },
-                        React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
-                            React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15, flex: 1 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) }, s.name),
-                            React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
-                                    background: b.bg, color: b.fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginLeft: 8 } }, b.word)),
-                        React.createElement("div", { className: "il-row" },
-                            React.createElement("span", { className: "il-sub", style: { margin: 0, minWidth: 0 } },
-                                s.what || "?",
-                                s.dose ? ` · ${s.dose}` : ""),
-                            React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily")))));
-            }))),
+            shelfOpen && shakes.length > 0 && (React.createElement("div", { className: "il-card", style: { margin: "0 14px 10px" } },
+                React.createElement("div", { style: { fontSize: 13.5, fontWeight: 600, marginBottom: 3 } },
+                    shakes.map((x) => x.what || x.name).join(", "),
+                    shakes.length === 1 ? " is food, not a supplement" : " are food, not supplements"),
+                React.createElement("div", { className: "il-sub", style: { margin: 0 } },
+                    "Log ",
+                    shakes.length === 1 ? "it" : "them",
+                    " in the food diary so the protein and the calories actually count. The cupboard below is the tablets and capsules."),
+                React.createElement("button", { className: "il-chip", style: { marginTop: 9 }, onClick: () => setSheet({ t: "protein" }) }, "Protein products"))),
+            shelfOpen && byCategory(shelf).map(({ cat, rows }) => (React.createElement("div", { key: cat },
+                React.createElement("div", { className: "il-lbl", style: { margin: "14px 16px 6px" } },
+                    cat,
+                    " \u00b7 ",
+                    rows.length),
+                rows.map((s, i) => {
+                    const b = suppBadge(s);
+                    return (React.createElement(SwipeDelete, { key: i, onDelete: () => save({ ...st,
+                            supps: (st.supps || []).filter((y) => y.name !== s.name),
+                            suppOff: (st.suppOff || []).filter((y) => y !== s.name) }) },
+                        React.createElement("div", { className: "il-rt" },
+                            React.createElement("div", { className: "il-row", style: { marginBottom: 5 } },
+                                React.createElement("div", { className: "il-h2", style: { minWidth: 0, fontSize: 15, flex: 1 }, onClick: () => setSheet({ t: "suppone", i: (st.supps || []).indexOf(s) }) }, s.name),
+                                React.createElement("span", { style: { fontSize: 10, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase",
+                                        background: b.bg, color: b.fg, padding: "3px 8px", borderRadius: 6, flexShrink: 0, marginLeft: 8 } }, b.word)),
+                            React.createElement("div", { className: "il-row" },
+                                React.createElement("span", { className: "il-sub", style: { margin: 0, minWidth: 0 } },
+                                    s.what || "?",
+                                    s.dose ? ` · ${s.dose}` : ""),
+                                React.createElement("button", { className: "il-chip" + (b.rec ? " on" : ""), style: { flexShrink: 0 }, onClick: () => save(toggleTaking(st, s.name)) }, b.rec ? "Add to my list" : "Take daily")))));
+                })))))),
         React.createElement(BoxT, { t: "Worth adding", s: (rec.answered > 0 && rec.list.length
                 ? `${rec.list.length} suggestion${rec.list.length === 1 ? "" : "s"}. `
                 : "") + "Only things with strong or moderate evidence get suggested here, weighed against your answers, your training and what you actually eat" }),
@@ -26604,6 +26826,110 @@ const byTier = (list) => [...list].sort((a, b) => {
     return ((PURPOSE_ORDER[ta.purpose] ?? 9) - (PURPOSE_ORDER[tb.purpose] ?? 9)) ||
         (tb.score - ta.score) || String(a.name).localeCompare(String(b.name));
 });
+/* ============ THE STRETCH WARM-UP ============
+   Five-odd minutes of stretches before the work, picked for the muscles the
+   session is about to use. Drawn ENTIRELY from the holds already in the
+   catalogue — they have poses, anatomy maps and timed handling, and adding
+   nothing means no exercise id can move (the v317/v342 rule).
+
+   The picks land as ordinary session entries whose one set is timed and
+   flagged warm — so the timer, the tick, the rest bar and the sound all just
+   work, a stretch never counts as a "best", and a session abandoned after
+   only stretching still reads as a false start. */
+function stretchPlan(entries, minutes) {
+    const want = Math.max(180, Math.min(600, (minutes || 5.5) * 60));
+    const target = {};
+    (entries || []).forEach((x) => {
+        const e = exOf(x.exId);
+        if (!e)
+            return;
+        e.primary.forEach((m) => { target[m] = (target[m] || 0) + 2; });
+        (e.secondary || []).forEach((m) => { target[m] = (target[m] || 0) + 1; });
+    });
+    const pool = EX.filter((e) => e.timed && !e.loaded && !e.cardio &&
+        (e.move === "hold" || e.name === "Deep squat hold") &&
+        e.name !== "Sun salutation");
+    const scored = pool.map((e) => {
+        let sc = 0;
+        e.primary.forEach((m) => { sc += (target[m] || 0) * 2; });
+        (e.secondary || []).forEach((m) => { sc += target[m] || 0; });
+        return { e, sc };
+    }).filter((x) => x.sc > 0)
+        .sort((a, b) => (b.sc - a.sc) || a.e.name.localeCompare(b.e.name));
+    const picks = [];
+    let total = 0;
+    for (const { e } of scored) {
+        if (total >= want || picks.length >= 8)
+            break;
+        const secs = Math.round((e.lo + e.hi) / 2 / 5) * 5;
+        picks.push({ exId: e.id, secs, perSide: !!e.perSide });
+        total += secs * (e.perSide ? 2 : 1);
+    }
+    return { picks, totalSec: total };
+}
+/* ============ WORKOUTS OUT TO APPLE HEALTH ============
+   He asked to push his training into Apple Health and Google Health. What is
+   actually possible, checked rather than assumed:
+
+   - A web page cannot write to Apple Health. HealthKit has no web API and no
+     server API at all — the code has to be a native iOS app. There is no
+     wording of this feature that gets round that.
+   - Google Fit's REST API is being switched off through 2026 and took new
+     sign-ups away in 2024, so building on it would be dead on arrival. Its
+     replacement, Health Connect, is Android only.
+   - Google Health (the renamed Fitbit app) now takes its iPhone data FROM
+     Apple Health. So on his phone there is one target, not two: get it into
+     Apple Health and Google Health reads it from there.
+
+   What is left is a file, and two apps that will take one: an Apple Health
+   CSV importer, or a Shortcut using the Log Workout action. So the app's job
+   is to write a clean, honest row per session and say plainly what to do
+   with it — not to pretend it can post it itself.
+
+   Only what was really recorded goes in the file. There is no calorie
+   estimate for a lifting session anywhere in this app, and inventing one to
+   fill an "energy burned" column would put a made-up number into his
+   permanent health record. The column is left out. */
+function healthRows(st, fromDate) {
+    const out = [];
+    (st.sessions || []).forEach((x) => {
+        if (!x || !x.startedAt || abandoned(x, Date.now()))
+            return;
+        if (fromDate && x.date < fromDate)
+            return;
+        const secs = Math.max(60, Math.round(x.durationSec || 0));
+        const start = new Date(x.startedAt);
+        const end = new Date(x.startedAt + secs * 1000);
+        const w = sessionWork(x);
+        out.push({
+            date: x.date,
+            /* the names Apple's own importers use, so the workout lands as a
+               workout rather than an unrecognised row */
+            type: isRings(x) ? "High Intensity Interval Training" : "Traditional Strength Training",
+            name: x.routineName || "Session",
+            start, end,
+            minutes: Math.round(secs / 60),
+            kcal: Math.round(burned(x, (st.profile || {}).weightKg) || 0),
+            sets: w.done,
+            kg: Math.round(sessVol(x)),
+        });
+    });
+    return out.sort((a, b) => a.start - b.start);
+}
+/* ISO with the phone's own offset, because a workout logged at 18:30 must
+   read 18:30 in Health rather than shifting by an hour in summer. */
+function isoLocal(d) {
+    const p = (n) => String(Math.floor(Math.abs(n))).padStart(2, "0");
+    const off = -d.getTimezoneOffset();
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}` +
+        `${off >= 0 ? "+" : "-"}${p(off / 60)}:${p(off % 60)}`;
+}
+function healthCsv(rows) {
+    const esc = (v) => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+    const head = ["type", "start", "end", "duration_minutes", "active_kcal", "name", "sets_done", "total_kg_lifted"];
+    return [head.join(",")].concat(rows.map((r) => [r.type, isoLocal(r.start), isoLocal(r.end),
+        r.minutes, r.kcal, r.name, r.sets, r.kg].map(esc).join(","))).join("\n");
+}
 function BoxT({ t, s }) {
     return (React.createElement("div", { style: { margin: "22px 14px 10px" } },
         React.createElement("div", { className: "il-h2" }, t),
@@ -26683,6 +27009,20 @@ function You({ st, save, a, today, setSheet, go }) {
                     "Clear the ",
                     d.total,
                     " example records")));
+        })(),
+        (() => {
+            /* v346: he asked for the day's training to show up here. Only real
+               sessions — the abandoned rule keeps ten-second false starts out */
+            const doneToday = (st.sessions || []).filter((x) => x.date === today && !abandoned(x, Date.now()));
+            if (!doneToday.length)
+                return null;
+            return (React.createElement(React.Fragment, null,
+                React.createElement(BoxT, { t: "Trained today", s: doneToday.length === 1 ? "Done and logged — tap it for the detail" : doneToday.length + " sessions done and logged" }),
+                React.createElement("div", { className: "il-list", style: { margin: "0 12px" } }, doneToday.map((x) => (React.createElement("div", { key: x.id, className: "il-li", onClick: () => setSheet({ t: "past", id: x.id }) },
+                    React.createElement("div", { style: { minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14.5 } }, x.name || "Session"),
+                        React.createElement("div", { className: "il-sub", style: { margin: "2px 0 0" } }, (() => { const w = sessionWork(x); return `${w.done} set${w.done === 1 ? "" : "s"} done`; })())),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "›")))))));
         })(),
         todayBox && React.createElement(BoxT, { t: "Needs doing today", s: "Anything that expires tonight or is waiting on an answer from you" }),
         (() => {
@@ -27377,7 +27717,7 @@ function Sheet({ sheet, setSheet, st, save, a, today, health, back, depth, go })
             sheet.t === "rlog" && React.createElement(RLogWrap, { sheet, st, save, today, close, setSheet }),
             sheet.t === "rtweak" && React.createElement(RTweakWrap, { sheet, st, save, a, close, setSheet }),
             sheet.t === "family" && React.createElement(FamilyRecipe, { st, save, a, today, close, setSheet }),
-            sheet.t === "addrec" && React.createElement(AddRecipe, { st, save, a, today, close, setSheet }),
+            sheet.t === "addrec" && React.createElement(AddRecipe, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "planner" && React.createElement(Planner, { st, save, a, today, close, setSheet }),
             sheet.t === "shopping" && React.createElement(Shopping, { sheet, st, save, a, today, close, setSheet }),
             sheet.t === "recipes" && React.createElement(RecipeBook, { st, save, a, today, close, setSheet, sheet }),
@@ -27497,18 +27837,19 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
    chip list, "Use this kit and close" on the catalogue — and a second generic
    Done that closed WITHOUT applying the staged choice read as two exits that
    disagree. He asked for it gone. */
-/* v345: anatmus and info are look-at screens whose sticky header already
-   carries the way out (X, and info's own Back link) — the bottom bar only
-   covered the rows he was reading */
-const NO_DONE = ["anatmus", "info", "kit", "equip", "recipe", "recipes", "tastes",
+/* v346: he asked for EVERY Back bar gone — and the code agrees: back skips
+   the commit path, so each one was only a wide close button under a sticky
+   header that already has the X. The old BACK_ONLY set moved in here whole. */
+const NO_DONE = ["tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
+    "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos",
+    "anatmus", "info", "kit", "equip", "recipe", "recipes", "tastes",
     "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
     "pump", "cbuild", "blockplan", "nightly", "niggle", "program", "importplan", "addfood",
     "addrec", "scan", "saveit", "cookmode"];
 /* A screen you look at rather than fill in. "Done" implies you are confirming
    something; these have their own button for that, or nothing to confirm at
    all, so the bar just takes you back. */
-const BACK_ONLY = ["tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
-    "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos"];
+const BACK_ONLY = []; /* v346: nothing left — kept so old code paths stay valid */
 const DONE_LABEL = {
     rate: "Save my rating", rules: "Save my rules", healthq: "Save my answers",
     additem: "Done adding", kitchen: "Done", list: "Done shopping", expiry: "Done",
@@ -28110,6 +28451,8 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
     const [intent, setIntent] = useState(rt.intent);
     const [chk, setChk] = useState({ sleep: lastSleep(st, today) ?? st.profile.sleep ?? 7, feel: 3, sore: "none" });
     const [warmUp, setWarmUp] = useState(true);
+    const [stretch, setStretch] = useState(true);
+    const stPlan = stretchPlan(rt.exercises, 5.5);
     const ar = autoreg(st, a, chk);
     const lastW = (exId) => {
         for (let i = st.sessions.length - 1; i >= 0; i--) {
@@ -28141,6 +28484,9 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
             return { exId: x.exId, lo: x.lo, hi: x.hi,
                 sets: [...warm, ...Array.from({ length: nSets }, () => ({ w, reps: startReps, warm: false, done: false, rir: null }))] };
         });
+        const opener_ = stretch ? stPlan.picks.map((p) => ({ exId: p.exId, lo: p.secs, hi: p.secs,
+            sets: [{ w: 0, reps: p.secs, warm: true, done: false, rir: null }] })) : [];
+        const withWarm = [...opener_, ...exercises];
         const sessions = [...st.sessions];
         /* v287: only an unstarted placeholder for today may be replaced.
            Matching on the date alone overwrote this morning's finished
@@ -28150,7 +28496,7 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
            day is a Tuesday, not an error. */
         const i = sessions.findIndex((s) => s.date === today && !s.startedAt && s.finished === false);
         const rec = { id: "u" + Date.now(), date: today, intent, routineName: rt.name, routineId: rt.id, hour: n.getHours(), minute: n.getMinutes(),
-            startedAt: Date.now(), durationSec: 0, checkin: { ...chk, at: Date.now() }, exercises };
+            startedAt: Date.now(), durationSec: 0, checkin: { ...chk, at: Date.now() }, exercises: withWarm };
         if (i < 0)
             sessions.push(rec);
         else
@@ -28262,19 +28608,50 @@ function StartRoutine({ sheet, st, save, a, today, close, setSheet }) {
                         ? `${ar.why.length ? ar.why.join(" and ") + ", so " : ""}this is a day to chase the top of the rep range.`
                         : "Nothing to change — run it as written.",
                 ar.loadNote ? ` ${ar.loadNote}` : ""))),
+        stPlan.picks.length > 0 && React.createElement("div", { className: "il-card", style: { display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }, onClick: () => setStretch(!stretch) },
+            React.createElement("span", { style: { width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: stretch ? "var(--acc)" : "#1E2024", color: stretch ? "#0B0B0D" : "var(--faint)", fontSize: 13, fontWeight: 700 } }, stretch ? "\u2713" : ""),
+            React.createElement("span", { style: { minWidth: 0 } },
+                React.createElement("span", { style: { display: "block", fontSize: 14 } }, "Warm up with stretches first"),
+                React.createElement("span", { className: "il-sub", style: { display: "block", margin: "2px 0 0" } }, `${Math.round(stPlan.totalSec / 60)} minutes, picked for what this session trains \u2014 timed and ticked like everything else`))),
         React.createElement("div", { style: { padding: "12px 12px 0", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", onClick: start }, "Start workout"),
-            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask coach to change it"),
+            React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "ask", ctx: { routineId: rt.id } }) }, "Ask coach to change it"),
             React.createElement("button", { className: "il-btn g", onClick: () => setSheet({ t: "editrt", id: rt.id }) }, "Edit manually")));
 }
 function EditRoutine({ sheet, st, save, close, setSheet }) {
     const existing = sheet.id ? st.routines.find((r) => r.id === sheet.id) : null;
     const [rt, setRt] = useState(existing || { id: "r" + Date.now(), name: "", intent: "strength", minutes: 30, blurb: "", exercises: [] });
     const [adding, setAdding] = useState(false);
+    const [swapAt, setSwapAt] = useState(-1);
     const [q, setQ] = useState("");
     const avail = EX.filter((e) => e.kit.every((k) => st.kit.includes(k)))
         .filter((e) => !rt.exercises.some((x) => x.exId === e.id))
         .filter((e) => !q || e.name.toLowerCase().includes(q.toLowerCase()));
+    if (swapAt >= 0 && rt.exercises[swapAt]) {
+        const slot = rt.exercises[swapAt];
+        const cur = exOf(slot.exId);
+        const picks = swapPicks(cur, st, rt.exercises.map((x) => x.exId), q);
+        const list = q ? picks.slice(0, 40) : picks.slice(0, 14);
+        return React.createElement(React.Fragment, null,
+            React.createElement(SH, { title: `Swap ${cur ? cur.name : "it"}`, sub: "Closest match first \u2014 it keeps its place and its sets", close: () => { setSwapAt(-1); setQ(""); } }),
+            React.createElement("div", { style: { padding: "0 12px 4px" } },
+                React.createElement("input", { className: "il-in", style: { textAlign: "left" }, placeholder: "Or search for something specific", type: "search", enterKeyHint: "search", autoCorrect: "off", autoCapitalize: "none", value: q, onChange: (e) => setQ(e.target.value) })),
+            list.map(({ e, share }) => (React.createElement("div", { key: e.id, className: "il-ex", style: { padding: "11px 12px" }, onClick: () => {
+                    setRt({ ...rt, exercises: rt.exercises.map((y, j) => j === swapAt ? { ...y, exId: e.id } : y) });
+                    setSwapAt(-1);
+                    setQ("");
+                } },
+                React.createElement("div", { style: { display: "flex", gap: 11, alignItems: "center" } },
+                    React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                        React.createElement("div", { style: { fontSize: 14.5 } }, e.name),
+                        React.createElement("div", { className: "il-sub" }, e.primary.map((m) => M[m]).join(", ")),
+                        share > 0 && React.createElement("div", { className: "il-sub il-n", style: { color: share > 0.7 ? "var(--grn)" : "var(--dim)", marginTop: 2 } },
+                            Math.round(share * 100),
+                            "% the same work")),
+                    React.createElement("span", { style: { color: "var(--faint)", fontSize: 17 } }, "\u203A"))))),
+            !list.length && React.createElement("div", { className: "il-empty" }, "Nothing close enough with the kit you have. Try searching."));
+    }
     if (adding)
         return React.createElement(React.Fragment, null,
             React.createElement(SH, { title: "Add to routine", close: () => setAdding(false) }),
@@ -28299,9 +28676,27 @@ function EditRoutine({ sheet, st, save, close, setSheet }) {
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Exercises"),
             rt.exercises.map((x, i) => {
                 const e = exOf(x.exId);
-                return React.createElement("div", { key: i, className: "il-row", style: { padding: "9px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
-                    React.createElement("span", { style: { fontSize: 13.5, minWidth: 0 } }, e.name),
-                    React.createElement("span", { style: { display: "flex", gap: 7, alignItems: "center", flexShrink: 0 } },
+                /* v349: he asked to swap one out and change the order. Five
+                   controls will not sit beside a name on a phone, so the name
+                   takes the first line and the controls the second. */
+                const move = (to) => {
+                    if (to < 0 || to >= rt.exercises.length)
+                        return;
+                    const next = rt.exercises.slice();
+                    const [row] = next.splice(i, 1);
+                    next.splice(to, 0, row);
+                    setRt({ ...rt, exercises: next });
+                };
+                return React.createElement("div", { key: i, style: { padding: "9px 0", borderTop: i ? "1px solid var(--line)" : 0 } },
+                    React.createElement("div", { style: { fontSize: 13.5, marginBottom: 7 } },
+                        i + 1,
+                        ". ",
+                        e.name),
+                    React.createElement("div", { style: { display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" } },
+                        React.createElement("button", { className: "il-chip", disabled: i === 0, onClick: () => move(i - 1) }, "\u2191"),
+                        React.createElement("button", { className: "il-chip", disabled: i === rt.exercises.length - 1, onClick: () => move(i + 1) }, "\u2193"),
+                        React.createElement("button", { className: "il-chip", onClick: () => { setQ(""); setSwapAt(i); } }, "Swap"),
+                        React.createElement("span", { style: { flex: 1 } }),
                         React.createElement("button", { className: "il-chip", onClick: () => setRt({ ...rt, exercises: rt.exercises.map((y, j) => j === i ? { ...y, sets: Math.max(1, y.sets - 1) } : y) }) }, "\u2212"),
                         React.createElement("span", { className: "il-n", style: { fontSize: 13, width: 42, textAlign: "center" } },
                             x.sets,
@@ -28312,6 +28707,12 @@ function EditRoutine({ sheet, st, save, close, setSheet }) {
             React.createElement("button", { className: "il-btn g sm", style: { width: "100%", marginTop: 12 }, onClick: () => setSheet({ t: "pick", title: "Add to this routine", onPick: (e) => setRt((r) => ({ ...r, exercises: [...r.exercises, { exId: e.id, sets: recSets(e, st.profile, null).n }] })) }) }, "+ Add exercise")),
         React.createElement("div", { style: { padding: "0 12px", display: "grid", gap: 8 } },
             React.createElement("button", { className: "il-btn", disabled: !rt.name || !rt.exercises.length, onClick: () => { save({ ...st, routines: existing ? st.routines.map((r) => (r.id === rt.id ? rt : r)) : [...st.routines, rt] }); close(); } }, "Save routine"),
+            existing && rt.exercises.length > 0 && React.createElement("button", { className: "il-btn g", onClick: () => {
+                    /* save first — he asks about what is on the screen, and the
+                       coach reads the routine out of state, not out of this form */
+                    save({ ...st, routines: st.routines.map((r) => (r.id === rt.id ? rt : r)) });
+                    setSheet({ t: "ask", ctx: { routineId: rt.id } });
+                } }, "Ask coach about this order"),
             existing && React.createElement("button", { className: "il-btn dz", onClick: () => { save({ ...st, routines: st.routines.filter((r) => r.id !== rt.id) }); close(); } }, "Delete routine")));
 }
 function HealthSheet({ st, close }) {
@@ -28332,8 +28733,10 @@ function HealthSheet({ st, close }) {
             setDone("copied to clipboard");
         }
     };
-    const workoutsCsv = () => csv([["date", "start", "duration_min", "type", "kcal", "volume_kg", "sets", "routine"],
-        ...st.sessions.map((s) => [s.date, hhmm(s.hour, s.minute), Math.round(s.durationSec / 60), isRings(s) ? "high_intensity_interval_training" : isPump(s) ? "strength_training_light" : "strength_training", burned(s, st.profile.weightKg), Math.round(sessVol(s)), s.exercises.reduce((x, e) => x + e.sets.filter((q) => !q.warm).length, 0), s.routineName || ""])]);
+    /* v352: it used to write a date and a clock time in separate columns,
+       which no importer can turn back into a workout — they need a start and
+       an end. It also carried false starts into his health record. */
+    const workoutsCsv = () => healthCsv(healthRows(st));
     const nutritionCsv = () => csv([["date", "kcal", "protein_g", "carbs_g", "fat_g"],
         ...st.foods.filter((f) => f.entries.length).map((f) => [f.date, Math.round(f.entries.reduce((a, e) => a + e.kcal, 0)), Math.round(f.entries.reduce((a, e) => a + e.p, 0)), Math.round(f.entries.reduce((a, e) => a + e.c, 0)), Math.round(f.entries.reduce((a, e) => a + e.f, 0))])]);
     const bodyCsv = () => csv([["date", "weight_kg", ...SITES.map((s) => s.id + "_cm")],
@@ -28341,9 +28744,12 @@ function HealthSheet({ st, close }) {
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Health apps", sub: "Apple Health and Health Connect", close: close }),
         React.createElement("div", { className: "il-card", style: { background: "#241F12" } },
-            React.createElement("div", { className: "il-note", style: { color: "#E5C87E" } }, "A browser prototype can't talk to Apple Health or Health Connect directly \u2014 those need an installed app with system permissions. It can export everything, and the mapping below is what a shipped version would use.")),
+            React.createElement("div", { className: "il-note", style: { color: "#E5C87E" } }, "This page can't write to Apple Health itself. Apple only allows it from an installed app with system permissions \u2014 there is no web route to it at all, and no wording of this feature gets round that."),
+            React.createElement("div", { className: "il-note", style: { color: "#E5C87E", marginTop: 10 } }, "The workouts CSV below is written so the two apps that CAN put it there will take it: an Apple Health CSV importer, or a Shortcut built on the Log Workout action. Save the file, open it in one of those, and the sessions land in Health with the right start, end and length."),
+            React.createElement("div", { className: "il-note", style: { color: "#E5C87E", marginTop: 10 } }, "Google is the shorter story. Its Fit API is being switched off through 2026 and its replacement, Health Connect, is Android only. But Google Health on an iPhone reads from Apple Health \u2014 so getting it into Health covers both.")),
         React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-lbl", style: { marginBottom: 10 } }, "Export your data"),
+            React.createElement("div", { className: "il-lbl", style: { marginBottom: 4 } }, "Export your data"),
+            React.createElement("div", { className: "il-sub", style: { margin: "0 0 8px" } }, `Workouts go out one row per session, with a real start and end time, the length, and the calories this app estimates. False starts are left out. ${healthRows(st).length} to send.`),
             [["Workouts", workoutsCsv, `${st.sessions.length} sessions`], ["Food", nutritionCsv, `${st.foods.filter((f) => f.entries.length).length} days`], ["Weight and measurements", bodyCsv, `${st.weights.length} weigh-ins`]].map(([l, fn, sub]) => (React.createElement("div", { key: l, className: "il-row", style: { padding: "11px 0", borderTop: "1px solid var(--line)" } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontSize: 14 } }, l),
@@ -29219,7 +29625,7 @@ ${desc.trim()}`, 1200, "cheap");
     });
     return React.createElement(React.Fragment, null,
         React.createElement(SH, { title: "Add food", sub: `${theMeal} · ${at}${onDate === today ? "" : " · " + dtiny(onDate)}`, close: close }),
-        React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => setTab(v) }, l)))),
+        React.createElement("div", { className: "il-scroll", style: { paddingTop: 4 } }, TABS.map(([v, l]) => (React.createElement("button", { key: v, className: "il-chip" + (tab === v ? " on" : ""), onClick: () => v === "search" ? setSheet({ t: "food", date: onDate }) : setTab(v) }, l)))),
         tab === "quick" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-lbl", style: { marginBottom: 8 } }, "Straight off the packet"),
             React.createElement("input", { className: "il-in", style: { textAlign: "left", marginBottom: 8 }, value: what, placeholder: "What was it?", onChange: (e) => setWhat(e.target.value) }),
@@ -29270,12 +29676,6 @@ ${desc.trim()}`, 1200, "cheap");
                 React.createElement("div", null,
                     React.createElement("button", { className: "il-btn g", style: { width: "100%" }, onClick: () => { setSheet({ t: "scan", date: onDate }); } }, "Scan a label or barcode"),
                     React.createElement("div", { className: "il-sub", style: { margin: "5px 2px 0" } }, "Anything with a pack. The barcode is looked up first and the printed panel read if it isn't known."))))),
-        tab === "search" && (React.createElement("div", { className: "il-card" },
-            React.createElement("div", { className: "il-note", style: { marginBottom: 12 } },
-                "The food table has ",
-                FOODS.length,
-                " things in it, with portions you can pick by eye."),
-            React.createElement("button", { className: "il-btn", onClick: () => { setSheet({ t: "food", date: onDate }); } }, "Search the food table"))),
         tab === "mine" && (React.createElement("div", { className: "il-card" },
             React.createElement("div", { className: "il-note", style: { marginBottom: 12 } }, "Things you've built yourself \u2014 a dish you make often, or a recipe out of the book."),
             React.createElement("div", { style: { display: "grid", gap: 8 } },
