@@ -43,7 +43,7 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;}
 <body>
 <div id="root"><div id="boot">
   <div class="t">My Bible</div>
-  <div class="v">v355 · 7 Aug</div>
+  <div class="v">v357 · 7 Aug</div>
   <div class="bar"><i></i></div>
   <div id="bootmsg">Getting everything together…</div>
 </div></div>
@@ -261,8 +261,11 @@ const CSS = `
  padding-bottom:calc(26px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch;}
 .il-grab{position:sticky;top:0;z-index:3;background:var(--bg);padding:9px 0 3px;display:flex;justify-content:center;cursor:pointer;}
 .il-grab i{display:block;width:42px;height:5px;border-radius:3px;background:color-mix(in srgb,var(--tint) 40%,#3A3F47);}
+/* v357: this sat at z-index 2 while the food screen's search bar sticks at
+   18, so rows scrolling through the band between them painted OVER the
+   title. A sticky header has to outrank everything that scrolls under it. */
 .il-sh{position:sticky;top:17px;background:var(--bg);padding:4px 16px 14px;display:flex;justify-content:space-between;
- align-items:flex-start;z-index:2;border-bottom:1px solid var(--line);}
+ align-items:flex-start;z-index:19;border-bottom:1px solid var(--line);}
 .il-si{scroll-padding-top:64px;}
 /* four rows of seven, one bar a day. A bar that is short because the day has
    not happened yet must not look like a bar that is short because you did not
@@ -358,6 +361,25 @@ const CSS = `
 .il-sel:focus{outline:2px solid var(--acc);outline-offset:-1px;}
 .il-fld{display:flex;gap:8px;align-items:stretch;}
 .il-menu{background:var(--card);border-radius:13px;margin:0 12px 8px;overflow:hidden;}
+/* v356: three across is the most that leaves a label readable on a phone.
+   aspect-ratio keeps them square whatever the screen width. */
+/* v357: what is in the bowl and the button that logs it now sit still at
+   the bottom of the screen instead of floating in the middle of the results.
+   Nothing else is pinned down there — the food screen has no Done bar. */
+.il-bowl{position:fixed;left:0;right:0;bottom:0;margin:0 auto;width:100%;max-width:460px;z-index:24;
+ background:rgba(11,11,13,.97);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+ padding:10px 12px calc(10px + env(safe-area-inset-bottom));}
+.il-bowl-r{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.il-bowl-n{flex:1;min-width:0;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.il-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 12px 10px;}
+.il-tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:7px;
+ aspect-ratio:1/1;padding:11px 10px;background:var(--card);border:1px solid var(--line);border-radius:14px;
+ color:var(--txt);font:inherit;text-align:left;cursor:pointer;overflow:hidden;-webkit-tap-highlight-color:transparent;}
+.il-tile:active{background:var(--c2);}
+.il-tile-ico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.il-tile-ico svg{width:19px;height:19px;}
+.il-tile-l{font-size:12.5px;font-weight:600;line-height:1.25;}
+.il-tile-s{font-size:10.5px;color:var(--dim);line-height:1.3;}
 .il-mrow{min-width:0;display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:none;border:0;
  padding:13px 14px;color:var(--txt);font:inherit;cursor:pointer;text-align:left;border-bottom:1px solid var(--line);}
 .il-mrow:last-child{border-bottom:0;}
@@ -5741,8 +5763,54 @@ function Rings({ move, exercise, size = 92 }) {
         arc(r1, move, "#FA3E5A"),
         arc(r2, exercise, "#A6F400"));
 }
+/* ============ TILES ============
+   His ask, from a Runna screenshot: coloured icon tiles in a grid rather
+   than a stack of identical rows. A row list makes everything look equally
+   important and reads as a wall of text; a tile gives each destination a
+   colour and a face, so the eye finds the one it wants.
+
+   Three across is the most that leaves a label readable on a phone. The
+   colour is the tab's own accent, tinted for the wash and full strength for
+   the icon, so a tile always belongs to the page it is on. */
+function Tile({ label, sub, icon, colour, onClick }) {
+    const c = colour || "var(--tint)";
+    return (React.createElement("button", { className: "il-tile", onClick: onClick },
+        React.createElement("span", { className: "il-tile-ico", style: { background: `color-mix(in srgb, ${c} 22%, transparent)`, color: c } },
+            React.createElement(Ico, { d: TILE_ICONS[icon] || ICONS[icon] || TILE_ICONS.list })),
+        React.createElement("span", { className: "il-tile-l" }, label),
+        sub && React.createElement("span", { className: "il-tile-s" }, sub)));
+}
+function TileGrid({ items, colour }) {
+    const rows = (items || []).filter(Boolean);
+    if (!rows.length)
+        return null;
+    return (React.createElement("div", { className: "il-tiles" }, rows.map((t, i) => (React.createElement(Tile, { key: i, label: t.label, sub: t.sub, icon: t.icon, colour: t.colour || colour, onClick: t.onClick })))));
+}
 const Ico = ({ d }) => React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.9", strokeLinecap: "round", strokeLinejoin: "round" },
     React.createElement("path", { d: d }));
+/* v356: the tile grid needs a face for every destination. Same viewBox,
+   same stroke weight and caps as the tab bar's, so nothing looks imported. */
+const TILE_ICONS = {
+    play: "M8 5l11 7-11 7V5Z",
+    build: "M12 5v14M5 12h14",
+    swap: "M7 8h11l-3-3M17 16H6l3 3",
+    list: "M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
+    clock: "M12 3a9 9 0 100 18 9 9 0 000-18ZM12 7v5l3 2",
+    stretch: "M12 4a2 2 0 100 4 2 2 0 000-4ZM12 8v5M12 13l-4 7M12 13l4 7M7 10l10 0",
+    coachhat: "M3 9l9-4 9 4-9 4-9-4ZM7 11v4c0 1.5 2.5 3 5 3s5-1.5 5-3v-4",
+    chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    kit: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11",
+    body2: "M12 3a2 2 0 100 4 2 2 0 000-4ZM6 9h12M12 8v6M9 21l3-7 3 7",
+    scan: "M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 12h10",
+    book: "M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4ZM5 17h14",
+    basket: "M3 8h18l-2 11H5L3 8ZM8 8l2-4M16 8l-2-4",
+    bowl: "M3 11h18a9 9 0 01-18 0ZM7 7c0-1 1-2 2-2M12 6c0-1 1-2 2-2",
+    pill: "M9 3h6v4l3 5v9H6v-9l3-5V3zM9 7h6",
+    camera: "M4 8h3l2-3h6l2 3h3v12H4V8ZM12 17a4 4 0 100-8 4 4 0 000 8Z",
+    note: "M6 3h9l4 4v14H6V3ZM15 3v4h4M9 12h7M9 16h5",
+    gear: "M12 9a3 3 0 100 6 3 3 0 000-6ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2",
+    heart: "M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9Z",
+};
 const ICONS = {
     supps: "M9 3h6v4l3 5v9H6v-9l3-5V3zM9 7h6",
     coach: "M12 3a4 4 0 100 8 4 4 0 000-8zM5 21a7 7 0 0114 0M9 15l1.5 2M15 15l-1.5 2",
@@ -5844,7 +5912,7 @@ async function storageReport() {
     await t("get plain key", () => window.storage.get("hltest3", false));
     return out.join("\n");
 }
-const APP_VERSION = "v355 · 7 Aug";
+const APP_VERSION = "v357 · 7 Aug";
 const STORE_KEY = "homeledger:v7";
 const STORE_BAK = "homeledger:v7:backup";
 function HomeLedgerInner() {
@@ -7271,39 +7339,41 @@ function Train({ st, save, a, today, setSheet }) {
                             rt.exercises.length,
                             " moves")))))),
             React.createElement(BoxT, { t: "Build something new", s: "Ask the coach, plan a block, a quick pump, a known programme, or straight from your kit" }),
-            React.createElement("div", { style: { padding: "0 12px 4px", display: "grid", gap: 8 } },
-                React.createElement("button", { className: "il-btn", onClick: () => setSheet({ t: "ask", ctx: "train" }) }, "Ask the coach to build me a session")),
+            React.createElement(TileGrid, { colour: "var(--t-train)", items: [
+                    { label: "Ask the coach", sub: "he builds it", icon: "coachhat",
+                        onClick: () => setSheet({ t: "ask", ctx: "train" }) },
+                    { label: "Plan a block", sub: "weeks ahead", icon: "chart",
+                        onClick: () => setSheet({ t: "blockplan" }) },
+                    { label: "Quick pump", sub: "20 minutes", icon: "clock",
+                        onClick: () => setSheet({ t: "pump" }) },
+                    { label: "Programmes", sub: "known plans", icon: "book",
+                        onClick: () => setSheet({ t: "progs" }) },
+                    { label: "My kit", sub: (() => {
+                            const eq = st.equip || { home: [], gym: [] };
+                            const n = (eq[st.where || "home"] || []).length;
+                            return n ? n + " things" : "set it up";
+                        })(), icon: "kit", onClick: () => setSheet({ t: "kit" }) },
+                    { label: "From my kit", sub: "build it for me", icon: "build",
+                        onClick: () => {
+                            let gen = [];
+                            try {
+                                gen = generateRoutines(st, a) || [];
+                            }
+                            catch (e) {
+                                setBuilt("That didn't work: " + (e.message || "something went wrong"));
+                                return;
+                            }
+                            if (!gen.length) {
+                                setBuilt(!(st.kit || []).filter((k) => k !== "none").length
+                                    ? "You haven't told me what kit you own yet, so there is nothing to build from. Set that up first."
+                                    : "Nothing could be built from what you own and the days you train. Tell me about more kit, or ask the coach.");
+                                return;
+                            }
+                            save({ ...st, routines: [...gen, ...(st.routines || []).filter((r) => !r.generated)] });
+                            setBuilt(`Built ${gen.length} sessions — ${gen.map((r) => r.name).join(", ")}. They are in Your sessions below.`);
+                        } },
+                ] }),
             React.createElement("div", { className: "il-scroll", style: { paddingTop: 2 } },
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "blockplan" }) }, "Plan a whole block"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "pump" }) }, "Quick pump"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "progs" }) }, "Known programmes"),
-                React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "kit" }) },
-                    "My kit",
-                    (() => {
-                        const eq = st.equip || { home: [], gym: [] };
-                        const n = (eq[st.where || "home"] || []).length;
-                        return n ? " \u00B7 " + n : "";
-                    })()),
-                React.createElement("button", { className: "il-chip", onClick: () => {
-                        /* it used to return quietly when it built nothing, which looks exactly
-                           like a dead button */
-                        let gen = [];
-                        try {
-                            gen = generateRoutines(st, a) || [];
-                        }
-                        catch (e) {
-                            setBuilt("That didn't work: " + (e.message || "something went wrong"));
-                            return;
-                        }
-                        if (!gen.length) {
-                            setBuilt(!(st.kit || []).filter((k) => k !== "none").length
-                                ? "You haven't told me what kit you own yet, so there is nothing to build from. Set that up first."
-                                : "Nothing could be built from what you own and the days you train. Tell me about more kit, or ask the coach.");
-                            return;
-                        }
-                        save({ ...st, routines: [...gen, ...(st.routines || []).filter((r) => !r.generated)] });
-                        setBuilt(`Built ${gen.length} sessions — ${gen.map((r) => r.name).join(", ")}. They are in Your sessions below.`);
-                    } }, "Build from my kit"),
                 React.createElement("button", { className: "il-chip", onClick: () => setSheet({ t: "pick", title: "Log cardio", onPick: (e) => {
                             const n = new Date();
                             const sessions = [...st.sessions];
@@ -27893,7 +27963,10 @@ function NumIn({ value, onChange, step = 1, placeholder, disabled, min, onBlurOn
 /* v346: he asked for EVERY Back bar gone — and the code agrees: back skips
    the commit path, so each one was only a wide close button under a sticky
    header that already has the X. The old BACK_ONLY set moved in here whole. */
-const NO_DONE = ["tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
+/* v357: the food screen ends in "Log the bowl". A Done bar under it meant
+   two bottom buttons that did different things, one of which threw the work
+   away — the header X is the way out. */
+const NO_DONE = ["food", "tdee", "reports", "protein", "scalephoto", "exprog", "mguide", "pastrev",
     "guide", "sides", "adhere", "muscle", "volume", "myratings", "photos",
     "anatmus", "info", "kit", "equip", "recipe", "recipes", "tastes",
     "ctalk", "ntalk", "chat", "cook", "session", "rest", "form3d", "pose",
@@ -30055,23 +30128,6 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
                             " a portion")),
                     React.createElement("span", { style: { color: "var(--faint)", fontSize: 17, flexShrink: 0 } }, "\u203A")))))));
         })(),
-        bowl.length > 0 && React.createElement("div", { className: "il-card lead", style: { margin: "0 0 10px" } },
-            React.createElement("div", { className: "il-row", style: { marginBottom: 6 } },
-                React.createElement("div", { className: "il-lbl" }, "In this bowl"),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0 } },
-                    Math.round(bowl.reduce((a, r) => a + r.f.kcal * r.g / 100, 0)),
-                    " cal")),
-            bowl.map((r) => (React.createElement("div", { key: r.key, style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
-                React.createElement("span", { style: { flex: 1, minWidth: 0, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, r.f.name),
-                React.createElement("input", { className: "il-in il-n", style: { width: 64 }, inputMode: "numeric", value: r.g, onChange: (ev) => setBowl((b) => b.map((x) => x.key === r.key ? { ...x, g: Number(ev.target.value) || 0 } : x)) }),
-                React.createElement("span", { className: "il-sub il-n", style: { margin: 0, width: 14 } }, "g"),
-                React.createElement("button", { className: "il-x", onClick: () => setBowl((b) => b.filter((x) => x.key !== r.key)) }, "\u00D7")))),
-            React.createElement("button", { className: "il-btn", style: { width: "100%", marginTop: 4 }, onClick: () => {
-                    logBowl(bowl.map((r) => ({ name: r.f.name + " (" + AMT(r.f, r.g) + ")", fid: r.f.id, g: r.g,
-                        kcal: r.f.kcal * r.g / 100, p: r.f.p * r.g / 100,
-                        c: r.f.c * r.g / 100, f: r.f.f * r.g / 100 })));
-                    setBowl([]);
-                } }, "Log the bowl \u00B7 " + bowl.length + (bowl.length === 1 ? " item" : " items"))),
         React.createElement("div", { className: "il-list", style: { marginBottom: 12 } }, list.slice(0, 120).map((f) => (React.createElement("div", { key: f.id, className: "il-li", onClick: () => { setSel(f); setGrams(f.serv); } },
             React.createElement("button", { className: "il-chip", style: { order: 9, marginLeft: "auto", flexShrink: 0, padding: "6px 13px", fontSize: 16 }, onClick: (ev) => {
                     ev.stopPropagation();
@@ -30150,7 +30206,20 @@ function FoodSheet({ st, save, today, sheet, close, setSheet, foodId }) {
                             shopExtra: [...(st.shopExtra || []), { name: h.name, cat: "other", at: Date.now() + i }] }) }, "Add to the shopping list"))))),
             React.createElement("div", { className: "il-note", style: { fontSize: 11.5, marginTop: 10 } }, "Open Food Facts \u2014 crowd-sourced, so a figure can be out of date or entered wrong. The barcode on the packet is the one to trust."))),
         React.createElement("div", { style: { padding: "0 12px" } },
-            React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed")));
+            React.createElement("button", { className: "il-btn g", onClick: () => setCustom({ name: q, kcal: "", p: "", c: "", f: "", serv: 100, unit: "g", servLabel: "" }) }, "+ Add a product not listed")),
+        bowl.length > 0 && React.createElement("div", { style: { height: 54 + bowl.length * 40 } }),
+        bowl.length > 0 && (React.createElement("div", { className: "il-bowl" },
+            bowl.map((r) => (React.createElement("div", { key: r.key, className: "il-bowl-r" },
+                React.createElement("span", { className: "il-bowl-n" }, r.f.name),
+                React.createElement("input", { className: "il-in il-n", style: { width: 62, flexShrink: 0 }, inputMode: "numeric", value: r.g, onChange: (ev) => setBowl((bb) => bb.map((x) => x.key === r.key ? { ...x, g: Number(ev.target.value) || 0 } : x)) }),
+                React.createElement("span", { className: "il-sub il-n", style: { margin: 0, width: 12, flexShrink: 0 } }, r.f.unit === "ml" ? "ml" : "g"),
+                React.createElement("button", { className: "il-x", style: { flexShrink: 0 }, onClick: () => setBowl((bb) => bb.filter((x) => x.key !== r.key)) }, "\u00D7")))),
+            React.createElement("button", { className: "il-btn", style: { width: "100%" }, onClick: () => {
+                    logBowl(bowl.map((r) => ({ name: r.f.name + " (" + AMT(r.f, r.g) + ")", fid: r.f.id, g: r.g,
+                        kcal: r.f.kcal * r.g / 100, p: r.f.p * r.g / 100,
+                        c: r.f.c * r.g / 100, f: r.f.f * r.g / 100 })));
+                    setBowl([]);
+                } }, `Log ${bowl.length === 1 ? bowl[0].f.name : bowl.length + " items"} \u00b7 ${Math.round(bowl.reduce((x, r) => x + r.f.kcal * r.g / 100, 0))} cal`))));
 }
 function Photos({ st, save, close }) {
     const [pose, setPose] = useState("front");
